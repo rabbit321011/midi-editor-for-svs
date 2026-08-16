@@ -312,8 +312,8 @@ function isCanonicalBase64(value: string): boolean {
 
 body {
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  background: #0d1117;
-  color: #c9d1d9;
+  background: var(--app-surface);
+  color: var(--app-text);
   overflow: hidden;
 }
 
@@ -321,18 +321,6 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  --app-surface: #0d1117;
-  --app-panel: #161b22;
-  --app-border: #21262d;
-  --app-text: #c9d1d9;
-  --app-muted: #8b949e;
-  --app-accent: #58a6ff;
-  --app-hover: #21262d;
-  --app-selected: #1f3a5f;
-  --app-located: #3a2f14;
-  --app-warning: #f0b72f;
-  --center-backdrop-filter: none;
-  --sidebar-backdrop-filter: none;
   background-color: var(--app-surface);
   background-image: var(--workbench-bg-image);
   background-size: cover;
@@ -340,40 +328,6 @@ body {
   background-repeat: no-repeat;
   color: var(--app-text);
   position: relative;
-}
-
-.app-root.theme-light {
-  --app-surface: #f4f6f8;
-  --app-panel: #ffffff;
-  --app-border: #d7dde4;
-  --app-text: #1f2328;
-  --app-muted: #59636e;
-  --app-accent: #0969da;
-  --app-hover: #e7edf3;
-  --app-selected: #d8ebff;
-  --app-located: #fff1bd;
-  --app-warning: #9a6700;
-}
-
-.app-root.theme-cream {
-  --app-surface: #f6edcf;
-  --app-panel: #fff8dc;
-  --app-border: #d7c58f;
-  --app-text: #2f2517;
-  --app-muted: #75613c;
-  --app-accent: #8a5a12;
-  --app-hover: #efe1b8;
-  --app-selected: #ead49a;
-  --app-located: #f1d68a;
-  --app-warning: #8a5a12;
-}
-
-.app-root.sidebar-glass {
-  --sidebar-backdrop-filter: blur(14px) saturate(1.15);
-}
-
-.app-root.center-glass {
-  --center-backdrop-filter: blur(14px) saturate(1.15);
 }
 
 .body {

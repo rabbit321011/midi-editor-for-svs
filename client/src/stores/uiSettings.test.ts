@@ -26,7 +26,10 @@ describe('ui settings store', () => {
     expect(stored.theme).toBe('cream')
     expect(stored.centerOpacity).toBe(0.55)
     expect(settings.rootClass).toBe('theme-cream')
+    expect(settings.palette.accent).toBe('#8a5a12')
+    expect(settings.cssVars['--app-panel']).toBe('#fff8dc')
     expect(settings.cssVars['--center-opacity-percent']).toBe('55%')
+    expect(settings.cssVars['--floating-opacity-percent']).toBe('94%')
   })
 
   it('persists the resizable L1-first sidebar layout', async () => {

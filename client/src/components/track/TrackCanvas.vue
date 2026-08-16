@@ -132,24 +132,18 @@ const totalW = computed(() => {
   return PAD_L + totalDuration.value * project.pxPerSec + PAD_R
 })
 const timelineObjectMenuStyle = computed(() => {
-  const palette = floatingMenuPalette(uiSettings.settings.theme)
+  const palette = uiSettings.palette
   return {
-    left: `${audioObjectMenu.value.x}px`,
-    top: `${audioObjectMenu.value.y}px`,
+    left: `${Math.max(8, Math.min(audioObjectMenu.value.x, window.innerWidth - 204))}px`,
+    top: `${Math.max(8, Math.min(audioObjectMenu.value.y, window.innerHeight - 196))}px`,
     '--floating-menu-panel': palette.panel,
     '--floating-menu-border': palette.border,
     '--floating-menu-text': palette.text,
     '--floating-menu-hover': palette.hover,
-    '--floating-menu-opacity': `${Math.round(uiSettings.settings.centerOpacity * 100)}%`,
+    '--floating-menu-opacity': uiSettings.cssVars['--floating-opacity-percent'],
     '--floating-menu-backdrop': uiSettings.settings.centerGlassEnabled ? 'blur(14px) saturate(1.15)' : 'none',
   }
 })
-
-function floatingMenuPalette(theme: string) {
-  if (theme === 'light') return { panel: '#ffffff', border: '#d7dde4', text: '#1f2328', hover: '#e7edf3' }
-  if (theme === 'cream') return { panel: '#fff8dc', border: '#d7c58f', text: '#2f2517', hover: '#efe1b8' }
-  return { panel: '#161b22', border: '#21262d', text: '#c9d1d9', hover: '#21262d' }
-}
 
 function freqToY(f: number): number {
   if (f <= 0) return -1
@@ -1812,7 +1806,9 @@ canvas {
 .timeline-object-menu {
   position: fixed;
   z-index: 9999;
-  min-width: 148px;
+  width: 196px;
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
   padding: 4px;
   border: 1px solid var(--floating-menu-border);
   border-radius: 6px;
@@ -1830,9 +1826,9 @@ canvas {
   text-align: left;
   cursor: pointer;
 }
-.timeline-object-menu button:hover:not(:disabled) { background: var(--floating-menu-hover); }
+.timeline-object-menu button:hover:not(:disabled) { background: color-mix(in srgb, var(--floating-menu-hover) 82%, transparent); }
 .timeline-object-menu button:disabled { opacity: 0.55; cursor: wait; }
-.timeline-object-menu button.danger { color: #f85149; }
+.timeline-object-menu button.danger { color: var(--app-danger); }
 .inline-text-editor {
   position: absolute;
   z-index: 3;
@@ -1844,7 +1840,8 @@ canvas {
   padding: 4px 6px;
   border: 1px solid var(--app-accent);
   border-radius: 4px;
-  background: var(--app-panel);
+  background: color-mix(in srgb, var(--app-elevated) var(--floating-opacity-percent), transparent);
+  backdrop-filter: var(--center-backdrop-filter);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 .inline-delete {
@@ -1875,7 +1872,7 @@ canvas {
   border: 1px solid var(--app-border);
   border-radius: 3px;
   outline: none;
-  background: var(--app-surface);
+  background: var(--app-panel);
   color: var(--app-text);
   padding: 2px 6px;
   font: inherit;

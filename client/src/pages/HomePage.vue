@@ -131,26 +131,27 @@ function formatDate(iso: string) {
 
 <style scoped>
 .home-root {
-  min-height: 100vh;
-  background: #0d1117;
-  color: #c9d1d9;
+  height: 100vh;
+  overflow: auto;
+  background: var(--app-surface);
+  color: var(--app-text);
   padding: 60px 80px;
 }
 .home-header { text-align: center; margin-bottom: 40px; }
-.home-title { font-size: 36px; margin: 0; color: #f0f6fc; display: inline-flex; align-items: center; gap: 10px; }
+.home-title { font-size: 36px; margin: 0; color: var(--app-text); display: inline-flex; align-items: center; gap: 10px; }
 .home-title svg { width: 34px; height: 34px; fill: currentColor; }
-.home-subtitle { font-size: 16px; color: #8b949e; margin-top: 8px; }
+.home-subtitle { font-size: 16px; color: var(--app-muted); margin-top: 8px; }
 .home-actions { display: flex; gap: 16px; justify-content: center; margin-bottom: 48px; }
-.home-projects h3 { margin-bottom: 16px; font-size: 18px; color: #8b949e; }
+.home-projects h3 { margin-bottom: 16px; font-size: 18px; color: var(--app-muted); }
 .project-card-content { display: flex; align-items: center; gap: 12px; font-size: 16px; }
-.project-icon { display: inline-flex; color: #8b949e; }
+.project-icon { display: inline-flex; color: var(--app-muted); }
 .project-icon svg { width: 24px; height: 24px; fill: currentColor; }
 .btn-icon { display: inline-flex; margin-right: 6px; vertical-align: -2px; }
 .btn-icon svg { width: 16px; height: 16px; fill: currentColor; }
-.project-name { color: #c9d1d9; }
+.project-name { color: var(--app-text); }
 .project-footer { display: flex; justify-content: space-between; align-items: center; }
-.project-date { font-size: 12px; color: #484f58; }
-.home-empty { text-align: center; padding: 60px 0; color: #484f58; font-size: 16px; }
-:deep(.n-card) { background: #161b22; border-color: #21262d; cursor: pointer; }
-:deep(.n-card:hover) { border-color: #58a6ff; }
+.project-date { font-size: 12px; color: var(--app-muted); }
+.home-empty { text-align: center; padding: 60px 0; color: var(--app-muted); font-size: 16px; }
+:deep(.n-card) { background: var(--app-panel); border-color: var(--app-border); cursor: pointer; }
+:deep(.n-card:hover) { border-color: var(--app-accent); }
 </style>

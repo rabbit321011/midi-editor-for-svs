@@ -6,6 +6,7 @@ import { useObjectTreeStore } from '@/stores/objectTree'
 import { useObjectTreeUiStore } from '@/stores/objectTreeUi'
 import { useHistoryStore } from '@/stores/history'
 import { useProjectStore } from '@/stores/project'
+import { useUiSettingsStore } from '@/stores/uiSettings'
 import type { TrackId } from '@/types'
 import { NColorPicker } from 'naive-ui'
 
@@ -18,6 +19,7 @@ const objectTree = useObjectTreeStore()
 const objectTreeUi = useObjectTreeUiStore()
 const history = useHistoryStore()
 const project = useProjectStore()
+const uiSettings = useUiSettingsStore()
 
 const track = computed(() => tracks.tracks[props.trackId])
 const isAudioTrack = computed(() => (track.value?.trackType ?? 'audio') === 'audio')
@@ -28,6 +30,12 @@ const editName = ref('')
 const showMenu = ref(false)
 const menuX = ref(0)
 const menuY = ref(0)
+const contextMenuStyle = computed(() => ({
+  left: `${Math.max(8, Math.min(menuX.value, window.innerWidth - 188))}px`,
+  top: `${Math.max(8, Math.min(menuY.value, window.innerHeight - 154))}px`,
+  '--floating-menu-opacity': uiSettings.cssVars['--floating-opacity-percent'],
+  '--floating-menu-backdrop': uiSettings.settings.centerGlassEnabled ? 'blur(14px) saturate(1.15)' : 'none',
+}))
 
 function handleClick(e: MouseEvent) {
   if (e.altKey) {
@@ -296,7 +304,7 @@ async function alignTrackStartToZero() {
     </div>
 
     <Teleport to="body">
-      <div v-if="showMenu" class="ctx-menu" :style="{ left: menuX + 'px', top: menuY + 'px' }" @click.stop>
+      <div v-if="showMenu" class="ctx-menu" :style="contextMenuStyle" @click.stop>
         <div class="ctx-item" @click="startRename"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.9 1.8 14.2 4 5.6 12.6 2.8 13.2l.6-2.8 8.5-8.6ZM3 14h10v1H3v-1Z" /></svg>重命名</div>
         <div class="ctx-color">
           <span>音轨颜色</span>
@@ -312,7 +320,7 @@ async function alignTrackStartToZero() {
 .track-header {
   width: 130px;
   flex-shrink: 0;
-  background: var(--app-panel);
+  background: color-mix(in srgb, var(--app-panel) var(--center-opacity-percent), transparent);
   border-left: 3px solid var(--app-accent);
   border-right: 1px solid var(--app-border);
   display: flex;
@@ -431,7 +439,8 @@ async function alignTrackStartToZero() {
 .ctx-menu {
   position: fixed;
   z-index: 9999;
-  background: var(--app-panel);
+  background: color-mix(in srgb, var(--app-elevated) var(--floating-menu-opacity), transparent);
+  backdrop-filter: var(--floating-menu-backdrop);
   border: 1px solid var(--app-border);
   border-radius: 6px;
   padding: 4px 0;
@@ -451,8 +460,8 @@ async function alignTrackStartToZero() {
   fill: currentColor;
 }
 .ctx-item:hover { background: var(--app-hover); }
-.ctx-danger { color: #f85149; }
-.ctx-danger:hover { background: #f8514922; }
+.ctx-danger { color: var(--app-danger); }
+.ctx-danger:hover { background: color-mix(in srgb, var(--app-danger) 14%, transparent); }
 .ctx-color {
   padding: 8px 12px;
   display: grid;

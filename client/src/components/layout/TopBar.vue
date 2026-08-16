@@ -308,7 +308,7 @@ function downloadBlob(filename: string, blob: Blob) {
 }
 .gpu-status:hover { color: var(--app-text); border-color: var(--app-accent); }
 .gpu-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--app-muted); }
-.gpu-dot.active { background: #4fd1a5; }
+.gpu-dot.active { background: var(--app-success); }
 .save-status {
   min-width: 142px;
   max-width: 300px;
@@ -322,8 +322,8 @@ function downloadBlob(filename: string, blob: Blob) {
   font-size: 11px;
 }
 .save-status svg { width: 14px; height: 14px; fill: currentColor; }
-.save-status.success { color: #3fb950; }
-.save-status.error { color: #f85149; }
+.save-status.success { color: var(--app-success); }
+.save-status.error { color: var(--app-danger); }
 .save-message { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .save-percent { min-width: 30px; text-align: right; }
 .save-progress {

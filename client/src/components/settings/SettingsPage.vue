@@ -78,7 +78,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
         <label>左右栏不透明度</label>
         <n-slider v-model:value="uiSettings.settings.sideOpacity" :min="0.2" :max="1" :step="0.05" />
 
-        <label>顶栏不透明度</label>
+        <label>顶栏与状态栏不透明度</label>
         <n-slider v-model:value="uiSettings.settings.topbarOpacity" :min="0.2" :max="1" :step="0.05" />
 
         <label>背景图片</label>

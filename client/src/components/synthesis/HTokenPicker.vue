@@ -136,33 +136,33 @@ function runPulseCommand(command: 'pul-fill' | 'pul-clear') {
   width: min(820px, calc(100vw - 48px));
   height: min(640px, calc(100vh - 48px));
   border-radius: 6px;
-  background: #171c22;
-  color: #d8dee7;
+  background: var(--app-elevated);
+  color: var(--app-text);
 }
 .h-picker-modal .n-card__content { min-height: 0; display: flex; flex-direction: column; }
-.picker-toolbar { display: grid; grid-template-columns: auto minmax(180px, 1fr) auto; gap: 10px; align-items: center; padding-bottom: 12px; border-bottom: 1px solid #303844; }
+.picker-toolbar { display: grid; grid-template-columns: auto minmax(180px, 1fr) auto; gap: 10px; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--app-border); }
 .picker-actions { display: flex; align-items: center; gap: 6px; }
 .picker-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 250px; }
 .token-grid { min-height: 0; overflow: auto; padding: 12px 12px 12px 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); align-content: start; gap: 6px; }
-.token-option { min-width: 0; height: 58px; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 28px 18px; gap: 0 6px; padding: 5px 7px; border: 1px solid #38424d; border-radius: 4px; background: #11161b; color: #d8dee7; text-align: left; cursor: pointer; }
+.token-option { min-width: 0; height: 58px; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 28px 18px; gap: 0 6px; padding: 5px 7px; border: 1px solid var(--app-border); border-radius: 4px; background: var(--app-panel); color: var(--app-text); text-align: left; cursor: pointer; }
 .token-option:hover,
-.token-option:focus-visible { border-color: #5dc9b1; outline: none; background: #18242a; }
-.token-option.current { border-color: #d2a85b; box-shadow: inset 0 0 0 1px #d2a85b; }
+.token-option:focus-visible { border-color: var(--app-accent); outline: none; background: var(--app-hover); }
+.token-option.current { border-color: var(--app-warning); box-shadow: inset 0 0 0 1px var(--app-warning); }
 .token-option.unseen { opacity: 0.62; }
 .token-option strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 16px/28px ui-monospace, SFMono-Regular, Consolas, monospace; }
-.token-option span { grid-column: 1 / -1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #aeb8c5; font-size: 10px; }
-.token-option small { color: #6f7b89; font: 9px/28px ui-monospace, SFMono-Regular, Consolas, monospace; }
-.token-inspector { min-width: 0; padding: 14px; border-left: 1px solid #303844; background: #13181e; overflow: auto; }
+.token-option span { grid-column: 1 / -1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--app-muted); font-size: 10px; }
+.token-option small { color: var(--app-muted); font: 9px/28px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.token-inspector { min-width: 0; padding: 14px; border-left: 1px solid var(--app-border); background: var(--app-surface); overflow: auto; }
 .inspector-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .inspector-heading strong { font-size: 14px; }
-.inspector-heading code { color: #f1b7c7; font-size: 17px; }
-.token-inspector p { color: #aeb8c5; font-size: 12px; line-height: 1.65; }
+.inspector-heading code { color: var(--app-accent); font-size: 17px; }
+.token-inspector p { color: var(--app-muted); font-size: 12px; line-height: 1.65; }
 .token-inspector dl { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 8px; margin-top: 18px; font-size: 11px; }
-.token-inspector dt { color: #6f7b89; }
-.token-inspector dd { min-width: 0; margin: 0; color: #c7d0da; overflow-wrap: anywhere; }
-.token-inspector .seen { color: #5dc9b1; }
-.token-inspector .unseenText { color: #e7b45d; }
+.token-inspector dt { color: var(--app-muted); }
+.token-inspector dd { min-width: 0; margin: 0; color: var(--app-text); overflow-wrap: anywhere; }
+.token-inspector .seen { color: var(--app-success); }
+.token-inspector .unseenText { color: var(--app-warning); }
 .inspector-empty,
-.no-results { color: #6f7b89; font-size: 11px; }
+.no-results { color: var(--app-muted); font-size: 11px; }
 .no-results { grid-column: 1 / -1; padding: 20px; text-align: center; }
 </style>

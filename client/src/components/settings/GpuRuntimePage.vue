@@ -252,7 +252,7 @@ function residentLabel(profile: ModelCatalogItem['vramProfile']) {
 .mode-toggle button { flex: 1; min-width: 0; height: 24px; padding: 0 6px; border: 0; background: transparent; color: var(--app-muted); font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap; }
 .mode-toggle button.active { background: var(--app-accent); color: #fff; }
 .notice { position: absolute; top: calc(100% + 6px); right: 0; z-index: 10; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--app-accent); font-size: 12px; background: var(--app-panel); border: 1px solid var(--app-border); border-radius: 4px; padding: 4px 8px; }
-.error-band { max-width: 1120px; margin-top: 18px; padding: 10px 12px; border: 1px solid #8f3f46; color: #f28b94; }
+.error-band { max-width: 1120px; margin-top: 18px; padding: 10px 12px; border: 1px solid var(--app-danger); color: var(--app-danger); }
 .gpu-band { max-width: 1120px; margin-top: 20px; }
 .gpu-device { padding: 15px 0; border-top: 1px solid var(--app-border); }
 .device-title { display: grid; grid-template-columns: 64px minmax(220px, 1fr) auto; align-items: baseline; gap: 12px; margin-bottom: 9px; }

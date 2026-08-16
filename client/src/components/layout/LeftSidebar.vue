@@ -34,15 +34,15 @@ const sidebarStyle = computed(() => {
 })
 const paneDividerStyle = computed(() => ({ left: `${uiSettings.settings.l1Width}px` }))
 const treeMenuStyle = computed(() => {
-  const palette = floatingMenuPalette(uiSettings.settings.theme)
+  const palette = uiSettings.palette
   return {
-    left: `${menu.value.x}px`,
-    top: `${menu.value.y}px`,
+    left: `${Math.max(8, Math.min(menu.value.x, window.innerWidth - 204))}px`,
+    top: `${Math.max(8, Math.min(menu.value.y, window.innerHeight - 260))}px`,
     '--floating-menu-panel': palette.panel,
     '--floating-menu-border': palette.border,
     '--floating-menu-text': palette.text,
     '--floating-menu-hover': palette.hover,
-    '--floating-menu-opacity': `${Math.round(uiSettings.settings.sideOpacity * 100)}%`,
+    '--floating-menu-opacity': uiSettings.cssVars['--floating-opacity-percent'],
     '--floating-menu-backdrop': uiSettings.settings.sidebarGlassEnabled ? 'blur(14px) saturate(1.15)' : 'none',
   }
 })
@@ -107,12 +107,6 @@ function resetPaneWidths() {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))
-}
-
-function floatingMenuPalette(theme: string) {
-  if (theme === 'light') return { panel: '#ffffff', border: '#d7dde4', text: '#1f2328', hover: '#e7edf3' }
-  if (theme === 'cream') return { panel: '#fff8dc', border: '#d7c58f', text: '#2f2517', hover: '#efe1b8' }
-  return { panel: '#161b22', border: '#21262d', text: '#c9d1d9', hover: '#21262d' }
 }
 
 onBeforeUnmount(() => stopResize?.())
@@ -740,7 +734,9 @@ function cssSafeId(id: NodeId) {
 .tree-context-menu {
   position: fixed;
   z-index: 10000;
-  min-width: 130px;
+  width: 196px;
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
   padding: 4px 0;
   background: color-mix(in srgb, var(--floating-menu-panel) var(--floating-menu-opacity), transparent);
   border: 1px solid var(--floating-menu-border);
@@ -754,8 +750,8 @@ function cssSafeId(id: NodeId) {
   color: var(--floating-menu-text);
   cursor: pointer;
 }
-.tree-menu-item:hover { background: var(--floating-menu-hover); }
-.tree-menu-item.danger { color: #f85149; }
+.tree-menu-item:hover { background: color-mix(in srgb, var(--floating-menu-hover) 82%, transparent); }
+.tree-menu-item.danger { color: var(--app-danger); }
 body.resizing-sidebar {
   cursor: col-resize;
   user-select: none;

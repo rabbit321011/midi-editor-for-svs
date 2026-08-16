@@ -554,8 +554,8 @@ onMounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.pitch-message.done { color: #3fb950; }
-.pitch-message.failed { color: #f85149; }
+.pitch-message.done { color: var(--app-success); }
+.pitch-message.failed { color: var(--app-danger); }
 .notice {
   min-height: 18px;
   padding: 0 10px 10px;
@@ -565,14 +565,14 @@ onMounted(() => {
 :global(.capacity-modal.n-card) {
   width: min(440px, calc(100vw - 48px));
   border-radius: 6px;
-  background: #171c22;
+  background: var(--app-elevated);
 }
 :global(.capacity-modal .n-card__content) {
   padding: 14px;
 }
-.capacity-prompt { display: grid; gap: 10px; color: #b6c0cc; font-size: 12px; }
-.capacity-insufficient { color: #f28b94; }
-.capacity-evictions { color: #d6a86a; overflow-wrap: anywhere; }
+.capacity-prompt { display: grid; gap: 10px; color: var(--app-text); font-size: 12px; }
+.capacity-insufficient { color: var(--app-danger); }
+.capacity-evictions { color: var(--app-warning); overflow-wrap: anywhere; }
 .capacity-metrics { display: flex; flex-wrap: wrap; gap: 8px 12px; }
 .capacity-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .run-status {

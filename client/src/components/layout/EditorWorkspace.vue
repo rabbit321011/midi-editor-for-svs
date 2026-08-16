@@ -96,7 +96,7 @@ const editorWorkspace = useEditorWorkspaceStore()
 
 .editor-tab.active {
   border-color: var(--app-border);
-  background: var(--app-panel);
+  background: color-mix(in srgb, var(--app-panel) var(--center-opacity-percent), transparent);
   color: var(--app-text);
 }
 

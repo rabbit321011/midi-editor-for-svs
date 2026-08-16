@@ -177,7 +177,7 @@
   margin-bottom: 14px;
 }
 .section-title h2 { margin: 0 0 4px; font-size: 16px; font-weight: 650; }
-.section-index { color: #5dc9b1; font: 12px/22px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.section-index { color: var(--app-accent); font: 12px/22px ui-monospace, SFMono-Regular, Consolas, monospace; }
 .workflow { border-top: 1px solid var(--app-border); }
 .workflow-step {
   display: grid;
@@ -191,9 +191,9 @@
   height: 24px;
   display: grid;
   place-items: center;
-  border: 1px solid #456d66;
+  border: 1px solid var(--app-accent);
   border-radius: 3px;
-  color: #8ed8ca;
+  color: var(--app-accent);
   font: 10px ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 .workflow-step strong { display: block; margin-bottom: 4px; font-size: 13px; }
@@ -220,12 +220,12 @@
 }
 .control-row.header { min-height: 32px; color: var(--app-muted); font-size: 10px; text-transform: uppercase; }
 .control-row strong { font-size: 12px; }
-.control-row > span { color: #9bcabb; font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.control-row > span { color: var(--app-accent); font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
 .playback-band {
   display: grid;
   grid-template-columns: repeat(3, minmax(150px, 1fr));
   gap: 12px;
-  border-left-color: #5dc9b1;
+  border-left-color: var(--app-accent);
 }
 .playback-band div { display: grid; gap: 3px; }
 .playback-band div span { color: var(--app-muted); font-size: 11px; }
@@ -246,7 +246,7 @@
   padding: 8px;
   border: 1px solid var(--app-border);
   border-radius: 6px;
-  background: var(--app-surface);
+  background: color-mix(in srgb, var(--app-surface) var(--center-opacity-percent), transparent);
   font-size: 15px;
   font-weight: 700;
 }
@@ -276,7 +276,7 @@ kbd {
   padding: 4px 7px;
   border: 1px solid var(--app-border);
   border-radius: 4px;
-  background: var(--app-surface);
+  background: color-mix(in srgb, var(--app-surface) var(--center-opacity-percent), transparent);
   color: var(--app-text);
   font: 11px ui-monospace, SFMono-Regular, Consolas, monospace;
   text-align: center;

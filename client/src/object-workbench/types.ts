@@ -1,4 +1,5 @@
 import type { CompGroupId, SegmentId, TrackId } from '@/types'
+import type { V5PModelId } from './v5pModel'
 
 export type NodeId = string
 
@@ -163,6 +164,7 @@ export interface SynthesisKanaTrack {
   origin: SynthesisTrackOrigin
   units: SynthesisKanaUnit[]
   boundaries: SynthesisKanaSegmentBoundary[]
+  boundaryFrameContract?: 'object-frame.v1'
   revisions: SynthesisTrackRevision[]
 }
 
@@ -227,6 +229,22 @@ export interface SynthesisReferenceBinding {
   boundAt: string
 }
 
+export type V5PGuidance =
+  | { mode: 'unified'; cfg: number }
+  | {
+      mode: 'three-way'
+      audio: number
+      text: number
+      midi: number
+      formula: 'audio-text-midi-telescoping.v1'
+    }
+
+export interface V5PSamplingSettings {
+  guidance: V5PGuidance
+  steps: number
+  seed: number
+}
+
 export interface SynthesisTake {
   id: string
   name: string
@@ -245,6 +263,7 @@ export interface SynthesisTake {
   vaeSHA256: string
   adapterSHA256: string
   seed: number
+  samplingSettings?: V5PSamplingSettings
   createdAt: string
   completedAt?: string
   error?: string
@@ -261,6 +280,8 @@ export interface SynthesisUnitObjectNode extends BaseTreeNode {
     hTokenTrack: SynthesisHTokenTrack
     midiPTokenTrack: SynthesisMidiPTokenTrack
     reference: SynthesisReferenceBinding | null
+    presetId?: V5PModelId
+    samplingSettings?: V5PSamplingSettings
     unitRevision: number
     takes: SynthesisTake[]
     activeTakeId: string | null

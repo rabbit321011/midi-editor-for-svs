@@ -22,6 +22,7 @@ describe('Synthesis Text Control protocol', () => {
         hAudit: {
           phonePhraseCount: 1, pulPhraseCount: 0, exactControlPhraseCount: 0,
           pulFrameCount: 0, lockedEventTokenSHA256: 'abc',
+          boundaryMode: 'kana-hard',
           phraseModes: [{ phraseId: 'segment:a', placementMode: 'phone', fallbackReason: null }],
         },
         runtimeHashes: { vocab: 'def' },
@@ -31,6 +32,7 @@ describe('Synthesis Text Control protocol', () => {
     expect(result?.kanaUnits[0].phraseId).toBe('segment:a')
     expect(result?.hEvents.map(event => event.frame)).toEqual([2, 15])
     expect(result?.hEvents[0]).toMatchObject({ phraseId: 'segment:a', moraIndex: 0, phoneIndex: 0 })
+    expect(result?.hAudit.boundaryMode).toBe('kana-hard')
   })
 
   it('rejects H collisions and forbidden PUNCT', () => {

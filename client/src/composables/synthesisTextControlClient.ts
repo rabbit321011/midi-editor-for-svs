@@ -9,6 +9,12 @@ export interface SynthesisTextControlPhraseInput {
   startFrame: number
   endFrameExclusive: number
   controlEndFrameExclusive?: number
+  kanaUnits?: Array<{
+    id: string
+    kana: string
+    startFrame: number
+    endFrameExclusive: number
+  }>
 }
 
 export interface RunSynthesisTextControlOptions {
@@ -19,6 +25,7 @@ export interface RunSynthesisTextControlOptions {
   sourceTrack: 'segment' | 'kana'
   sourceRevision: number
   phrases: SynthesisTextControlPhraseInput[]
+  hardKanaBoundaries?: boolean
   sofaEscapeSeconds?: number
   onProgress?: (progress: number, message: string) => void
 }
@@ -43,6 +50,7 @@ export async function runSynthesisTextControl(
         sourceTrack: options.sourceTrack,
         sourceRevision: options.sourceRevision,
         phrases: options.phrases,
+        hardKanaBoundaries: options.hardKanaBoundaries ?? false,
         sofaEscapeSeconds: options.sofaEscapeSeconds ?? 0,
         device: 'cuda:0',
       }),

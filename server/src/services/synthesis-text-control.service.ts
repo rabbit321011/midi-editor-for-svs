@@ -4,6 +4,7 @@ import path from 'path'
 import type { WebSocket } from 'ws'
 import { GPU_PROCESS_CANCELLED_MESSAGE, registerGpuProcess, wasGpuProcessReleased } from './gpu-runtime.service.js'
 import { verifyOwnedGuideWav } from './owned-guide-runtime.js'
+import { isAnalysisRuntimeReady, runAnalysisInfer } from './analysis-runtime.service.js'
 
 const PROJECT_ROOT = 'E:/AIscene/AISVC-midi-web'
 const TO_LINUX_ROOT = 'E:/MyProject/ToLinuxServer'
@@ -30,6 +31,12 @@ export interface SynthesisTextControlPhrase {
    * have not been materialized yet.
    */
   controlEndFrameExclusive?: number
+  kanaUnits?: Array<{
+    id: string
+    kana: string
+    startFrame: number
+    endFrameExclusive: number
+  }>
 }
 
 export interface SynthesisTextControlRequest {
@@ -40,6 +47,7 @@ export interface SynthesisTextControlRequest {
   sourceTrack: 'segment' | 'kana'
   sourceRevision: number
   phrases: SynthesisTextControlPhrase[]
+  hardKanaBoundaries?: boolean
   sofaEscapeSeconds?: number
   device?: string
 }
@@ -68,6 +76,9 @@ export function validateSynthesisTextControlRequest(req: SynthesisTextControlReq
     throw new Error('SOFA 逸散程度必须在 0s 到 2s 之间')
   }
   if (!Array.isArray(req.phrases) || req.phrases.length === 0) throw new Error('Text Control phrase 为空')
+  if (req.hardKanaBoundaries && req.sourceTrack !== 'kana') {
+    throw new Error('Kana 硬边界只支持 KanaTrack 来源')
+  }
 
   const ids = new Set<string>()
   let previousEnd = -1
@@ -96,6 +107,23 @@ export function validateSynthesisTextControlRequest(req: SynthesisTextControlReq
     if (req.sourceTrack === 'kana' && phrase.controlEndFrameExclusive === undefined) {
       throw new Error(`Kana phrase ${index + 1} 缺少 SEG control boundary`)
     }
+    if (req.hardKanaBoundaries) {
+      if (!Array.isArray(phrase.kanaUnits) || phrase.kanaUnits.length === 0) {
+        throw new Error(`Kana phrase ${index + 1} 缺少 KanaUnit 硬边界`)
+      }
+      let previousKanaEnd = -1
+      for (const [kanaIndex, kana] of phrase.kanaUnits.entries()) {
+        if (!kana.id?.trim() || !kana.kana?.trim()
+          || !Number.isInteger(kana.startFrame) || !Number.isInteger(kana.endFrameExclusive)
+          || kana.startFrame < phrase.startFrame
+          || kana.endFrameExclusive <= kana.startFrame
+          || kana.endFrameExclusive > phrase.endFrameExclusive
+          || kana.startFrame < previousKanaEnd) {
+          throw new Error(`Kana phrase ${index + 1} 的 KanaUnit ${kanaIndex + 1} 硬边界无效`)
+        }
+        previousKanaEnd = kana.endFrameExclusive
+      }
+    }
     const nextPhrase = req.phrases[index + 1]
     if (
       nextPhrase
@@ -118,6 +146,7 @@ export function buildSynthesisTextControlJob(req: SynthesisTextControlRequest) {
     frameCount: req.frameCount,
     sourceTrack: req.sourceTrack,
     sourceRevision: req.sourceRevision,
+    hardKanaBoundaries: req.hardKanaBoundaries === true,
     targetPhrases: req.phrases.map(phrase => ({
       id: phrase.id,
       text: phrase.kana.trim(),
@@ -128,6 +157,7 @@ export function buildSynthesisTextControlJob(req: SynthesisTextControlRequest) {
       ...(phrase.controlEndFrameExclusive === undefined
         ? {}
         : { controlEndFrameExclusive: phrase.controlEndFrameExclusive }),
+      ...(phrase.kanaUnits === undefined ? {} : { kanaUnits: phrase.kanaUnits }),
     })),
   }
 }
@@ -167,21 +197,7 @@ export async function runSynthesisTextControl(
     fs.writeFileSync(jobManifest, JSON.stringify(buildSynthesisTextControlJob(req), null, 2), 'utf-8')
 
     send(ws, { type: 'progress', progress: 5, message: '校验 V5-P Text Control 运行时' })
-    await runJsonProcess(SOFA_PYTHON, [
-      PREPARE_SCRIPT,
-      '--job-manifest', jobManifest,
-      '--output', alignmentFile,
-      '--runtime', V5P_RUNTIME,
-      '--h-runner', H_RUNNER,
-      '--singer-root', SINGER_ROOT,
-      '--sofa-repo', SOFA_REPO,
-      '--sofa-checkpoint', SOFA_CHECKPOINT,
-      '--escape-seconds', String(req.sofaEscapeSeconds ?? 0),
-      '--japanese', V5P_JAPANESE,
-      '--vocab', V5P_VOCAB,
-      '--hash-contract', 'v5p-source-20260810',
-      '--gpu', deviceIndex(req.device),
-    ], event => {
+    const onAlignmentEvent = (event: ProcessEvent) => {
       if (event.type === 'loading_sofa') send(ws, { type: 'progress', progress: 8, message: '加载 SOFA' })
       if (event.type === 'loaded_sofa') send(ws, { type: 'progress', progress: 18, message: 'SOFA 已加载' })
       if (event.type === 'align_phrase') {
@@ -192,7 +208,39 @@ export async function runSynthesisTextControl(
           message: `SOFA 对齐第 ${event.index}/${event.total} 句`,
         })
       }
-    }, { id: `text-control:${req.jobId}`, kind: 'analysis', modelId: 'SOFA Japanese', device: req.device || 'cuda:0' })
+    }
+    if (req.hardKanaBoundaries) {
+      if (!isAnalysisRuntimeReady('SOFA Japanese')) {
+        throw new Error('SOFA Japanese 常驻 Runtime 未加载；请重新执行显存准备')
+      }
+      await runAnalysisInfer('SOFA Japanese', {
+        type: 'align_constrained',
+        jobManifest,
+        output: alignmentFile,
+        runtime: V5P_RUNTIME,
+        hRunner: H_RUNNER,
+        singerRoot: SINGER_ROOT,
+        escapeSeconds: req.sofaEscapeSeconds ?? 0,
+        japanese: V5P_JAPANESE,
+        vocab: V5P_VOCAB,
+      }, onAlignmentEvent)
+    } else {
+      await runJsonProcess(SOFA_PYTHON, [
+        PREPARE_SCRIPT,
+        '--job-manifest', jobManifest,
+        '--output', alignmentFile,
+        '--runtime', V5P_RUNTIME,
+        '--h-runner', H_RUNNER,
+        '--singer-root', SINGER_ROOT,
+        '--sofa-repo', SOFA_REPO,
+        '--sofa-checkpoint', SOFA_CHECKPOINT,
+        '--escape-seconds', String(req.sofaEscapeSeconds ?? 0),
+        '--japanese', V5P_JAPANESE,
+        '--vocab', V5P_VOCAB,
+        '--hash-contract', 'v5p-source-20260810',
+        '--gpu', deviceIndex(req.device),
+      ], onAlignmentEvent, { id: `text-control:${req.jobId}`, kind: 'analysis', modelId: 'SOFA Japanese', device: req.device || 'cuda:0' })
+    }
 
     send(ws, { type: 'progress', progress: 90, message: '按训练 placement 编译 Kana/H' })
     await runJsonProcess(SOFA_PYTHON, [

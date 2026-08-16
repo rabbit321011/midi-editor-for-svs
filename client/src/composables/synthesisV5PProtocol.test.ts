@@ -15,6 +15,14 @@ describe('V5-P result protocol', () => {
       type: 'v5p-result', result: { ...fixture(), outputSHA256: 'bad' },
     }, 'v5p-job-test')).toBeNull()
   })
+
+  it('accepts a V5Pg_20K result when the expected preset matches', () => {
+    const result = { ...fixture(), presetId: 'V5Pg_20K' as const }
+    expect(readSynthesisV5PResult({
+      type: 'v5p-result',
+      result,
+    }, 'v5p-job-test', 'V5Pg_20K')).toEqual(result)
+  })
 })
 
 function fixture() {
@@ -33,5 +41,10 @@ function fixture() {
     vaeSHA256: 'd'.repeat(64),
     adapterSHA256: 'e'.repeat(64),
     seed: 42,
+    samplingSettings: {
+      guidance: { mode: 'unified' as const, cfg: 1 },
+      steps: 32,
+      seed: 42,
+    },
   }
 }

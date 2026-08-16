@@ -61,6 +61,34 @@ Take/range = 禁止
 编辑页面是某个 `SynthesisUnit` 的内部编辑器，不再把 H 分散到 TextObject Editor、把 MIDI-P 分散
 到 MidiObject Editor。
 
+### 2.1 V5Pg_20K 第二 Direct-Control 模型（2026-08-13）
+
+合成单元新增模型选择，默认 `V5P_40K_EMA`，可选择 `V5Pg_20K`（V5-Pg20-HLR07 20k final）。
+模型选择保存在 `SynthesisUnit.presetId`，旧项目缺省时回退到 40K EMA；选择只影响后续生成，
+已完成的 Take 仍保留生成时的 preset/hash。
+
+V5Pg_20K 身份：
+
+```text
+checkpoint: E:/MyProject/重要模型保存/V5Pg_20K/step_020000_final.pt
+SHA256:     36c424a6c4e1afabf9e1d7d29a343b4d6816e869297b021e05001b9cf1d2143f
+schema:     v5pg_training_checkpoint_v1
+step:       20000，EMA step = 60000（EMA offset 40000）
+VAE:        285k online VAE，SHA f18aeecacc04173cd2ea73bbdf8edae9e976d18e4ca050c38e2723281c5cba85
+```
+
+结构、H/PUL、GAME MIDI-P 合同与 40K EMA 完全一致；`v5p_direct_runner.py` 按 preset 校验
+schema、step、EMA offset 和训练合同。常驻 Runtime 按 modelId 独立管理，两个 V5-P 模型可分别
+加载/释放。显存档案未单独标定时复用 40K EMA 档案，理论占用一致。
+
+### 2.2 统一 CFG 与三路 CFG
+
+合成单元的高级采样菜单支持统一 CFG，以及 A 音频 / Text-H / MIDI-P 三路独立 CFG。两款 V5-P
+模型的训练条件 dropout 均为 A 0.30 / Text 0.15 / MIDI 0.30。三路使用
+`audio-text-midi-telescoping.v1` 公式；三个值相同时严格退化为同值统一 CFG。菜单默认收起，当前不提供
+经验预设。每个 Take 冻结 guidance、steps 和 seed，服务端 preflight、audit 和 result 进行一致性校验。
+详细合同见 `docs/v5p-three-way-cfg.md`。
+
 ## 3. 独立轨与单目标覆盖
 
 当前最重要的用户裁决：
@@ -275,6 +303,12 @@ H event 精确归属所选 `moraIndex` 且不越过 control range；相邻 mora 
 
 提交只替换所选 Kana control range。手工 H 需显式确认覆盖，一次 undo 恢复整段旧值；Segment、Kana、
 MIDI-P revision 不变。
+
+Segment 右键另有“按本 Segment 当前 Kana 对齐至 H Token”。该动作同时把当前 KanaUnit 的文本和
+`[startFrame,endFrameExclusive)` 作为硬约束传入 SOFA 常驻 Runtime。项目内
+`sofa_kana_constrained.py` 在 JPN_Test2_Plus 的 `ph_frame_logits/ph_edge_logits` 上执行带 Kana 状态 mask
+的原生单调 DP；不是自由对齐后的投影或搬帧。相邻 Kana 有间隙时仅 `SP` 可占用空白。没有合法完整
+路径则不写 H；成功结果继续经过训练侧 placement renderer，再一次性覆盖当前 Segment 的 H 范围。
 
 ## 7. H 实际训练表示调查
 

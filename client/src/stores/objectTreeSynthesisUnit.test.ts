@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { TOP_LEVEL_IDS, createEmptyProjectObjectTree, createEmptySynthesisUnit } from '@/object-workbench'
-import type { NodeId, SynthesisUnitObjectNode } from '@/object-workbench'
+import type { NodeId, SynthesisUnitObjectNode, TrackFolderNode } from '@/object-workbench'
 import { useObjectTreeStore } from './objectTree'
 import { useTracksStore } from './tracks'
 import { useHistoryStore } from './history'
@@ -54,6 +54,101 @@ describe('SynthesisUnit object-tree integration', () => {
     expect(objectTree.deleteNode('node:audio:guide')).toEqual({ ok: true })
     expect(objectTree.node(unit.id)?.kind).toBe('synthesisUnit')
     expect(tracks.sourceBlobs.get(result.guideBlobKey ?? '')).toBe(output)
+  })
+
+  it('does not auto-create a timeline object for a Resource SynthesisUnit', () => {
+    const objectTree = useObjectTreeStore()
+    const tracks = useTracksStore()
+    const tree = createEmptyProjectObjectTree()
+    const resource = tree.root.children.find(node => node.id === TOP_LEVEL_IDS.resource)
+    if (!resource || resource.kind !== 'folder') throw new Error('missing resource')
+    const unit = makeUnit('node:synthesisUnit:resource', 'Resource SYN')
+    unit.synthesisUnit.defaultTimelineStart = 5
+    resource.children.push(unit)
+
+    objectTree.loadObjectTree(tree)
+
+    expect(tracks.trackOrder).toEqual([])
+    expect(Object.values(objectTree.index.nodes).some(node => node.kind === 'trackObject')).toBe(false)
+    expect(objectTree.node(unit.id)?.kind).toBe('synthesisUnit')
+  })
+
+  it('keeps a SynthesisUnit on its saved mixed audio track when reloading', () => {
+    const objectTree = useObjectTreeStore()
+    const tracks = useTracksStore()
+    const tree = createEmptyProjectObjectTree()
+    const trackSources = tree.root.children.find(node => node.id === TOP_LEVEL_IDS.trackSources)
+    const tracksRoot = tree.root.children.find(node => node.id === TOP_LEVEL_IDS.tracks)
+    if (!trackSources || trackSources.kind !== 'folder') throw new Error('missing trackSources')
+    if (!tracksRoot || tracksRoot.kind !== 'folder') throw new Error('missing tracks')
+
+    const unit = makeUnit('node:synthesisUnit:moved', 'Moved SYN')
+    unit.synthesisUnit.timelineTrackId = 'trk_original'
+    unit.synthesisUnit.defaultTimelineStart = 1
+    trackSources.children.push(unit)
+    const targetTrack: TrackFolderNode = {
+      id: 'node:trackFolder:trk_target',
+      kind: 'trackFolder',
+      name: 'Target audio track',
+      trackFolder: { trackType: 'audio' },
+      legacy: { trackId: 'trk_target' },
+      children: [
+        {
+          id: 'node:trackObject:ordinary',
+          kind: 'trackObject',
+          name: 'ordinary.wav',
+          trackObject: {
+            contentType: 'audio',
+            sourceObjectId: 'node:audio:ordinary',
+            timelineStart: 0,
+            timelineEnd: 4,
+            ignored: false,
+          },
+          legacy: { segmentId: 'ordinary', trackId: 'trk_target' },
+        },
+        {
+          id: 'node:trackObject:synthesis:moved',
+          kind: 'trackObject',
+          name: unit.name,
+          trackObject: {
+            contentType: 'audio',
+            sourceObjectId: unit.id,
+            timelineStart: 6,
+            timelineEnd: 6 + unit.synthesisUnit.guide.duration,
+            ignored: false,
+          },
+          legacy: { trackId: 'trk_target' },
+        },
+      ],
+    }
+    tracksRoot.children.push(targetTrack)
+    tracks.tracks.trk_target = {
+      id: 'trk_target',
+      name: 'Target audio track',
+      trackType: 'audio',
+      color: '#58a6ff',
+      segments: ['ordinary'],
+      sourceFile: 'ordinary.wav',
+      sampleRate: 44100,
+      totalSamples: 176400,
+      f0Cache: null,
+      f0Pending: 0,
+      f0Total: 0,
+      collapsed: false,
+      muted: false,
+      solo: false,
+      volume: 1,
+      ignored: false,
+      boundCompGroupId: null,
+    }
+    tracks.trackOrder.push('trk_target')
+
+    objectTree.loadObjectTree(tree)
+
+    expect(objectTree.parent('node:trackObject:synthesis:moved')?.id).toBe('node:trackFolder:trk_target')
+    expect(tracks.trackOrder).toEqual(['trk_target'])
+    expect(unit.synthesisUnit.timelineTrackId).toBe('trk_target')
+    expect(unit.synthesisUnit.defaultTimelineStart).toBe(6)
   })
 
   it('binds a full-Guide follow-latest reference with undo and redo', () => {

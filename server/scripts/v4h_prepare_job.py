@@ -107,6 +107,30 @@ def validate_phrases(source, duration, label, tokenizer):
         tokens = [int(token) for token in tokenizer.encode(text)]
         if not tokens:
             raise ValueError(f"{label} phrase {index + 1} tokenizer returned no tokens")
+        kana_units = raw.get("kanaUnits")
+        if kana_units is not None:
+            if not isinstance(kana_units, list) or not kana_units:
+                raise ValueError(f"{label} phrase {index + 1} has no KanaUnit bounds")
+            previous_unit_end = None
+            checked_units = []
+            for unit_index, unit in enumerate(kana_units):
+                kana = str(unit.get("kana") or "").strip()
+                start_frame = int(unit["startFrame"])
+                end_frame = int(unit["endFrameExclusive"])
+                phrase_start_frame = int(raw["startFrame"])
+                phrase_end_frame = int(raw["endFrameExclusive"])
+                if not kana or start_frame < phrase_start_frame or end_frame <= start_frame or end_frame > phrase_end_frame:
+                    raise ValueError(f"{label} phrase {index + 1} KanaUnit {unit_index + 1} frame range is invalid")
+                if previous_unit_end is not None and start_frame < previous_unit_end:
+                    raise ValueError(f"{label} phrase {index + 1} KanaUnit bounds overlap")
+                checked_units.append({
+                    "id": str(unit.get("id") or f"kana:{index}:{unit_index}"),
+                    "kana": kana,
+                    "startFrame": start_frame,
+                    "endFrameExclusive": end_frame,
+                })
+                previous_unit_end = end_frame
+            kana_units = checked_units
         phrases.append(
             {
                 "id": str(raw.get("id") or f"{label}:phrase:{index}"),
@@ -115,6 +139,7 @@ def validate_phrases(source, duration, label, tokenizer):
                 "start": start,
                 "end": min(end, duration),
                 "tokens": tokens,
+                **({"kanaUnits": kana_units} if kana_units is not None else {}),
                 **(
                     {
                         "sourceStartFrame": int(raw["startFrame"]),
@@ -207,6 +232,10 @@ def prepare_region(
             "start": phrase["start"] - crop_start,
             "end": phrase["end"] - crop_start,
         }
+        if local_phrase.get("kanaUnits") is not None:
+            if not hasattr(sofa_runtime, "set_kana_constraints"):
+                raise ValueError("current SOFA runtime does not support hard Kana boundaries")
+            sofa_runtime.set_kana_constraints(local_phrase["kanaUnits"], crop_start)
         item = {
             "split": label,
             "source_index": batch_offset + index,
@@ -281,6 +310,11 @@ def prepare_region(
         "Phrases": phrases,
         "HAlignment": {
             "schema": "h_alignment_v1_web_phrase_windows",
+            "boundaryMode": (
+                "kana-hard"
+                if phrases and all(phrase.get("kanaUnits") for phrase in phrases)
+                else "free"
+            ),
             "sample_status": (
                 "all_phone" if eligible == len(candidates)
                 else "all_sentence_fallback" if eligible == 0
@@ -292,8 +326,7 @@ def prepare_region(
     }
 
 
-def main():
-    args = parse_args()
+def run_job(args, sofa_runtime_override=None):
     if not math.isfinite(args.escape_seconds) or not 0 <= args.escape_seconds <= 2:
         raise ValueError("SOFA escape seconds must be between 0 and 2")
     os.environ.setdefault(
@@ -349,9 +382,12 @@ def main():
         sofa_repo = args.sofa_repo.resolve()
         checkpoint = sofa_checkpoint
 
-    emit("loading_sofa", checkpoint=str(sofa_checkpoint))
-    sofa_runtime = h_runner.SofaRuntime(SofaArgs())
-    emit("loaded_sofa")
+    if sofa_runtime_override is None:
+        emit("loading_sofa", checkpoint=str(sofa_checkpoint))
+        sofa_runtime = h_runner.SofaRuntime(SofaArgs())
+        emit("loaded_sofa")
+    else:
+        sofa_runtime = sofa_runtime_override
     job = json.loads(args.job_manifest.read_text(encoding="utf-8"))
     temp_dir = Path(tempfile.mkdtemp(prefix="v4h_phrase_", dir=str(args.output.parent)))
     try:
@@ -413,6 +449,10 @@ def main():
         emit("complete", output=str(args.output), **output["summary"])
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def main():
+    run_job(parse_args())
 
 
 if __name__ == "__main__":

@@ -5,14 +5,19 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import { V5P_DIRECT_PRESET } from './v5p-preset.js'
+import {
+  V5P_DIRECT_PRESET,
+  getV5PDirectPreset,
+  type V5PDirectPreset,
+  type V5PModelId,
+} from './v5p-preset.js'
 
 const execFileAsync = promisify(execFile)
 const PROJECT_ROOT = 'E:/AIscene/AISVC-midi-web'
 const SINGER_ROOT = V5P_DIRECT_PRESET.singerRoot
 const RUNTIME_DIR = path.join(PROJECT_ROOT, 'data', 'v5p-runtime')
 const WORKER = path.join(PROJECT_ROOT, 'server', 'scripts', 'v5p_resident_worker.py')
-const V5P_RUNTIME_ID = 'V5P_40K_EMA'
+const DEFAULT_V5P_MODEL: V5PModelId = V5P_DIRECT_PRESET.id
 
 export type ModelRuntimeState = 'unloaded' | 'loading' | 'ready' | 'busy' | 'releasing' | 'error'
 
@@ -48,10 +53,10 @@ export function readModelRuntimeStatus(): ModelRuntimeStatus[] {
   return [...runtimes.values()].map(publicRuntime)
 }
 
-export function getV5PRuntimeStatus(): ModelRuntimeStatus {
-  return publicRuntime(runtimes.get(V5P_RUNTIME_ID) ?? {
-    id: V5P_RUNTIME_ID,
-    modelId: V5P_DIRECT_PRESET.id,
+export function getV5PRuntimeStatus(modelId: V5PModelId = DEFAULT_V5P_MODEL): ModelRuntimeStatus {
+  return publicRuntime(runtimes.get(modelId) ?? {
+    id: modelId,
+    modelId,
     device: 'cuda:0',
     state: 'unloaded',
     presetFile: '',
@@ -59,13 +64,17 @@ export function getV5PRuntimeStatus(): ModelRuntimeStatus {
   })
 }
 
-export function isV5PRuntimeReady(): boolean {
-  const runtime = runtimes.get(V5P_RUNTIME_ID)
+export function isV5PRuntimeReady(modelId: V5PModelId = DEFAULT_V5P_MODEL): boolean {
+  const runtime = runtimes.get(modelId)
   return runtime?.state === 'ready'
 }
 
-export async function loadV5PRuntime(device = 'cuda:0'): Promise<ModelRuntimeStatus> {
-  const existing = runtimes.get(V5P_RUNTIME_ID)
+export async function loadV5PRuntime(
+  modelId: V5PModelId = DEFAULT_V5P_MODEL,
+  device = 'cuda:0',
+): Promise<ModelRuntimeStatus> {
+  const preset = getV5PDirectPreset(modelId)
+  const existing = runtimes.get(modelId)
   if (existing) {
     if (existing.state === 'loading') {
       return new Promise((resolve, reject) => {
@@ -73,29 +82,30 @@ export async function loadV5PRuntime(device = 'cuda:0'): Promise<ModelRuntimeSta
       })
     }
     if (existing.state === 'ready' || existing.state === 'busy') return publicRuntime(existing)
-    if (existing.state === 'releasing') throw new Error('V5-P Runtime 正在释放，请稍后再加载')
+    if (existing.state === 'releasing') throw new Error(`${preset.id} Runtime 正在释放，请稍后再加载`)
   }
 
   fs.mkdirSync(RUNTIME_DIR, { recursive: true })
-  const presetFile = path.join(RUNTIME_DIR, `${V5P_RUNTIME_ID}.preset.json`)
-  const resources = await buildV5PResources()
-  const preset = {
+  const presetFile = path.join(RUNTIME_DIR, `${preset.id}.preset.json`)
+  const resources = await buildV5PResources(preset)
+  const runtimePreset = {
     schema: 'aisvc.v5p-runtime-preset.v1',
     preset: {
-      id: V5P_DIRECT_PRESET.id,
-      checkpointSchema: V5P_DIRECT_PRESET.checkpointSchema,
-      checkpointStep: V5P_DIRECT_PRESET.checkpointStep,
-      weightSource: V5P_DIRECT_PRESET.weightSource,
-      trainingCodeSHA256: V5P_DIRECT_PRESET.trainingCodeSHA256,
+      id: preset.id,
+      checkpointSchema: preset.checkpointSchema,
+      checkpointStep: preset.checkpointStep,
+      emaStepOffset: preset.emaStepOffset,
+      weightSource: preset.weightSource,
+      trainingCodeSHA256: preset.trainingCodeSHA256,
     },
     device,
     resources,
   }
-  fs.writeFileSync(presetFile, `${JSON.stringify(preset, null, 2)}\n`, { encoding: 'utf-8', flag: 'w' })
+  fs.writeFileSync(presetFile, `${JSON.stringify(runtimePreset, null, 2)}\n`, { encoding: 'utf-8', flag: 'w' })
 
   const record: V5PRuntimeRecord = {
-    id: V5P_RUNTIME_ID,
-    modelId: V5P_DIRECT_PRESET.id,
+    id: preset.id,
+    modelId: preset.id,
     device,
     state: 'loading',
     presetFile,
@@ -103,10 +113,10 @@ export async function loadV5PRuntime(device = 'cuda:0'): Promise<ModelRuntimeSta
     startedAt: new Date().toISOString(),
     lastUsedAt: new Date().toISOString(),
   }
-  runtimes.set(V5P_RUNTIME_ID, record)
+  runtimes.set(preset.id, record)
 
   try {
-    const child = spawn(V5P_DIRECT_PRESET.python, [WORKER, '--preset-file', presetFile], {
+    const child = spawn(preset.python, [WORKER, '--preset-file', presetFile], {
       cwd: SINGER_ROOT,
       windowsHide: true,
       env: {
@@ -136,7 +146,7 @@ export async function loadV5PRuntime(device = 'cuda:0'): Promise<ModelRuntimeSta
     })
     child.on('close', code => {
       if (record.state === 'releasing' || record.shuttingDown) {
-        runtimes.delete(V5P_RUNTIME_ID)
+        runtimes.delete(record.id)
         return
       }
       const detail = stderrBuffer.split(/\r?\n/).filter(Boolean).slice(-3).join(' | ')
@@ -149,8 +159,10 @@ export async function loadV5PRuntime(device = 'cuda:0'): Promise<ModelRuntimeSta
   }
 }
 
-export async function unloadV5PRuntime(): Promise<{ ok: boolean; reason?: string }> {
-  const record = runtimes.get(V5P_RUNTIME_ID)
+export async function unloadV5PRuntime(
+  modelId: V5PModelId = DEFAULT_V5P_MODEL,
+): Promise<{ ok: boolean; reason?: string }> {
+  const record = runtimes.get(modelId)
   if (!record) return { ok: false, reason: 'V5-P Runtime 未加载' }
   if (record.state === 'releasing') return { ok: false, reason: 'V5-P Runtime 正在释放' }
   record.state = 'releasing'
@@ -171,7 +183,7 @@ export async function unloadV5PRuntime(): Promise<{ ok: boolean; reason?: string
   } catch {
     // The process may already have exited.
   }
-  runtimes.delete(V5P_RUNTIME_ID)
+  runtimes.delete(record.id)
   return { ok: true }
 }
 
@@ -181,7 +193,7 @@ export async function unloadAllModelRuntimes(): Promise<{ released: string[]; fa
   for (const id of [...runtimes.keys()]) {
     const record = runtimes.get(id)
     if (!record) continue
-    const result = await unloadV5PRuntime()
+    const result = await unloadV5PRuntime(record.modelId as V5PModelId)
     if (result.ok) released.push(id)
     else failed.push({ id, reason: result.reason || '释放失败' })
   }
@@ -189,14 +201,15 @@ export async function unloadAllModelRuntimes(): Promise<{ released: string[]; fa
 }
 
 export async function runV5PResidentInfer(
+  modelId: V5PModelId,
   jobFile: string,
   expectedJobSha256: string,
   outputDir: string,
   onEvent?: (event: Record<string, any>) => void,
 ): Promise<string> {
-  const record = runtimes.get(V5P_RUNTIME_ID)
+  const record = runtimes.get(modelId)
   if (!record || (record.state !== 'ready' && record.state !== 'busy')) {
-    throw new Error('V5-P Runtime 未加载；请先在显存页面加载模型')
+    throw new Error(`${modelId} Runtime 未加载；请先在显存页面加载模型`)
   }
   if (record.pendingInfer) throw new Error('V5-P Runtime 正在执行其他任务')
   if (!record.child || record.child.exitCode != null) throw new Error('V5-P Runtime 已退出')
@@ -247,6 +260,14 @@ function handleWorkerLine(record: V5PRuntimeRecord, line: string): void {
     const pending = record.pendingLoad
     record.pendingLoad = undefined
     pending?.resolve(publicRuntime(record))
+    return
+  }
+  if (event.type === 'resident_updated') {
+    const residentMiB = Number(event.residentMiB)
+    if (Number.isFinite(residentMiB) && residentMiB >= 0) {
+      record.residentMiB = residentMiB
+      persistResidentProfile(record.modelId, residentMiB)
+    }
     return
   }
   if (event.type === 'error') {
@@ -321,40 +342,42 @@ function publicRuntime(record: V5PRuntimeRecord): ModelRuntimeStatus {
   }
 }
 
-async function buildV5PResources(): Promise<Record<string, { path: string; sha256?: string }>> {
+async function buildV5PResources(
+  preset: V5PDirectPreset,
+): Promise<Record<string, { path: string; sha256?: string }>> {
   const midiModule = `${SINGER_ROOT}/src/YingMusicSinger/melody/midi_p_v4ph.py`
   return {
     checkpoint: {
-      path: V5P_DIRECT_PRESET.checkpoint,
-      sha256: V5P_DIRECT_PRESET.checkpointSHA256,
+      path: preset.checkpoint,
+      sha256: preset.checkpointSHA256,
     },
     modelConfig: {
-      path: V5P_DIRECT_PRESET.modelConfig,
-      sha256: V5P_DIRECT_PRESET.modelConfigSHA256,
+      path: preset.modelConfig,
+      sha256: preset.modelConfigSHA256,
     },
     vaeConfig: {
-      path: V5P_DIRECT_PRESET.vaeConfig,
-      sha256: V5P_DIRECT_PRESET.vaeConfigSHA256,
+      path: preset.vaeConfig,
+      sha256: preset.vaeConfigSHA256,
     },
     vaeCheckpoint: {
-      path: V5P_DIRECT_PRESET.vaeCheckpoint,
-      sha256: V5P_DIRECT_PRESET.vaeCheckpointSHA256,
+      path: preset.vaeCheckpoint,
+      sha256: preset.vaeCheckpointSHA256,
     },
     placement: {
-      path: V5P_DIRECT_PRESET.placement,
-      sha256: V5P_DIRECT_PRESET.placementSHA256,
+      path: preset.placement,
+      sha256: preset.placementSHA256,
     },
     directControlAdapter: {
-      path: V5P_DIRECT_PRESET.directControlAdapter,
-      sha256: await sha256File(V5P_DIRECT_PRESET.directControlAdapter),
+      path: preset.directControlAdapter,
+      sha256: await sha256File(preset.directControlAdapter),
     },
     runner: {
-      path: V5P_DIRECT_PRESET.directRunner,
-      sha256: await sha256File(V5P_DIRECT_PRESET.directRunner),
+      path: preset.directRunner,
+      sha256: await sha256File(preset.directRunner),
     },
     midiPModule: {
       path: midiModule,
-      sha256: V5P_DIRECT_PRESET.melodyHashes['midi_p_v4ph.py'],
+      sha256: preset.melodyHashes['midi_p_v4ph.py'],
     },
     singerRoot: { path: SINGER_ROOT },
   }

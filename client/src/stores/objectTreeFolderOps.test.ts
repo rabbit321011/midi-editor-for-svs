@@ -41,8 +41,10 @@ describe('object tree folder operations and file import', () => {
 
     expect(result.ok).toBe(true)
     expect(result.ids).toHaveLength(1)
-    expect(store.node(result.ids![0])?.kind).toBe('audio')
-    expect(tracks.sourceBlobs.get('voice.wav')).toBe(file)
+    const imported = store.node(result.ids![0])
+    expect(imported?.kind).toBe('audio')
+    const assetId = imported?.kind === 'audio' ? imported.audio.assetId : undefined
+    expect(tracks.sourceBlobs.get(store.tree.assets[assetId!]?.blobKey ?? '')).toBe(file)
 
     const blocked = await store.importFilesToFolder(TOP_LEVEL_IDS.renders, [file])
     expect(blocked).toMatchObject({ ok: false })
@@ -60,10 +62,11 @@ describe('object tree folder operations and file import', () => {
     const node = store.node(nodeId)
     if (node?.kind !== 'audio') throw new Error('expected audio')
     const assetId = node.audio.assetId
+    const blobKey = store.tree.assets[assetId]?.blobKey ?? ''
 
     expect(store.deleteNode(nodeId).ok).toBe(true)
     expect(store.node(nodeId)).toBeUndefined()
     expect(store.tree.assets[assetId]).toBeUndefined()
-    expect(tracks.sourceBlobs.has('delete-me.wav')).toBe(false)
+    expect(tracks.sourceBlobs.has(blobKey)).toBe(false)
   })
 })

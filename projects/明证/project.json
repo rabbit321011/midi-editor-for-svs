@@ -3564,6 +3564,3876 @@
                     "createdAt": "2026-08-11T16:31:44.809Z",
                     "updatedAt": "2026-08-11T16:31:44.809Z"
                   }
+                },
+                {
+                  "id": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                  "kind": "synthesisUnit",
+                  "name": "普通-偏温柔 - 合成单元",
+                  "synthesisUnit": {
+                    "schema": "aisvc.synthesis-unit.v1",
+                    "guide": {
+                      "assetId": "asset:synthesisGuide:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                      "audioSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe",
+                      "sampleRate": 44100,
+                      "channels": 1,
+                      "sampleCount": 974848,
+                      "duration": 22.105396825396827,
+                      "source": {
+                        "sourceAudioObjectId": "node:trackSource:audio:ad4de2ab-7e09-41c9-8848-08d187a7965f",
+                        "sourceAssetId": "asset:trackSource:70422af7-8fa5-4235-bd98-117e5d6c640b",
+                        "effectiveStartSample": 0,
+                        "effectiveEndSampleExclusive": 974848,
+                        "sourceTimelineStart": 0,
+                        "resolverManifest": "{\"schema\":\"aisvc.owned-guide-resolver.v1\",\"inputKind\":\"trackObject\",\"inputId\":\"node:trackObject:seg_8756504c\",\"sourceAudioObjectId\":\"node:trackSource:audio:ad4de2ab-7e09-41c9-8848-08d187a7965f\",\"sourceAssetId\":\"asset:trackSource:70422af7-8fa5-4235-bd98-117e5d6c640b\",\"effectiveStartSample\":0,\"effectiveEndSampleExclusive\":974848,\"sourceSampleRate\":44100,\"sourceTimelineStart\":0,\"resolvedDuration\":22.10539682539683,\"outputSampleRate\":44100}"
+                      }
+                    },
+                    "frameContract": {
+                      "schema": "aisvc.v5p-frame.v1",
+                      "sampleRate": 44100,
+                      "hopSamples": 2048,
+                      "frameRate": 21.533203125,
+                      "frameCount": 476,
+                      "modelSampleCount": 974848,
+                      "trailingSampleCount": 0,
+                      "compilerVersion": "stable-audio2-oobleck-floor.v1"
+                    },
+                    "segmentTrack": {
+                      "status": "ready",
+                      "revision": 1,
+                      "origin": "whisper-sofa",
+                      "items": [
+                        {
+                          "id": "phrase:whisper:0",
+                          "text": "気付けば気にしてる画面も",
+                          "kana": "きづけばきにしてるがめんも",
+                          "romaji": "ki zu ke ba ki ni shi te ru ga me nmo",
+                          "startFrame": 0,
+                          "speechEndFrameExclusive": 88,
+                          "sourceOnsetSeconds": 0,
+                          "sourceEndSeconds": 4.058,
+                          "origin": "whisper-sofa"
+                        },
+                        {
+                          "id": "phrase:whisper:1",
+                          "text": "そろそろ見飽きた",
+                          "kana": "そろそろみあきた",
+                          "romaji": "so ro so ro mi a ki ta",
+                          "startFrame": 91,
+                          "speechEndFrameExclusive": 148,
+                          "sourceOnsetSeconds": 4.258,
+                          "sourceEndSeconds": 6.911,
+                          "origin": "whisper-sofa"
+                        },
+                        {
+                          "id": "phrase:whisper:2",
+                          "text": "あれ抜きこれ抜き",
+                          "kana": "あれぬきこれぬき",
+                          "romaji": "a re nu ki ko re nu ki",
+                          "startFrame": 148,
+                          "speechEndFrameExclusive": 212,
+                          "sourceOnsetSeconds": 6.911,
+                          "sourceEndSeconds": 9.848,
+                          "origin": "whisper-sofa"
+                        },
+                        {
+                          "id": "phrase:whisper:3",
+                          "text": "それじゃつまんないでしょ",
+                          "kana": "それじゃつまんないでしょ",
+                          "romaji": "so re ja tsu ma nna i de sho",
+                          "startFrame": 212,
+                          "speechEndFrameExclusive": 265,
+                          "sourceOnsetSeconds": 9.848,
+                          "sourceEndSeconds": 12.301,
+                          "origin": "whisper-sofa"
+                        },
+                        {
+                          "id": "phrase:whisper:4",
+                          "text": "退屈でしょ",
+                          "kana": "たいくつでしょ",
+                          "romaji": "ta i ku tsu de sho",
+                          "startFrame": 268,
+                          "speechEndFrameExclusive": 298,
+                          "sourceOnsetSeconds": 12.481,
+                          "sourceEndSeconds": 13.816,
+                          "origin": "whisper-sofa"
+                        },
+                        {
+                          "id": "phrase:whisper:5",
+                          "text": "フリッターフリッターメンを滑って",
+                          "kana": "ふりったーふりったーめんをすべって",
+                          "romaji": "fu ri tta -fu ri tta -me nwo su be tte",
+                          "startFrame": 301,
+                          "speechEndFrameExclusive": 372,
+                          "sourceOnsetSeconds": 14.013,
+                          "sourceEndSeconds": 17.258,
+                          "origin": "whisper-sofa"
+                        },
+                        {
+                          "id": "phrase:whisper:6",
+                          "text": "スワイトアップスワイトアップ",
+                          "kana": "すわいとあっぷすわいとあっぷ",
+                          "romaji": "su wa i to a ppu su wa i to a ppu",
+                          "startFrame": 375,
+                          "speechEndFrameExclusive": 414,
+                          "sourceOnsetSeconds": 17.447,
+                          "sourceEndSeconds": 19.255,
+                          "origin": "whisper-sofa"
+                        },
+                        {
+                          "id": "phrase:whisper:7",
+                          "text": "エアーティー",
+                          "kana": "えあーてぃー",
+                          "romaji": "e a -te i -",
+                          "startFrame": 414,
+                          "speechEndFrameExclusive": 442,
+                          "sourceOnsetSeconds": 19.255,
+                          "sourceEndSeconds": 20.521,
+                          "origin": "whisper-sofa"
+                        },
+                        {
+                          "id": "phrase:whisper:8",
+                          "text": "フリッターフリッ",
+                          "kana": "ふりったーふりっ",
+                          "romaji": "fu ri tta -fu ri xtsu",
+                          "startFrame": 451,
+                          "speechEndFrameExclusive": 476,
+                          "sourceOnsetSeconds": 20.959,
+                          "sourceEndSeconds": 22.105,
+                          "origin": "whisper-sofa"
+                        }
+                      ],
+                      "revisions": [
+                        {
+                          "id": "revision:segment:08f120ef-9305-4fc4-96dd-1df9452e2391",
+                          "revision": 1,
+                          "track": "segment",
+                          "operation": "Guide -> Whisper + SOFA -> SegmentTrack",
+                          "sourceRefs": [
+                            {
+                              "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                              "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                            }
+                          ],
+                          "affectedStartFrame": 0,
+                          "affectedEndFrameExclusive": 476,
+                          "createdAt": "2026-08-12T21:20:59.285Z"
+                        }
+                      ]
+                    },
+                    "kanaTrack": {
+                      "status": "empty",
+                      "revision": 0,
+                      "origin": "empty",
+                      "units": [],
+                      "boundaries": [],
+                      "revisions": []
+                    },
+                    "hTokenTrack": {
+                      "status": "ready",
+                      "revision": 9,
+                      "origin": "alignment",
+                      "events": [
+                        {
+                          "id": "h:0:32",
+                          "frame": 0,
+                          "tokenId": 32,
+                          "symbol": "k",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 0,
+                          "phoneIndex": 0,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:1:56",
+                          "frame": 1,
+                          "tokenId": 56,
+                          "symbol": "i",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 0,
+                          "phoneIndex": 1,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:4:39",
+                          "frame": 4,
+                          "tokenId": 39,
+                          "symbol": "z",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 1,
+                          "phoneIndex": 2,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:6:319",
+                          "frame": 6,
+                          "tokenId": 319,
+                          "symbol": "ɯ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 1,
+                          "phoneIndex": 3,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:16:32",
+                          "frame": 16,
+                          "tokenId": 32,
+                          "symbol": "k",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 2,
+                          "phoneIndex": 4,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:19:320",
+                          "frame": 19,
+                          "tokenId": 320,
+                          "symbol": "e",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 2,
+                          "phoneIndex": 5,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:23:29",
+                          "frame": 23,
+                          "tokenId": 29,
+                          "symbol": "b",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 3,
+                          "phoneIndex": 6,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:24:211",
+                          "frame": 24,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 3,
+                          "phoneIndex": 7,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:32:32",
+                          "frame": 32,
+                          "tokenId": 32,
+                          "symbol": "k",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 4,
+                          "phoneIndex": 8,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:38:56",
+                          "frame": 38,
+                          "tokenId": 56,
+                          "symbol": "i",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 4,
+                          "phoneIndex": 9,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:42:46",
+                          "frame": 42,
+                          "tokenId": 46,
+                          "symbol": "n",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 5,
+                          "phoneIndex": 10,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:43:56",
+                          "frame": 43,
+                          "tokenId": 56,
+                          "symbol": "i",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 5,
+                          "phoneIndex": 11,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:50:345",
+                          "frame": 50,
+                          "tokenId": 345,
+                          "symbol": "ɕ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 6,
+                          "phoneIndex": 12,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:53:56",
+                          "frame": 53,
+                          "tokenId": 56,
+                          "symbol": "i",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 6,
+                          "phoneIndex": 13,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:55:30",
+                          "frame": 55,
+                          "tokenId": 30,
+                          "symbol": "t",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 7,
+                          "phoneIndex": 14,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:57:320",
+                          "frame": 57,
+                          "tokenId": 320,
+                          "symbol": "e",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 7,
+                          "phoneIndex": 15,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:60:59",
+                          "frame": 60,
+                          "tokenId": 59,
+                          "symbol": "ɾ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 8,
+                          "phoneIndex": 16,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:61:319",
+                          "frame": 61,
+                          "tokenId": 319,
+                          "symbol": "ɯ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 8,
+                          "phoneIndex": 17,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:65:328",
+                          "frame": 65,
+                          "tokenId": 328,
+                          "symbol": "g",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 9,
+                          "phoneIndex": 18,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:66:211",
+                          "frame": 66,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 9,
+                          "phoneIndex": 19,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:69:45",
+                          "frame": 69,
+                          "tokenId": 45,
+                          "symbol": "m",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 10,
+                          "phoneIndex": 20,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:70:320",
+                          "frame": 70,
+                          "tokenId": 320,
+                          "symbol": "e",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 10,
+                          "phoneIndex": 21,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:74:327",
+                          "frame": 74,
+                          "tokenId": 327,
+                          "symbol": "ɴ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 11,
+                          "phoneIndex": 22,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:77:45",
+                          "frame": 77,
+                          "tokenId": 45,
+                          "symbol": "m",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 12,
+                          "phoneIndex": 23,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:80:216",
+                          "frame": 80,
+                          "tokenId": 216,
+                          "symbol": "o",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "moraIndex": 12,
+                          "phoneIndex": 24,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:90:365",
+                          "frame": 90,
+                          "tokenId": 365,
+                          "symbol": "<SEP>",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:0",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:91:38",
+                          "frame": 91,
+                          "tokenId": 38,
+                          "symbol": "s",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:1",
+                          "moraIndex": 0,
+                          "phoneIndex": 0,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:94:216",
+                          "frame": 94,
+                          "tokenId": 216,
+                          "symbol": "o",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:1",
+                          "moraIndex": 0,
+                          "phoneIndex": 1,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:98:59",
+                          "frame": 98,
+                          "tokenId": 59,
+                          "symbol": "ɾ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:1",
+                          "moraIndex": 1,
+                          "phoneIndex": 2,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:99:216",
+                          "frame": 99,
+                          "tokenId": 216,
+                          "symbol": "o",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:1",
+                          "moraIndex": 1,
+                          "phoneIndex": 3,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:107:38",
+                          "frame": 107,
+                          "tokenId": 38,
+                          "symbol": "s",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:1",
+                          "moraIndex": 2,
+                          "phoneIndex": 4,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:113:216",
+                          "frame": 113,
+                          "tokenId": 216,
+                          "symbol": "o",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:1",
+                          "moraIndex": 2,
+                          "phoneIndex": 5,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:116:59",
+                          "frame": 116,
+                          "tokenId": 59,
+                          "symbol": "ɾ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:1",
+                          "moraIndex": 3,
+                          "phoneIndex": 6,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:117:216",
+                          "frame": 117,
+                          "tokenId": 216,
+                          "symbol": "o",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:1",
+                          "moraIndex": 3,
+                          "phoneIndex": 7,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:125:45",
+                          "frame": 125,
+                          "tokenId": 45,
+                          "symbol": "m",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:1",
+                          "moraIndex": 4,
+                          "phoneIndex": 8,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:131:56",
+                          "frame": 131,
+                          "tokenId": 56,
+                          "symbol": "i",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:1",
+                          "moraIndex": 4,
+                          "phoneIndex": 9,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:136:211",
+                          "frame": 136,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:1",
+                          "moraIndex": 5,
+                          "phoneIndex": 10,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:139:32",
+                          "frame": 139,
+                          "tokenId": 32,
+                          "symbol": "k",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:1",
+                          "moraIndex": 6,
+                          "phoneIndex": 11,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:141:56",
+                          "frame": 141,
+                          "tokenId": 56,
+                          "symbol": "i",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:1",
+                          "moraIndex": 6,
+                          "phoneIndex": 12,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:144:30",
+                          "frame": 144,
+                          "tokenId": 30,
+                          "symbol": "t",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:1",
+                          "moraIndex": 7,
+                          "phoneIndex": 13,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:145:211",
+                          "frame": 145,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:1",
+                          "moraIndex": 7,
+                          "phoneIndex": 14,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:147:365",
+                          "frame": 147,
+                          "tokenId": 365,
+                          "symbol": "<SEP>",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:1",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:148:211",
+                          "frame": 148,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:2",
+                          "moraIndex": 0,
+                          "phoneIndex": 0,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:153:59",
+                          "frame": 153,
+                          "tokenId": 59,
+                          "symbol": "ɾ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:2",
+                          "moraIndex": 1,
+                          "phoneIndex": 1,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:154:320",
+                          "frame": 154,
+                          "tokenId": 320,
+                          "symbol": "e",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:2",
+                          "moraIndex": 1,
+                          "phoneIndex": 2,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:163:46",
+                          "frame": 163,
+                          "tokenId": 46,
+                          "symbol": "n",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:2",
+                          "moraIndex": 2,
+                          "phoneIndex": 3,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:168:319",
+                          "frame": 168,
+                          "tokenId": 319,
+                          "symbol": "ɯ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:2",
+                          "moraIndex": 2,
+                          "phoneIndex": 4,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:170:32",
+                          "frame": 170,
+                          "tokenId": 32,
+                          "symbol": "k",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:2",
+                          "moraIndex": 3,
+                          "phoneIndex": 5,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:174:56",
+                          "frame": 174,
+                          "tokenId": 56,
+                          "symbol": "i",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:2",
+                          "moraIndex": 3,
+                          "phoneIndex": 6,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:182:32",
+                          "frame": 182,
+                          "tokenId": 32,
+                          "symbol": "k",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:2",
+                          "moraIndex": 4,
+                          "phoneIndex": 7,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:187:216",
+                          "frame": 187,
+                          "tokenId": 216,
+                          "symbol": "o",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:2",
+                          "moraIndex": 4,
+                          "phoneIndex": 8,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:191:59",
+                          "frame": 191,
+                          "tokenId": 59,
+                          "symbol": "ɾ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:2",
+                          "moraIndex": 5,
+                          "phoneIndex": 9,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:192:320",
+                          "frame": 192,
+                          "tokenId": 320,
+                          "symbol": "e",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:2",
+                          "moraIndex": 5,
+                          "phoneIndex": 10,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:200:46",
+                          "frame": 200,
+                          "tokenId": 46,
+                          "symbol": "n",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:2",
+                          "moraIndex": 6,
+                          "phoneIndex": 11,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:205:319",
+                          "frame": 205,
+                          "tokenId": 319,
+                          "symbol": "ɯ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:2",
+                          "moraIndex": 6,
+                          "phoneIndex": 12,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:208:32",
+                          "frame": 208,
+                          "tokenId": 32,
+                          "symbol": "k",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:2",
+                          "moraIndex": 7,
+                          "phoneIndex": 13,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:210:56",
+                          "frame": 210,
+                          "tokenId": 56,
+                          "symbol": "i",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:2",
+                          "moraIndex": 7,
+                          "phoneIndex": 14,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:211:365",
+                          "frame": 211,
+                          "tokenId": 365,
+                          "symbol": "<SEP>",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:2",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:212:38",
+                          "frame": 212,
+                          "tokenId": 38,
+                          "symbol": "s",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:3",
+                          "moraIndex": 0,
+                          "phoneIndex": 0,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:215:216",
+                          "frame": 215,
+                          "tokenId": 216,
+                          "symbol": "o",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:3",
+                          "moraIndex": 0,
+                          "phoneIndex": 1,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:218:59",
+                          "frame": 218,
+                          "tokenId": 59,
+                          "symbol": "ɾ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:3",
+                          "moraIndex": 1,
+                          "phoneIndex": 2,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:219:320",
+                          "frame": 219,
+                          "tokenId": 320,
+                          "symbol": "e",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:3",
+                          "moraIndex": 1,
+                          "phoneIndex": 3,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:222:329",
+                          "frame": 222,
+                          "tokenId": 329,
+                          "symbol": "dʑ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:3",
+                          "moraIndex": 2,
+                          "phoneIndex": 4,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:224:211",
+                          "frame": 224,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:3",
+                          "moraIndex": 2,
+                          "phoneIndex": 5,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:227:346",
+                          "frame": 227,
+                          "tokenId": 346,
+                          "symbol": "tsɯ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:3",
+                          "moraIndex": 3,
+                          "phoneIndex": 6,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:229:319",
+                          "frame": 229,
+                          "tokenId": 319,
+                          "symbol": "ɯ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:3",
+                          "moraIndex": 3,
+                          "phoneIndex": 7,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:232:45",
+                          "frame": 232,
+                          "tokenId": 45,
+                          "symbol": "m",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:3",
+                          "moraIndex": 4,
+                          "phoneIndex": 8,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:233:211",
+                          "frame": 233,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:3",
+                          "moraIndex": 4,
+                          "phoneIndex": 9,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:238:327",
+                          "frame": 238,
+                          "tokenId": 327,
+                          "symbol": "ɴ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:3",
+                          "moraIndex": 5,
+                          "phoneIndex": 10,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:242:46",
+                          "frame": 242,
+                          "tokenId": 46,
+                          "symbol": "n",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:3",
+                          "moraIndex": 6,
+                          "phoneIndex": 11,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:243:211",
+                          "frame": 243,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:3",
+                          "moraIndex": 6,
+                          "phoneIndex": 12,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:247:56",
+                          "frame": 247,
+                          "tokenId": 56,
+                          "symbol": "i",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:3",
+                          "moraIndex": 7,
+                          "phoneIndex": 13,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:256:31",
+                          "frame": 256,
+                          "tokenId": 31,
+                          "symbol": "d",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:3",
+                          "moraIndex": 8,
+                          "phoneIndex": 14,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:257:320",
+                          "frame": 257,
+                          "tokenId": 320,
+                          "symbol": "e",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:3",
+                          "moraIndex": 8,
+                          "phoneIndex": 15,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:258:345",
+                          "frame": 258,
+                          "tokenId": 345,
+                          "symbol": "ɕ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:3",
+                          "moraIndex": 9,
+                          "phoneIndex": 16,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:261:216",
+                          "frame": 261,
+                          "tokenId": 216,
+                          "symbol": "o",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:3",
+                          "moraIndex": 9,
+                          "phoneIndex": 17,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:267:365",
+                          "frame": 267,
+                          "tokenId": 365,
+                          "symbol": "<SEP>",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:3",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:268:30",
+                          "frame": 268,
+                          "tokenId": 30,
+                          "symbol": "t",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:4",
+                          "moraIndex": 0,
+                          "phoneIndex": 0,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:270:211",
+                          "frame": 270,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:4",
+                          "moraIndex": 0,
+                          "phoneIndex": 1,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:275:56",
+                          "frame": 275,
+                          "tokenId": 56,
+                          "symbol": "i",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:4",
+                          "moraIndex": 1,
+                          "phoneIndex": 2,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:278:32",
+                          "frame": 278,
+                          "tokenId": 32,
+                          "symbol": "k",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:4",
+                          "moraIndex": 2,
+                          "phoneIndex": 3,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:280:319",
+                          "frame": 280,
+                          "tokenId": 319,
+                          "symbol": "ɯ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:4",
+                          "moraIndex": 2,
+                          "phoneIndex": 4,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:282:346",
+                          "frame": 282,
+                          "tokenId": 346,
+                          "symbol": "tsɯ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:4",
+                          "moraIndex": 3,
+                          "phoneIndex": 5,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:284:319",
+                          "frame": 284,
+                          "tokenId": 319,
+                          "symbol": "ɯ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:4",
+                          "moraIndex": 3,
+                          "phoneIndex": 6,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:288:31",
+                          "frame": 288,
+                          "tokenId": 31,
+                          "symbol": "d",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:4",
+                          "moraIndex": 4,
+                          "phoneIndex": 7,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:289:320",
+                          "frame": 289,
+                          "tokenId": 320,
+                          "symbol": "e",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:4",
+                          "moraIndex": 4,
+                          "phoneIndex": 8,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:291:345",
+                          "frame": 291,
+                          "tokenId": 345,
+                          "symbol": "ɕ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:4",
+                          "moraIndex": 5,
+                          "phoneIndex": 9,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:294:216",
+                          "frame": 294,
+                          "tokenId": 216,
+                          "symbol": "o",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:4",
+                          "moraIndex": 5,
+                          "phoneIndex": 10,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:300:365",
+                          "frame": 300,
+                          "tokenId": 365,
+                          "symbol": "<SEP>",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:4",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:301:325",
+                          "frame": 301,
+                          "tokenId": 325,
+                          "symbol": "ɸ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 0,
+                          "phoneIndex": 0,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:302:319",
+                          "frame": 302,
+                          "tokenId": 319,
+                          "symbol": "ɯ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 0,
+                          "phoneIndex": 1,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:303:59",
+                          "frame": 303,
+                          "tokenId": 59,
+                          "symbol": "ɾ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 1,
+                          "phoneIndex": 2,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:304:56",
+                          "frame": 304,
+                          "tokenId": 56,
+                          "symbol": "i",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 1,
+                          "phoneIndex": 3,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:307:330",
+                          "frame": 307,
+                          "tokenId": 330,
+                          "symbol": "q",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 2,
+                          "phoneIndex": 4,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:310:30",
+                          "frame": 310,
+                          "tokenId": 30,
+                          "symbol": "t",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 3,
+                          "phoneIndex": 5,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:312:211",
+                          "frame": 312,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 3,
+                          "phoneIndex": 6,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:313:211",
+                          "frame": 313,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 4,
+                          "phoneIndex": 7,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:318:325",
+                          "frame": 318,
+                          "tokenId": 325,
+                          "symbol": "ɸ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 5,
+                          "phoneIndex": 8,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:321:319",
+                          "frame": 321,
+                          "tokenId": 319,
+                          "symbol": "ɯ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 5,
+                          "phoneIndex": 9,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:322:59",
+                          "frame": 322,
+                          "tokenId": 59,
+                          "symbol": "ɾ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 6,
+                          "phoneIndex": 10,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:323:56",
+                          "frame": 323,
+                          "tokenId": 56,
+                          "symbol": "i",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 6,
+                          "phoneIndex": 11,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:326:330",
+                          "frame": 326,
+                          "tokenId": 330,
+                          "symbol": "q",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 7,
+                          "phoneIndex": 12,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:329:30",
+                          "frame": 329,
+                          "tokenId": 30,
+                          "symbol": "t",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 8,
+                          "phoneIndex": 13,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:331:211",
+                          "frame": 331,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 8,
+                          "phoneIndex": 14,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:340:211",
+                          "frame": 340,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 9,
+                          "phoneIndex": 15,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:347:45",
+                          "frame": 347,
+                          "tokenId": 45,
+                          "symbol": "m",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 10,
+                          "phoneIndex": 16,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:348:320",
+                          "frame": 348,
+                          "tokenId": 320,
+                          "symbol": "e",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 10,
+                          "phoneIndex": 17,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:349:327",
+                          "frame": 349,
+                          "tokenId": 327,
+                          "symbol": "ɴ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 11,
+                          "phoneIndex": 18,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:350:216",
+                          "frame": 350,
+                          "tokenId": 216,
+                          "symbol": "o",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 12,
+                          "phoneIndex": 19,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:355:38",
+                          "frame": 355,
+                          "tokenId": 38,
+                          "symbol": "s",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 13,
+                          "phoneIndex": 20,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:357:319",
+                          "frame": 357,
+                          "tokenId": 319,
+                          "symbol": "ɯ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 13,
+                          "phoneIndex": 21,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:358:29",
+                          "frame": 358,
+                          "tokenId": 29,
+                          "symbol": "b",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 14,
+                          "phoneIndex": 22,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:359:320",
+                          "frame": 359,
+                          "tokenId": 320,
+                          "symbol": "e",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 14,
+                          "phoneIndex": 23,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:364:330",
+                          "frame": 364,
+                          "tokenId": 330,
+                          "symbol": "q",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 15,
+                          "phoneIndex": 24,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:366:30",
+                          "frame": 366,
+                          "tokenId": 30,
+                          "symbol": "t",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 16,
+                          "phoneIndex": 25,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:368:320",
+                          "frame": 368,
+                          "tokenId": 320,
+                          "symbol": "e",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "moraIndex": 16,
+                          "phoneIndex": 26,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:374:365",
+                          "frame": 374,
+                          "tokenId": 365,
+                          "symbol": "<SEP>",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:5",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:375:38",
+                          "frame": 375,
+                          "tokenId": 38,
+                          "symbol": "s",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 0,
+                          "phoneIndex": 0,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:376:319",
+                          "frame": 376,
+                          "tokenId": 319,
+                          "symbol": "ɯ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 0,
+                          "phoneIndex": 1,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:377:326",
+                          "frame": 377,
+                          "tokenId": 326,
+                          "symbol": "ɰᵝ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 1,
+                          "phoneIndex": 2,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:378:211",
+                          "frame": 378,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 1,
+                          "phoneIndex": 3,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:382:56",
+                          "frame": 382,
+                          "tokenId": 56,
+                          "symbol": "i",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 2,
+                          "phoneIndex": 4,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:383:30",
+                          "frame": 383,
+                          "tokenId": 30,
+                          "symbol": "t",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 3,
+                          "phoneIndex": 5,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:386:216",
+                          "frame": 386,
+                          "tokenId": 216,
+                          "symbol": "o",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 3,
+                          "phoneIndex": 6,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:387:211",
+                          "frame": 387,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 4,
+                          "phoneIndex": 7,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:390:330",
+                          "frame": 390,
+                          "tokenId": 330,
+                          "symbol": "q",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 5,
+                          "phoneIndex": 8,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:391:28",
+                          "frame": 391,
+                          "tokenId": 28,
+                          "symbol": "p",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 6,
+                          "phoneIndex": 9,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:392:319",
+                          "frame": 392,
+                          "tokenId": 319,
+                          "symbol": "ɯ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 6,
+                          "phoneIndex": 10,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:393:38",
+                          "frame": 393,
+                          "tokenId": 38,
+                          "symbol": "s",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 7,
+                          "phoneIndex": 11,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:395:319",
+                          "frame": 395,
+                          "tokenId": 319,
+                          "symbol": "ɯ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 7,
+                          "phoneIndex": 12,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:396:326",
+                          "frame": 396,
+                          "tokenId": 326,
+                          "symbol": "ɰᵝ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 8,
+                          "phoneIndex": 13,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:397:211",
+                          "frame": 397,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 8,
+                          "phoneIndex": 14,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:401:56",
+                          "frame": 401,
+                          "tokenId": 56,
+                          "symbol": "i",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 9,
+                          "phoneIndex": 15,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:402:30",
+                          "frame": 402,
+                          "tokenId": 30,
+                          "symbol": "t",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 10,
+                          "phoneIndex": 16,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:405:216",
+                          "frame": 405,
+                          "tokenId": 216,
+                          "symbol": "o",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 10,
+                          "phoneIndex": 17,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:408:211",
+                          "frame": 408,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 11,
+                          "phoneIndex": 18,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:409:330",
+                          "frame": 409,
+                          "tokenId": 330,
+                          "symbol": "q",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 12,
+                          "phoneIndex": 19,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:411:28",
+                          "frame": 411,
+                          "tokenId": 28,
+                          "symbol": "p",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 13,
+                          "phoneIndex": 20,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:412:319",
+                          "frame": 412,
+                          "tokenId": 319,
+                          "symbol": "ɯ",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "moraIndex": 13,
+                          "phoneIndex": 21,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:413:365",
+                          "frame": 413,
+                          "tokenId": 365,
+                          "symbol": "<SEP>",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:6",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:414:320",
+                          "frame": 414,
+                          "tokenId": 320,
+                          "symbol": "e",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:7",
+                          "moraIndex": 0,
+                          "phoneIndex": 0,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:419:211",
+                          "frame": 419,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:7",
+                          "moraIndex": 1,
+                          "phoneIndex": 1,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:424:211",
+                          "frame": 424,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:7",
+                          "moraIndex": 2,
+                          "phoneIndex": 2,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:430:30",
+                          "frame": 430,
+                          "tokenId": 30,
+                          "symbol": "t",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:7",
+                          "moraIndex": 3,
+                          "phoneIndex": 3,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:433:56",
+                          "frame": 433,
+                          "tokenId": 56,
+                          "symbol": "i",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:7",
+                          "moraIndex": 3,
+                          "phoneIndex": 4,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:441:56",
+                          "frame": 441,
+                          "tokenId": 56,
+                          "symbol": "i",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:7",
+                          "moraIndex": 4,
+                          "phoneIndex": 5,
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:450:365",
+                          "frame": 450,
+                          "tokenId": 365,
+                          "symbol": "<SEP>",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:7",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:451:325",
+                          "frame": 451,
+                          "tokenId": 325,
+                          "symbol": "ɸ",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:452:319",
+                          "frame": 452,
+                          "tokenId": 319,
+                          "symbol": "ɯ",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:453:59",
+                          "frame": 453,
+                          "tokenId": 59,
+                          "symbol": "ɾ",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:454:56",
+                          "frame": 454,
+                          "tokenId": 56,
+                          "symbol": "i",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:455:330",
+                          "frame": 455,
+                          "tokenId": 330,
+                          "symbol": "q",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:456:30",
+                          "frame": 456,
+                          "tokenId": 30,
+                          "symbol": "t",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:457:211",
+                          "frame": 457,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:458:211",
+                          "frame": 458,
+                          "tokenId": 211,
+                          "symbol": "a",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:459:325",
+                          "frame": 459,
+                          "tokenId": 325,
+                          "symbol": "ɸ",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:460:319",
+                          "frame": 460,
+                          "tokenId": 319,
+                          "symbol": "ɯ",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:461:59",
+                          "frame": 461,
+                          "tokenId": 59,
+                          "symbol": "ɾ",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:462:56",
+                          "frame": 462,
+                          "tokenId": 56,
+                          "symbol": "i",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:463:330",
+                          "frame": 463,
+                          "tokenId": 330,
+                          "symbol": "q",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:464:366",
+                          "frame": 464,
+                          "tokenId": 366,
+                          "symbol": "<PUL>",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:465:366",
+                          "frame": 465,
+                          "tokenId": 366,
+                          "symbol": "<PUL>",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:466:366",
+                          "frame": 466,
+                          "tokenId": 366,
+                          "symbol": "<PUL>",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:467:366",
+                          "frame": 467,
+                          "tokenId": 366,
+                          "symbol": "<PUL>",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:468:366",
+                          "frame": 468,
+                          "tokenId": 366,
+                          "symbol": "<PUL>",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:469:366",
+                          "frame": 469,
+                          "tokenId": 366,
+                          "symbol": "<PUL>",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:470:366",
+                          "frame": 470,
+                          "tokenId": 366,
+                          "symbol": "<PUL>",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:471:366",
+                          "frame": 471,
+                          "tokenId": 366,
+                          "symbol": "<PUL>",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:472:366",
+                          "frame": 472,
+                          "tokenId": 366,
+                          "symbol": "<PUL>",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:473:366",
+                          "frame": 473,
+                          "tokenId": 366,
+                          "symbol": "<PUL>",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:474:366",
+                          "frame": 474,
+                          "tokenId": 366,
+                          "symbol": "<PUL>",
+                          "origin": "segment-align",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        },
+                        {
+                          "id": "h:475:365",
+                          "frame": 475,
+                          "tokenId": 365,
+                          "symbol": "<SEP>",
+                          "origin": "segment-align",
+                          "phraseId": "phrase:whisper:8",
+                          "generatedFrom": {
+                            "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                            "track": "segment",
+                            "revision": 1,
+                            "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                          }
+                        }
+                      ],
+                      "revisions": [
+                        {
+                          "id": "revision:h:cc9b15d8-ac07-45f9-980d-7417c0181682",
+                          "revision": 1,
+                          "track": "h",
+                          "operation": "Segment -> H",
+                          "sourceRefs": [
+                            {
+                              "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                              "track": "segment",
+                              "revision": 1,
+                              "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                            }
+                          ],
+                          "affectedStartFrame": 0,
+                          "affectedEndFrameExclusive": 91,
+                          "createdAt": "2026-08-12T21:21:51.342Z"
+                        },
+                        {
+                          "id": "revision:h:c34c88e0-08d4-4ca6-b94b-5eafb9a404e5",
+                          "revision": 2,
+                          "track": "h",
+                          "operation": "Segment -> H",
+                          "sourceRefs": [
+                            {
+                              "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                              "track": "segment",
+                              "revision": 1,
+                              "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                            }
+                          ],
+                          "affectedStartFrame": 91,
+                          "affectedEndFrameExclusive": 148,
+                          "createdAt": "2026-08-12T21:22:50.694Z"
+                        },
+                        {
+                          "id": "revision:h:db52121e-77bc-4c95-9b54-a1ddc3952825",
+                          "revision": 3,
+                          "track": "h",
+                          "operation": "Segment -> H",
+                          "sourceRefs": [
+                            {
+                              "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                              "track": "segment",
+                              "revision": 1,
+                              "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                            }
+                          ],
+                          "affectedStartFrame": 148,
+                          "affectedEndFrameExclusive": 212,
+                          "createdAt": "2026-08-12T21:22:56.700Z"
+                        },
+                        {
+                          "id": "revision:h:eb73f6a2-b2c2-4c60-b610-6f8ee19f7349",
+                          "revision": 4,
+                          "track": "h",
+                          "operation": "Segment -> H",
+                          "sourceRefs": [
+                            {
+                              "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                              "track": "segment",
+                              "revision": 1,
+                              "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                            }
+                          ],
+                          "affectedStartFrame": 212,
+                          "affectedEndFrameExclusive": 268,
+                          "createdAt": "2026-08-12T21:23:02.441Z"
+                        },
+                        {
+                          "id": "revision:h:4d187e90-0040-4421-840c-327a0fb875e9",
+                          "revision": 5,
+                          "track": "h",
+                          "operation": "Segment -> H",
+                          "sourceRefs": [
+                            {
+                              "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                              "track": "segment",
+                              "revision": 1,
+                              "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                            }
+                          ],
+                          "affectedStartFrame": 268,
+                          "affectedEndFrameExclusive": 301,
+                          "createdAt": "2026-08-12T21:23:06.020Z"
+                        },
+                        {
+                          "id": "revision:h:1c71c634-81a9-4a51-974b-c28bf1e889e6",
+                          "revision": 6,
+                          "track": "h",
+                          "operation": "Segment -> H",
+                          "sourceRefs": [
+                            {
+                              "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                              "track": "segment",
+                              "revision": 1,
+                              "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                            }
+                          ],
+                          "affectedStartFrame": 301,
+                          "affectedEndFrameExclusive": 375,
+                          "createdAt": "2026-08-12T21:23:08.354Z"
+                        },
+                        {
+                          "id": "revision:h:5015f3d3-6c01-49cb-bff2-24b719aaf68c",
+                          "revision": 7,
+                          "track": "h",
+                          "operation": "Segment -> H",
+                          "sourceRefs": [
+                            {
+                              "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                              "track": "segment",
+                              "revision": 1,
+                              "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                            }
+                          ],
+                          "affectedStartFrame": 375,
+                          "affectedEndFrameExclusive": 414,
+                          "createdAt": "2026-08-12T21:23:12.131Z"
+                        },
+                        {
+                          "id": "revision:h:16e74d01-73c8-4357-b95e-945434918b8a",
+                          "revision": 8,
+                          "track": "h",
+                          "operation": "Segment -> H",
+                          "sourceRefs": [
+                            {
+                              "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                              "track": "segment",
+                              "revision": 1,
+                              "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                            }
+                          ],
+                          "affectedStartFrame": 414,
+                          "affectedEndFrameExclusive": 451,
+                          "createdAt": "2026-08-12T21:23:16.195Z"
+                        },
+                        {
+                          "id": "revision:h:079ac57b-1b1c-4709-9c71-8f74436b96e7",
+                          "revision": 9,
+                          "track": "h",
+                          "operation": "Segment -> H",
+                          "sourceRefs": [
+                            {
+                              "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                              "track": "segment",
+                              "revision": 1,
+                              "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                            }
+                          ],
+                          "affectedStartFrame": 451,
+                          "affectedEndFrameExclusive": 476,
+                          "createdAt": "2026-08-12T21:23:20.037Z"
+                        }
+                      ],
+                      "placementRanges": [
+                        {
+                          "phraseId": "phrase:whisper:0",
+                          "startFrame": 0,
+                          "endFrameExclusive": 91,
+                          "placementMode": "phone",
+                          "fallbackReason": null
+                        },
+                        {
+                          "phraseId": "phrase:whisper:1",
+                          "startFrame": 91,
+                          "endFrameExclusive": 148,
+                          "placementMode": "phone",
+                          "fallbackReason": null
+                        },
+                        {
+                          "phraseId": "phrase:whisper:2",
+                          "startFrame": 148,
+                          "endFrameExclusive": 212,
+                          "placementMode": "phone",
+                          "fallbackReason": null
+                        },
+                        {
+                          "phraseId": "phrase:whisper:3",
+                          "startFrame": 212,
+                          "endFrameExclusive": 268,
+                          "placementMode": "phone",
+                          "fallbackReason": null
+                        },
+                        {
+                          "phraseId": "phrase:whisper:4",
+                          "startFrame": 268,
+                          "endFrameExclusive": 301,
+                          "placementMode": "phone",
+                          "fallbackReason": null
+                        },
+                        {
+                          "phraseId": "phrase:whisper:5",
+                          "startFrame": 301,
+                          "endFrameExclusive": 375,
+                          "placementMode": "phone",
+                          "fallbackReason": null
+                        },
+                        {
+                          "phraseId": "phrase:whisper:6",
+                          "startFrame": 375,
+                          "endFrameExclusive": 414,
+                          "placementMode": "phone",
+                          "fallbackReason": null
+                        },
+                        {
+                          "phraseId": "phrase:whisper:7",
+                          "startFrame": 414,
+                          "endFrameExclusive": 451,
+                          "placementMode": "phone",
+                          "fallbackReason": null
+                        },
+                        {
+                          "phraseId": "phrase:whisper:8",
+                          "startFrame": 451,
+                          "endFrameExclusive": 476,
+                          "placementMode": "pul",
+                          "fallbackReason": "missing_cl"
+                        }
+                      ],
+                      "vocabHash": "4246e275721cffd944906ad2e148d85ac93250441e04ac75d2670106bc8ada72",
+                      "compilerHash": "25e13a9261157f14b5cf2e3ab3efb86b7ea7b070ba879acddf5e43785809535a"
+                    },
+                    "midiPTokenTrack": {
+                      "status": "ready",
+                      "revision": 1,
+                      "origin": "game",
+                      "classes": [
+                        255,
+                        126,
+                        126,
+                        126,
+                        126,
+                        126,
+                        126,
+                        126,
+                        126,
+                        126,
+                        126,
+                        126,
+                        126,
+                        126,
+                        126,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        137,
+                        137,
+                        137,
+                        137,
+                        123,
+                        123,
+                        123,
+                        123,
+                        123,
+                        123,
+                        123,
+                        123,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        134,
+                        134,
+                        134,
+                        134,
+                        134,
+                        123,
+                        123,
+                        123,
+                        123,
+                        123,
+                        123,
+                        123,
+                        123,
+                        123,
+                        123,
+                        125,
+                        125,
+                        125,
+                        125,
+                        133,
+                        133,
+                        133,
+                        133,
+                        133,
+                        123,
+                        123,
+                        123,
+                        123,
+                        116,
+                        116,
+                        116,
+                        112,
+                        112,
+                        112,
+                        112,
+                        112,
+                        106,
+                        106,
+                        106,
+                        106,
+                        106,
+                        106,
+                        115,
+                        115,
+                        115,
+                        115,
+                        115,
+                        115,
+                        115,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        129,
+                        129,
+                        129,
+                        129,
+                        129,
+                        124,
+                        124,
+                        124,
+                        124,
+                        124,
+                        124,
+                        124,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        133,
+                        133,
+                        133,
+                        133,
+                        124,
+                        124,
+                        124,
+                        124,
+                        124,
+                        124,
+                        124,
+                        124,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        142,
+                        142,
+                        142,
+                        142,
+                        142,
+                        141,
+                        141,
+                        141,
+                        141,
+                        134,
+                        134,
+                        134,
+                        134,
+                        129,
+                        129,
+                        129,
+                        129,
+                        124,
+                        124,
+                        124,
+                        124,
+                        124,
+                        128,
+                        128,
+                        128,
+                        128,
+                        128,
+                        128,
+                        128,
+                        128,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        138,
+                        138,
+                        138,
+                        138,
+                        138,
+                        138,
+                        124,
+                        124,
+                        124,
+                        124,
+                        124,
+                        124,
+                        124,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        132,
+                        132,
+                        132,
+                        132,
+                        132,
+                        124,
+                        124,
+                        124,
+                        124,
+                        124,
+                        124,
+                        124,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        130,
+                        130,
+                        130,
+                        130,
+                        121,
+                        121,
+                        121,
+                        121,
+                        116,
+                        116,
+                        116,
+                        116,
+                        116,
+                        122,
+                        122,
+                        122,
+                        122,
+                        122,
+                        126,
+                        126,
+                        126,
+                        126,
+                        126,
+                        129,
+                        129,
+                        129,
+                        129,
+                        138,
+                        138,
+                        138,
+                        138,
+                        138,
+                        126,
+                        126,
+                        126,
+                        126,
+                        126,
+                        127,
+                        127,
+                        127,
+                        127,
+                        134,
+                        134,
+                        134,
+                        134,
+                        134,
+                        127,
+                        127,
+                        127,
+                        127,
+                        127,
+                        127,
+                        127,
+                        127,
+                        127,
+                        137,
+                        137,
+                        137,
+                        137,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        135,
+                        135,
+                        135,
+                        135,
+                        135,
+                        138,
+                        138,
+                        138,
+                        138,
+                        138,
+                        143,
+                        143,
+                        143,
+                        143,
+                        141,
+                        141,
+                        141,
+                        141,
+                        141,
+                        134,
+                        134,
+                        134,
+                        134,
+                        134,
+                        123,
+                        123,
+                        123,
+                        123,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        125,
+                        125,
+                        125,
+                        125,
+                        125,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        120,
+                        120,
+                        120,
+                        120,
+                        120,
+                        120,
+                        120,
+                        120,
+                        120,
+                        123,
+                        123,
+                        123,
+                        123,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        119,
+                        119,
+                        119,
+                        119,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        128,
+                        128,
+                        128,
+                        128,
+                        128,
+                        128,
+                        128,
+                        128,
+                        128,
+                        128,
+                        124,
+                        124,
+                        124,
+                        124,
+                        124,
+                        124,
+                        124,
+                        123,
+                        123,
+                        128,
+                        128,
+                        128,
+                        128,
+                        128,
+                        255,
+                        255,
+                        255,
+                        255,
+                        124,
+                        124,
+                        124,
+                        124,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        130,
+                        130,
+                        130,
+                        130,
+                        130,
+                        125,
+                        125,
+                        125,
+                        125,
+                        126,
+                        126,
+                        126,
+                        126,
+                        126,
+                        126,
+                        126,
+                        126,
+                        126,
+                        130,
+                        130,
+                        130,
+                        130,
+                        130,
+                        130,
+                        130,
+                        130,
+                        130,
+                        126,
+                        126,
+                        126,
+                        126,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        118,
+                        118,
+                        118,
+                        118,
+                        118,
+                        118,
+                        255,
+                        255,
+                        255,
+                        121,
+                        121,
+                        121,
+                        121,
+                        121,
+                        121,
+                        121,
+                        121,
+                        121,
+                        128,
+                        128,
+                        128,
+                        128,
+                        128,
+                        128,
+                        128,
+                        128,
+                        128,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        137,
+                        137,
+                        137,
+                        137,
+                        255,
+                        255,
+                        255,
+                        255,
+                        255,
+                        123,
+                        123,
+                        123,
+                        123,
+                        123,
+                        123,
+                        123,
+                        123,
+                        123,
+                        137,
+                        137,
+                        137,
+                        137,
+                        137,
+                        138
+                      ],
+                      "flowFrames": [
+                        2,
+                        3,
+                        4,
+                        5,
+                        6,
+                        7,
+                        8,
+                        9,
+                        10,
+                        11,
+                        12,
+                        13,
+                        14,
+                        21,
+                        22,
+                        23,
+                        25,
+                        26,
+                        27,
+                        28,
+                        29,
+                        30,
+                        31,
+                        39,
+                        40,
+                        41,
+                        42,
+                        44,
+                        45,
+                        46,
+                        47,
+                        48,
+                        49,
+                        50,
+                        51,
+                        52,
+                        54,
+                        55,
+                        56,
+                        58,
+                        59,
+                        60,
+                        61,
+                        63,
+                        64,
+                        65,
+                        67,
+                        68,
+                        70,
+                        71,
+                        72,
+                        73,
+                        75,
+                        76,
+                        77,
+                        78,
+                        79,
+                        81,
+                        82,
+                        83,
+                        84,
+                        85,
+                        86,
+                        95,
+                        96,
+                        97,
+                        98,
+                        100,
+                        101,
+                        102,
+                        103,
+                        104,
+                        105,
+                        114,
+                        115,
+                        116,
+                        118,
+                        119,
+                        120,
+                        121,
+                        122,
+                        123,
+                        124,
+                        133,
+                        134,
+                        135,
+                        136,
+                        138,
+                        139,
+                        140,
+                        142,
+                        143,
+                        144,
+                        146,
+                        147,
+                        148,
+                        150,
+                        151,
+                        152,
+                        153,
+                        155,
+                        156,
+                        157,
+                        158,
+                        159,
+                        160,
+                        161,
+                        169,
+                        170,
+                        171,
+                        172,
+                        173,
+                        175,
+                        176,
+                        177,
+                        178,
+                        179,
+                        180,
+                        188,
+                        189,
+                        190,
+                        191,
+                        193,
+                        194,
+                        195,
+                        196,
+                        197,
+                        198,
+                        207,
+                        208,
+                        209,
+                        211,
+                        212,
+                        213,
+                        215,
+                        216,
+                        217,
+                        218,
+                        220,
+                        221,
+                        222,
+                        223,
+                        225,
+                        226,
+                        227,
+                        228,
+                        230,
+                        231,
+                        232,
+                        234,
+                        235,
+                        236,
+                        237,
+                        239,
+                        240,
+                        241,
+                        242,
+                        244,
+                        245,
+                        246,
+                        248,
+                        249,
+                        250,
+                        251,
+                        253,
+                        254,
+                        255,
+                        256,
+                        257,
+                        258,
+                        259,
+                        260,
+                        262,
+                        263,
+                        264,
+                        271,
+                        272,
+                        273,
+                        274,
+                        276,
+                        277,
+                        278,
+                        279,
+                        281,
+                        282,
+                        283,
+                        285,
+                        286,
+                        287,
+                        288,
+                        290,
+                        291,
+                        292,
+                        293,
+                        295,
+                        296,
+                        297,
+                        304,
+                        305,
+                        306,
+                        307,
+                        314,
+                        315,
+                        316,
+                        317,
+                        318,
+                        319,
+                        320,
+                        321,
+                        323,
+                        324,
+                        325,
+                        332,
+                        333,
+                        334,
+                        341,
+                        342,
+                        343,
+                        344,
+                        345,
+                        346,
+                        347,
+                        348,
+                        349,
+                        351,
+                        352,
+                        353,
+                        354,
+                        355,
+                        356,
+                        358,
+                        360,
+                        361,
+                        362,
+                        363,
+                        369,
+                        370,
+                        371,
+                        379,
+                        380,
+                        381,
+                        382,
+                        384,
+                        385,
+                        386,
+                        388,
+                        389,
+                        390,
+                        391,
+                        392,
+                        393,
+                        394,
+                        395,
+                        397,
+                        398,
+                        399,
+                        400,
+                        401,
+                        402,
+                        403,
+                        404,
+                        406,
+                        407,
+                        408,
+                        416,
+                        417,
+                        418,
+                        419,
+                        420,
+                        425,
+                        426,
+                        427,
+                        428,
+                        429,
+                        430,
+                        431,
+                        432,
+                        434,
+                        435,
+                        436,
+                        437,
+                        438,
+                        439,
+                        440,
+                        441,
+                        453,
+                        454,
+                        455,
+                        462,
+                        463,
+                        464,
+                        465,
+                        466,
+                        467,
+                        468,
+                        469,
+                        471,
+                        472,
+                        473,
+                        474
+                      ],
+                      "manualFrames": [],
+                      "revisions": [
+                        {
+                          "id": "revision:midi-p:62121385-990f-4396-9112-7eaf8b8e15af",
+                          "revision": 1,
+                          "track": "midi-p",
+                          "operation": "Guide -> GAME K=4 -> MIDI-P",
+                          "sourceRefs": [
+                            {
+                              "unitId": "node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49",
+                              "guideSHA256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
+                            }
+                          ],
+                          "affectedStartFrame": 0,
+                          "affectedEndFrameExclusive": 476,
+                          "createdAt": "2026-08-12T21:26:31.822Z"
+                        }
+                      ],
+                      "gameModelHash": "e9904159fb0646e1a352b9d2bc74615547cfa3e32d45c7464d440ac142846d93",
+                      "compilerHash": "0a55e5130b77c5c436aea269e6242c77e6463e40b62dea0f152fd25d9917ddd8"
+                    },
+                    "reference": null,
+                    "presetId": "V5P_40K_EMA",
+                    "unitRevision": 11,
+                    "takes": [],
+                    "activeTakeId": null,
+                    "timelineTrackId": null,
+                    "defaultTimelineStart": null,
+                    "createdAt": "2026-08-12T21:20:47.216Z",
+                    "updatedAt": "2026-08-12T21:30:31.091Z"
+                  }
                 }
               ]
             },
@@ -7692,63 +11562,14 @@
                       "gameModelHash": "e9904159fb0646e1a352b9d2bc74615547cfa3e32d45c7464d440ac142846d93",
                       "compilerHash": "0a55e5130b77c5c436aea269e6242c77e6463e40b62dea0f152fd25d9917ddd8"
                     },
-                    "reference": {
-                      "unitId": "node:synthesisUnit:7a759ddf-7860-4132-a28d-ff6f2f97faf2",
-                      "audioSource": "guide",
-                      "range": "full-guide",
-                      "revisionPolicy": "follow-latest",
-                      "boundAt": "2026-08-11T16:43:18.229Z"
-                    },
-                    "unitRevision": 107,
-                    "takes": [
-                      {
-                        "id": "take:8631ec9e-9773-48f7-8613-67cb22b61496",
-                        "name": "Take 1",
-                        "status": "ready",
-                        "targetUnitRevision": 107,
-                        "referenceUnitId": "node:synthesisUnit:7a759ddf-7860-4132-a28d-ff6f2f97faf2",
-                        "referenceUnitRevision": 8,
-                        "presetId": "V5P_40K_EMA",
-                        "checkpointSHA256": "3a532f5bd5965dff7d011996b7ca72d7884c5494a2d44d6c28b0bab21bace96c",
-                        "vaeSHA256": "dc2c4a8ec9731594951a27eff4a188a89b82859649c341c51d050101d1ce0b39",
-                        "adapterSHA256": "a61f6c9987b718555375b92ac4395384085d3f03c016d8cbb961f19f8ea7db38",
-                        "seed": 42,
-                        "createdAt": "2026-08-11T16:43:20.693Z",
-                        "outputAssetId": "asset:synthesisTake:82893a53-31f2-4027-a2f9-e5971a820b76",
-                        "outputSHA256": "e208328f75cef191c0ebb8a8e99bc7f4f273e008f929efcacc88457b0f694b26",
-                        "snapshotSHA256": "ba44b12bb37c3ee4f8a450d6ed60fcd7e648b66aa9e3b94c8c067a7cfc90cac0",
-                        "sampleRate": 44100,
-                        "sampleCount": 786432,
-                        "duration": 17.832925170068027,
-                        "completedAt": "2026-08-11T16:43:51.728Z"
-                      },
-                      {
-                        "id": "take:015715e2-e79a-41fb-bcc4-852d3d394fdb",
-                        "name": "Take 2",
-                        "status": "ready",
-                        "targetUnitRevision": 107,
-                        "referenceUnitId": "node:synthesisUnit:7a759ddf-7860-4132-a28d-ff6f2f97faf2",
-                        "referenceUnitRevision": 8,
-                        "presetId": "V5P_40K_EMA",
-                        "checkpointSHA256": "3a532f5bd5965dff7d011996b7ca72d7884c5494a2d44d6c28b0bab21bace96c",
-                        "vaeSHA256": "dc2c4a8ec9731594951a27eff4a188a89b82859649c341c51d050101d1ce0b39",
-                        "adapterSHA256": "a61f6c9987b718555375b92ac4395384085d3f03c016d8cbb961f19f8ea7db38",
-                        "seed": 42,
-                        "createdAt": "2026-08-11T16:44:59.836Z",
-                        "outputAssetId": "asset:synthesisTake:a1a241f7-0eb1-438f-aa48-65b249899302",
-                        "outputSHA256": "3d61c24b877c64d0cd6840899ae33398996ddc43e150ca1f836a49793da88014",
-                        "snapshotSHA256": "0483f4a40fd9bd3fd52961570080bd11a698f745060b07da9699d738b7901405",
-                        "sampleRate": 44100,
-                        "sampleCount": 786432,
-                        "duration": 17.832925170068027,
-                        "completedAt": "2026-08-11T16:45:29.163Z"
-                      }
-                    ],
-                    "activeTakeId": "take:8631ec9e-9773-48f7-8613-67cb22b61496",
-                    "timelineTrackId": "trk_93a0b08c",
+                    "reference": null,
+                    "unitRevision": 106,
+                    "takes": [],
+                    "activeTakeId": null,
+                    "timelineTrackId": "trk_8bbcf7c0",
                     "defaultTimelineStart": 11.633333333333333,
                     "createdAt": "2026-08-11T15:36:23.337Z",
-                    "updatedAt": "2026-08-11T16:43:18.229Z"
+                    "updatedAt": "2026-08-11T15:36:23.337Z"
                   }
                 }
               ]
@@ -15701,7 +19522,7 @@
       "asset:import:b38ae381-072b-418f-8745-ef554dff7ec6": {
         "id": "asset:import:b38ae381-072b-418f-8745-ef554dff7ec6",
         "storage": "projectBlob",
-        "blobKey": "global-resource:node:folder:08247e95-8e00-4518-bb30-16c77b9fd082:asset:import:b38ae381-072b-418f-8745-ef554dff7ec6:BV1NDRhYkEzt_致我重要的人们《大切な人たちへ》翻唱【花丸晴琉】_2_seg005.wav",
+        "blobKey": "global-resource:node:audio:c76fb1fa-7c51-46ae-8b57-59312db79370:asset:import:b38ae381-072b-418f-8745-ef554dff7ec6:BV1NDRhYkEzt_致我重要的人们《大切な人たちへ》翻唱【花丸晴琉】_2_seg005.wav",
         "sampleRate": 0,
         "duration": 0,
         "channels": 0
@@ -15709,7 +19530,7 @@
       "asset:import:17b9941c-9add-410b-aa7a-04add64c97e9": {
         "id": "asset:import:17b9941c-9add-410b-aa7a-04add64c97e9",
         "storage": "projectBlob",
-        "blobKey": "global-resource:node:folder:08247e95-8e00-4518-bb30-16c77b9fd082:asset:import:17b9941c-9add-410b-aa7a-04add64c97e9:BV1NDRhYkEzt_致我重要的人们《大切な人たちへ》翻唱【花丸晴琉】_2_seg000.wav",
+        "blobKey": "global-resource:node:audio:aa119c23-9718-4efd-9195-67eb1f336a08:asset:import:17b9941c-9add-410b-aa7a-04add64c97e9:BV1NDRhYkEzt_致我重要的人们《大切な人たちへ》翻唱【花丸晴琉】_2_seg000.wav",
         "sampleRate": 0,
         "duration": 0,
         "channels": 0
@@ -15717,7 +19538,7 @@
       "asset:import:6d232b1c-17fc-457a-aa91-dd0c76e022d3": {
         "id": "asset:import:6d232b1c-17fc-457a-aa91-dd0c76e022d3",
         "storage": "projectBlob",
-        "blobKey": "global-resource:node:folder:08247e95-8e00-4518-bb30-16c77b9fd082:asset:import:6d232b1c-17fc-457a-aa91-dd0c76e022d3:BV1NDRhYkEzt_致我重要的人们《大切な人たちへ》翻唱【花丸晴琉】_2_seg003.wav",
+        "blobKey": "global-resource:node:audio:30401d39-880c-41f4-9c38-7f1ebb5f5e62:asset:import:6d232b1c-17fc-457a-aa91-dd0c76e022d3:BV1NDRhYkEzt_致我重要的人们《大切な人たちへ》翻唱【花丸晴琉】_2_seg003.wav",
         "sampleRate": 0,
         "duration": 0,
         "channels": 0
@@ -15725,7 +19546,7 @@
       "asset:import:8bc61480-4221-430a-82b7-e258d3328c55": {
         "id": "asset:import:8bc61480-4221-430a-82b7-e258d3328c55",
         "storage": "projectBlob",
-        "blobKey": "global-resource:node:folder:08247e95-8e00-4518-bb30-16c77b9fd082:asset:import:8bc61480-4221-430a-82b7-e258d3328c55:BV1NDRhYkEzt_致我重要的人们《大切な人たちへ》翻唱【花丸晴琉】_2_seg001.wav",
+        "blobKey": "global-resource:node:audio:eed924f3-9627-4746-9b09-acef849895b1:asset:import:8bc61480-4221-430a-82b7-e258d3328c55:BV1NDRhYkEzt_致我重要的人们《大切な人たちへ》翻唱【花丸晴琉】_2_seg001.wav",
         "sampleRate": 0,
         "duration": 0,
         "channels": 0
@@ -15733,7 +19554,7 @@
       "asset:import:929dac1e-fc0c-4428-a39e-a0259a5d0e02": {
         "id": "asset:import:929dac1e-fc0c-4428-a39e-a0259a5d0e02",
         "storage": "projectBlob",
-        "blobKey": "global-resource:node:folder:08247e95-8e00-4518-bb30-16c77b9fd082:asset:import:929dac1e-fc0c-4428-a39e-a0259a5d0e02:BV1TdC9Y7EXR_【油管歌回】 Wishing_2_seg007.wav",
+        "blobKey": "global-resource:node:audio:b493c48b-16c8-4954-bb0e-134179a30a11:asset:import:929dac1e-fc0c-4428-a39e-a0259a5d0e02:BV1TdC9Y7EXR_【油管歌回】 Wishing_2_seg007.wav",
         "sampleRate": 0,
         "duration": 0,
         "channels": 0
@@ -15741,7 +19562,7 @@
       "asset:import:69a81d25-f079-4e50-848a-9cc8a5de451f": {
         "id": "asset:import:69a81d25-f079-4e50-848a-9cc8a5de451f",
         "storage": "projectBlob",
-        "blobKey": "global-resource:node:folder:08247e95-8e00-4518-bb30-16c77b9fd082:asset:import:69a81d25-f079-4e50-848a-9cc8a5de451f:BV1TdC9Y7EXR_【油管歌回】 Wishing_2_seg004_hard.wav",
+        "blobKey": "global-resource:node:audio:6374399b-02bf-4fa7-927f-5034971af09c:asset:import:69a81d25-f079-4e50-848a-9cc8a5de451f:BV1TdC9Y7EXR_【油管歌回】 Wishing_2_seg004_hard.wav",
         "sampleRate": 0,
         "duration": 0,
         "channels": 0
@@ -15749,7 +19570,7 @@
       "asset:import:1e6d7edc-9238-4d72-a107-f37f92e607a5": {
         "id": "asset:import:1e6d7edc-9238-4d72-a107-f37f92e607a5",
         "storage": "projectBlob",
-        "blobKey": "global-resource:node:folder:08247e95-8e00-4518-bb30-16c77b9fd082:asset:import:1e6d7edc-9238-4d72-a107-f37f92e607a5:BV1TdC9Y7EXR_【油管歌回】 Wishing_2_seg008_hard.wav",
+        "blobKey": "global-resource:node:audio:e0d2848c-4b1d-4aaa-a09e-6b9af437d421:asset:import:1e6d7edc-9238-4d72-a107-f37f92e607a5:BV1TdC9Y7EXR_【油管歌回】 Wishing_2_seg008_hard.wav",
         "sampleRate": 0,
         "duration": 0,
         "channels": 0
@@ -15757,7 +19578,7 @@
       "asset:import:29cad413-6f84-4dfd-a94c-0fbfab0a6bb2": {
         "id": "asset:import:29cad413-6f84-4dfd-a94c-0fbfab0a6bb2",
         "storage": "projectBlob",
-        "blobKey": "global-resource:node:folder:08247e95-8e00-4518-bb30-16c77b9fd082:asset:import:29cad413-6f84-4dfd-a94c-0fbfab0a6bb2:BV1TdC9Y7EXR_【油管歌回】 Wishing_2_seg001.wav",
+        "blobKey": "global-resource:node:audio:ba5590f0-aa85-49b4-9774-efd20ecde808:asset:import:29cad413-6f84-4dfd-a94c-0fbfab0a6bb2:BV1TdC9Y7EXR_【油管歌回】 Wishing_2_seg001.wav",
         "sampleRate": 0,
         "duration": 0,
         "channels": 0
@@ -15765,7 +19586,7 @@
       "asset:import:66ae604b-e28a-47ea-9be7-d98c9a9185fc": {
         "id": "asset:import:66ae604b-e28a-47ea-9be7-d98c9a9185fc",
         "storage": "projectBlob",
-        "blobKey": "global-resource:node:folder:08247e95-8e00-4518-bb30-16c77b9fd082:asset:import:66ae604b-e28a-47ea-9be7-d98c9a9185fc:BV1TdC9Y7EXR_【油管歌回】 Wishing_2_seg011.wav",
+        "blobKey": "global-resource:node:audio:8cda6c24-2ca8-4215-9dbd-626e64f3123a:asset:import:66ae604b-e28a-47ea-9be7-d98c9a9185fc:BV1TdC9Y7EXR_【油管歌回】 Wishing_2_seg011.wav",
         "sampleRate": 0,
         "duration": 0,
         "channels": 0
@@ -15909,7 +19730,7 @@
       "asset:import:07e9eb85-7b47-4414-9602-08fed41085aa": {
         "id": "asset:import:07e9eb85-7b47-4414-9602-08fed41085aa",
         "storage": "projectBlob",
-        "blobKey": "global-resource:node:folder:f670a71b-f112-4622-ad5e-dad0361b0868:asset:import:07e9eb85-7b47-4414-9602-08fed41085aa:萌-高.wav",
+        "blobKey": "global-resource:node:audio:330a3bc3-0a9e-4503-ae4a-7350d74bddaf:asset:import:07e9eb85-7b47-4414-9602-08fed41085aa:萌-高.wav",
         "sampleRate": 0,
         "duration": 0,
         "channels": 0
@@ -16167,7 +19988,7 @@
       "asset:synthesisCopy:cac9f560-48ad-4f86-8308-7206ea68e4a2": {
         "id": "asset:synthesisCopy:cac9f560-48ad-4f86-8308-7206ea68e4a2",
         "storage": "projectBlob",
-        "blobKey": "global-resource:node:synthesisUnit:4c182bdf-e69b-46a8-a8e6-1e364093bf27:asset:synthesisCopy:cac9f560-48ad-4f86-8308-7206ea68e4a2:synthesis-copy_cac9f560-48ad-4f86-8308-7206ea68e4a2",
+        "blobKey": "global-resource:node:folder:2f23b6e1-9587-436d-86e8-2f7aa5d99c33:asset:synthesisCopy:cac9f560-48ad-4f86-8308-7206ea68e4a2:synthesis-copy_cac9f560-48ad-4f86-8308-7206ea68e4a2",
         "sampleRate": 44100,
         "duration": 17.866666666666667,
         "channels": 1,
@@ -16177,7 +19998,7 @@
       "asset:import:2d44c0ea-22c6-4f62-8ab5-f116c1b6b05c": {
         "id": "asset:import:2d44c0ea-22c6-4f62-8ab5-f116c1b6b05c",
         "storage": "projectBlob",
-        "blobKey": "export (10).wav",
+        "blobKey": "global-resource:node:audio:e4a03963-a355-423c-8b8f-ad0f000009c4:asset:import:2d44c0ea-22c6-4f62-8ab5-f116c1b6b05c:export (10).wav",
         "sampleRate": 0,
         "duration": 0,
         "channels": 0
@@ -16203,7 +20024,7 @@
       "asset:synthesisCopy:d60ebcf2-363a-490e-b5bd-0257c208dc3a": {
         "id": "asset:synthesisCopy:d60ebcf2-363a-490e-b5bd-0257c208dc3a",
         "storage": "projectBlob",
-        "blobKey": "synthesis-copy_e2945854-609f-404f-aa08-f1d1ce601437",
+        "blobKey": "global-resource:node:synthesisUnit:0aedb1bf-7935-4c33-a6af-703978f11d77:asset:synthesisCopy:d60ebcf2-363a-490e-b5bd-0257c208dc3a:synthesis-copy_e2945854-609f-404f-aa08-f1d1ce601437",
         "sampleRate": 44100,
         "duration": 15.794444444444444,
         "channels": 1,
@@ -16229,6 +20050,16 @@
         "duration": 17.832925170068027,
         "channels": 1,
         "sha256": "3d61c24b877c64d0cd6840899ae33398996ddc43e150ca1f836a49793da88014"
+      },
+      "asset:synthesisGuide:e7326c89-7313-4233-93bb-eb2ccc401b49": {
+        "id": "asset:synthesisGuide:e7326c89-7313-4233-93bb-eb2ccc401b49",
+        "storage": "projectBlob",
+        "blobKey": "global-resource:node:synthesisUnit:e7326c89-7313-4233-93bb-eb2ccc401b49:asset:synthesisGuide:e7326c89-7313-4233-93bb-eb2ccc401b49:synthesis-guide_e7326c89-7313-4233-93bb-eb2ccc401b49.wav",
+        "sampleRate": 44100,
+        "duration": 22.105396825396827,
+        "channels": 1,
+        "sampleCount": 974848,
+        "sha256": "f443f1fd2e8303fc169c16d707b738862c18c37d0ceb6522f685c162224551fe"
       }
     }
   },
@@ -203821,5 +207652,5 @@
     "hopMs": 16
   },
   "createdAt": "2026-07-30T13:09:49.395Z",
-  "modifiedAt": "2026-08-11T16:46:47.003Z"
+  "modifiedAt": "2026-08-16T13:26:31.246Z"
 }

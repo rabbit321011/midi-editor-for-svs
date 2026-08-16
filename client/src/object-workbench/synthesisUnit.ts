@@ -7,12 +7,19 @@ import type {
   SynthesisMidiPTokenTrack,
   SynthesisSegmentTrack,
   SynthesisUnitObjectNode,
+  V5PSamplingSettings,
 } from './types'
 import type { TrackId } from '@/types'
+import { V5P_DEFAULT_MODEL, type V5PModelId } from './v5pModel'
 
 export const V5P_SAMPLE_RATE = 44100 as const
 export const V5P_HOP_SAMPLES = 2048 as const
 export const V5P_FRAME_RATE = V5P_SAMPLE_RATE / V5P_HOP_SAMPLES
+export const V5P_DEFAULT_SAMPLING_SETTINGS: V5PSamplingSettings = {
+  guidance: { mode: 'unified', cfg: 1 },
+  steps: 32,
+  seed: 42,
+}
 
 export interface CreateSynthesisUnitOptions {
   id?: NodeId
@@ -20,6 +27,7 @@ export interface CreateSynthesisUnitOptions {
   guide: OwnedGuideAudio
   timelineTrackId?: TrackId | null
   defaultTimelineStart: number | null
+  presetId?: V5PModelId
   now?: string
 }
 
@@ -65,6 +73,8 @@ export function createEmptySynthesisUnit(options: CreateSynthesisUnitOptions): S
       hTokenTrack: emptyHTokenTrack(),
       midiPTokenTrack: emptyMidiPTokenTrack(),
       reference: null,
+      presetId: options.presetId ?? V5P_DEFAULT_MODEL,
+      samplingSettings: structuredClone(V5P_DEFAULT_SAMPLING_SETTINGS),
       unitRevision: 0,
       takes: [],
       activeTakeId: null,
@@ -79,6 +89,29 @@ export function createEmptySynthesisUnit(options: CreateSynthesisUnitOptions): S
 export function validateSynthesisUnit(unit: SynthesisUnitObjectNode): string[] {
   const errors: string[] = []
   const { guide, frameContract, hTokenTrack, midiPTokenTrack } = unit.synthesisUnit
+  const presetId = unit.synthesisUnit.presetId
+  if (presetId != null && presetId !== 'V5P_40K_EMA' && presetId !== 'V5Pg_20K') {
+    errors.push('SynthesisUnit presetId is invalid')
+  }
+  const sampling = unit.synthesisUnit.samplingSettings
+  if (sampling != null) {
+    if (!Number.isInteger(sampling.steps) || sampling.steps < 1 || sampling.steps > 256) {
+      errors.push('SynthesisUnit sampling steps are invalid')
+    }
+    if (!Number.isSafeInteger(sampling.seed) || sampling.seed < 0 || sampling.seed > 0xffffffff) {
+      errors.push('SynthesisUnit sampling seed is invalid')
+    }
+    const values = sampling.guidance.mode === 'unified'
+      ? [sampling.guidance.cfg]
+      : [sampling.guidance.audio, sampling.guidance.text, sampling.guidance.midi]
+    if (values.some(value => !Number.isFinite(value) || value < 0 || value > 10)) {
+      errors.push('SynthesisUnit CFG settings are invalid')
+    }
+    if (sampling.guidance.mode === 'three-way'
+      && sampling.guidance.formula !== 'audio-text-midi-telescoping.v1') {
+      errors.push('SynthesisUnit 3CFG formula is invalid')
+    }
+  }
   if (guide.sampleRate !== V5P_SAMPLE_RATE) errors.push('Owned Guide sample rate is not 44100 Hz')
   if (frameContract.frameCount !== Math.floor(guide.sampleCount / V5P_HOP_SAMPLES)) {
     errors.push('Frame count does not match the official Oobleck encoder contract')
@@ -129,7 +162,15 @@ function emptySegmentTrack(): SynthesisSegmentTrack {
 }
 
 function emptyKanaTrack(): SynthesisKanaTrack {
-  return { status: 'empty', revision: 0, origin: 'empty', units: [], boundaries: [], revisions: [] }
+  return {
+    status: 'empty',
+    revision: 0,
+    origin: 'empty',
+    units: [],
+    boundaries: [],
+    boundaryFrameContract: 'object-frame.v1',
+    revisions: [],
+  }
 }
 
 function emptyHTokenTrack(): SynthesisHTokenTrack {

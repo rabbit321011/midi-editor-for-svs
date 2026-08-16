@@ -43,7 +43,13 @@ const editorWorkspace = useEditorWorkspaceStore()
       <KeymapHelpPage v-if="editorWorkspace.activeTab?.kind === 'keymap'" />
       <GpuRuntimePage v-if="editorWorkspace.activeTab?.kind === 'gpu'" />
       <TextObjectEditor v-if="editorWorkspace.activeTab?.kind === 'object' && editorWorkspace.activeTab.objectKind === 'text'" :object-id="editorWorkspace.activeTab.contextObjectId" />
-      <SynthesisUnitEditor v-if="editorWorkspace.activeTab?.kind === 'object' && editorWorkspace.activeTab.objectKind === 'synthesisUnit'" :object-id="editorWorkspace.activeTab.contextObjectId" />
+      <KeepAlive>
+        <SynthesisUnitEditor
+          v-if="editorWorkspace.activeTab?.kind === 'object' && editorWorkspace.activeTab.objectKind === 'synthesisUnit'"
+          :key="editorWorkspace.activeTab.contextObjectId"
+          :object-id="editorWorkspace.activeTab.contextObjectId"
+        />
+      </KeepAlive>
       <div v-if="editorWorkspace.activeTab?.kind !== 'timeline' && editorWorkspace.activeTab?.kind !== 'settings' && editorWorkspace.activeTab?.kind !== 'keymap' && editorWorkspace.activeTab?.kind !== 'gpu' && !(editorWorkspace.activeTab?.kind === 'object' && (editorWorkspace.activeTab.objectKind === 'text' || editorWorkspace.activeTab.objectKind === 'synthesisUnit'))" class="empty-editor">Editor unavailable</div>
     </div>
   </section>

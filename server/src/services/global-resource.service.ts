@@ -110,6 +110,7 @@ export class GlobalResourceRepository {
     const added: string[] = []
     for (const entry of Object.values(catalog)) {
       let treeChanged = false
+      const incomingNode = sanitizeResourceNode(entry.node)
       let destination = resourceFolder
       for (const ancestor of entry.ancestors ?? []) {
         destination = ensurePathFolder(destination, ancestor)
@@ -132,12 +133,12 @@ export class GlobalResourceRepository {
         treeChanged = true
       }
       if (existing) {
-        if (existing.kind === 'folder' || entry.node.kind === 'folder') {
-          if (existing.kind !== entry.node.kind) {
+        if (existing.kind === 'folder' || incomingNode.kind === 'folder') {
+          if (existing.kind !== incomingNode.kind) {
             throw new Error(`Global Resource kind conflicts with project node: ${entry.id}`)
           }
-          if (mergeFolderTree(existing, entry.node)) treeChanged = true
-        } else if (replaceLeafNode(existing, entry.node)) {
+          if (mergeFolderTree(existing, incomingNode)) treeChanged = true
+        } else if (replaceLeafNode(existing, incomingNode)) {
           treeChanged = true
         }
         const assetsPresent = Object.keys(entry.assets).every(assetId => tree.assets?.[assetId])
@@ -146,7 +147,7 @@ export class GlobalResourceRepository {
         ))
         if (!treeChanged && assetsPresent && blobsPresent) continue
       } else {
-        destination.children.push(structuredClone(entry.node))
+        destination.children.push(incomingNode)
         treeChanged = true
       }
       for (const [key, fileName] of Object.entries(entry.blobFiles)) {
@@ -267,6 +268,20 @@ function mergeFolderTree(existing: any, incoming: Record<string, unknown>): bool
     }
   }
   return changed
+}
+
+function sanitizeResourceNode(node: Record<string, unknown>): Record<string, unknown> {
+  const copy: Record<string, unknown> = structuredClone(node)
+  if (copy.kind === 'synthesisUnit' && copy.synthesisUnit && typeof copy.synthesisUnit === 'object') {
+    Object.assign(copy.synthesisUnit as Record<string, unknown>, {
+      timelineTrackId: null,
+      defaultTimelineStart: null,
+    })
+  }
+  if (Array.isArray(copy.children)) {
+    copy.children = (copy.children as Array<Record<string, unknown>>).map(sanitizeResourceNode)
+  }
+  return copy
 }
 
 function replaceLeafNode(existing: any, incoming: Record<string, unknown>): boolean {

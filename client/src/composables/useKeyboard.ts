@@ -20,8 +20,11 @@ export function useKeyboard() {
   function handler(e: KeyboardEvent) {
     const ctrl = e.ctrlKey || e.metaKey
     const altLocate = e.altKey && !ctrl && !e.shiftKey
-    const tag = (e.target as HTMLElement)?.tagName
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+    const target = e.target instanceof HTMLElement ? e.target : null
+    const editingText = Boolean(target?.closest('input, textarea, select, [contenteditable="true"]'))
+    if (ctrl && e.key === 's') { e.preventDefault(); saveProject(); return }
+    if (ctrl && e.key === 'o') { e.preventDefault(); loadProject(); return }
+    if (editingText) return
 
     if (e.key === ' ') {
       if ((window as any).__synthesisUnitEditorActive) return
@@ -35,11 +38,16 @@ export function useKeyboard() {
     if (altLocate && e.key.toLowerCase() === 'k') { e.preventDefault(); locateBoundObjectShortcut('text'); return }
     if (ctrl && e.key === 'z' && !e.shiftKey) { e.preventDefault(); history.undo(); return }
     if (ctrl && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); history.redo(); return }
-    if (ctrl && e.key === 's') { e.preventDefault(); saveProject(); return }
-    if (ctrl && e.key === 'o') { e.preventDefault(); loadProject(); return }
     if (ctrl && e.key === 'ArrowUp') { e.preventDefault(); moveSelectedTimelineObjects(-1); return }
     if (ctrl && e.key === 'ArrowDown') { e.preventDefault(); moveSelectedTimelineObjects(1); return }
-    if (ctrl && e.key === 'c') { e.preventDefault(); clipboard.copy(); return }
+    if (ctrl && e.key.toLowerCase() === 'c') {
+      // A visible browser text selection belongs to the system clipboard.
+      // Only use the editor clipboard when the page has no selected text.
+      if (window.getSelection()?.toString()) return
+      e.preventDefault()
+      clipboard.copy()
+      return
+    }
     if (ctrl && e.key === 'v') { e.preventDefault(); pasteFromClipboard(); return }
     if (ctrl && e.key === 'b') { e.preventDefault(); mergeSelected(); return }
     if (e.key === 'Delete' || e.key === 'Del') { e.preventDefault(); deleteSelected(); return }

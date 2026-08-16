@@ -43,6 +43,12 @@ export interface ReplaceMidiPTrackRequest extends Omit<ReplaceBase, 'startFrame'
   compilerHash?: string
 }
 
+export interface ReplaceMidiPTrackRangeRequest extends ReplaceBase {
+  classes: number[]
+  gameModelHash?: string
+  compilerHash?: string
+}
+
 export interface MoveHTokenEventRequest {
   eventId: string
   targetFrame: number
@@ -79,6 +85,13 @@ export interface UpdateSegmentObjectRequest {
   revisionId?: string
 }
 
+export interface CreateSegmentObjectRequest {
+  segment: SynthesisSegmentObject
+  operation?: string
+  now?: string
+  revisionId?: string
+}
+
 export interface UpdateKanaUnitRequest {
   unitId: string
   patch: Partial<Pick<SynthesisKanaUnit, 'kana' | 'romaji'>>
@@ -99,6 +112,22 @@ export interface MoveKanaSharedBoundaryRequest {
 export interface MoveKanaBoundaryRequest {
   unitId: string
   edge: 'start' | 'end'
+  targetFrame: number
+  operation?: string
+  now?: string
+  revisionId?: string
+}
+
+export interface MoveKanaUnitRequest {
+  unitId: string
+  targetStartFrame: number
+  operation?: string
+  now?: string
+  revisionId?: string
+}
+
+export interface MoveKanaSegmentBoundaryRequest {
+  boundaryId: string
   targetFrame: number
   operation?: string
   now?: string
@@ -128,6 +157,7 @@ export function replaceKanaTrackRange(unit: SynthesisUnitObjectNode, request: Re
   }
   validateKana(request.units, request.boundaries, range.start, range.end, boundaryEndFrameExclusive)
   const track = unit.synthesisUnit.kanaTrack
+  track.boundaryFrameContract = 'object-frame.v1'
   const revision = nextRevision(unit, 'kana', request, range.start, Math.max(range.end, boundaryEndFrameExclusive))
   track.units = [
     ...track.units.filter(item => !rangesOverlap(item.startFrame, item.endFrameExclusive, range.start, range.end)),
@@ -202,6 +232,33 @@ export function replaceMidiPTrack(unit: SynthesisUnitObjectNode, request: Replac
   track.classes = [...request.classes]
   track.flowFrames = request.origin === 'game' ? deriveMidiPFlowFrames(request.classes) : []
   track.manualFrames = []
+  track.status = 'ready'
+  track.origin = request.origin
+  track.revision = revision.revision
+  track.revisions.push(revision)
+  if (request.gameModelHash !== undefined) track.gameModelHash = request.gameModelHash
+  if (request.compilerHash !== undefined) track.compilerHash = request.compilerHash
+  touchUnit(unit, request.now)
+}
+
+export function replaceMidiPTrackRange(unit: SynthesisUnitObjectNode, request: ReplaceMidiPTrackRangeRequest) {
+  const range = validateRange(unit, request.startFrame, request.endFrameExclusive)
+  if (request.classes.length !== range.end - range.start) {
+    throw new Error(`MIDI-P range requires ${range.end - range.start} dense classes`)
+  }
+  if (request.classes.some(value => !Number.isInteger(value) || value < 0 || value > 255)) {
+    throw new Error('MIDI-P class must be an integer in 0..255; PAD=256 is not valid control data')
+  }
+  const track = unit.synthesisUnit.midiPTokenTrack
+  const frameCount = unit.synthesisUnit.frameContract.frameCount
+  const existing = track.status === 'ready' && track.classes.length === frameCount
+    ? [...track.classes]
+    : Array(frameCount).fill(255)
+  existing.splice(range.start, range.end - range.start, ...request.classes)
+  const revision = nextRevision(unit, 'midi-p', request, range.start, range.end)
+  track.classes = existing
+  track.flowFrames = deriveMidiPFlowFrames(existing)
+  track.manualFrames = (track.manualFrames ?? []).filter(frame => frame < range.start || frame >= range.end)
   track.status = 'ready'
   track.origin = request.origin
   track.revision = revision.revision
@@ -408,6 +465,27 @@ export function updateSegmentObject(unit: SynthesisUnitObjectNode, request: Upda
   touchUnit(unit, request.now)
 }
 
+export function createSegmentObject(unit: SynthesisUnitObjectNode, request: CreateSegmentObjectRequest) {
+  const track = unit.synthesisUnit.segmentTrack
+  if (track.items.some(item => item.id === request.segment.id)) {
+    throw new Error('Segment ID 已存在')
+  }
+  const nextItems = [...track.items, { ...clone(request.segment), origin: 'user' as const }]
+  validateSegments(nextItems, unit.synthesisUnit.frameContract.frameCount)
+  const revision = nextRevision(unit, 'segment', {
+    operation: request.operation ?? 'create Segment',
+    sourceRefs: [],
+    now: request.now,
+    revisionId: request.revisionId,
+  }, request.segment.startFrame, request.segment.speechEndFrameExclusive)
+  track.items = nextItems.sort((left, right) => left.startFrame - right.startFrame)
+  track.status = 'ready'
+  track.origin = 'user'
+  track.revision = revision.revision
+  track.revisions.push(revision)
+  touchUnit(unit, request.now)
+}
+
 export function deleteSegmentObject(unit: SynthesisUnitObjectNode, segmentId: string) {
   const track = unit.synthesisUnit.segmentTrack
   const existing = track.items.find(item => item.id === segmentId)
@@ -545,6 +623,98 @@ export function moveKanaBoundary(
     revisionId: request.revisionId,
   }, Math.min(oldFrame, request.targetFrame), Math.max(oldFrame, request.targetFrame) + 1)
   track.units = nextUnits.sort((a, b) => a.startFrame - b.startFrame)
+  track.revision = revision.revision
+  track.origin = 'user'
+  track.revisions.push(revision)
+  touchUnit(unit, request.now)
+}
+
+export function moveKanaUnit(
+  unit: SynthesisUnitObjectNode,
+  request: MoveKanaUnitRequest,
+) {
+  const track = unit.synthesisUnit.kanaTrack
+  const current = track.units.find(item => item.id === request.unitId)
+  if (!current) throw new Error('KanaUnit does not exist')
+  if (!Number.isInteger(request.targetStartFrame)) throw new Error('Kana 起点必须是整数 frame')
+  const width = current.endFrameExclusive - current.startFrame
+  const targetEndFrameExclusive = request.targetStartFrame + width
+  const frameCount = unit.synthesisUnit.frameContract.frameCount
+  if (request.targetStartFrame < 0 || targetEndFrameExclusive > frameCount) {
+    throw new Error('Kana 整体移动后越过音频 frame 范围')
+  }
+  if (request.targetStartFrame === current.startFrame) return
+  const collision = track.units.find(item => item.id !== current.id
+    && request.targetStartFrame < item.endFrameExclusive
+    && item.startFrame < targetEndFrameExclusive)
+  if (collision) {
+    throw new Error(`Kana「${current.kana}」移动后会与 Kana「${collision.kana}」重叠`)
+  }
+  const crossedSeg = track.boundaries.find(boundary => (
+    request.targetStartFrame < boundary.frame + 1 && boundary.frame < targetEndFrameExclusive
+  ))
+  if (crossedSeg) throw new Error(`Kana「${current.kana}」移动后会与 SEG frame ${crossedSeg.frame} 重叠`)
+
+  const nextUnits = clone(track.units)
+  const moved = nextUnits.find(item => item.id === current.id)!
+  moved.startFrame = request.targetStartFrame
+  moved.endFrameExclusive = targetEndFrameExclusive
+  moved.origin = 'user'
+  const revision = nextRevision(unit, 'kana', {
+    operation: request.operation ?? 'move Kana object',
+    sourceRefs: [],
+    now: request.now,
+    revisionId: request.revisionId,
+  }, Math.min(current.startFrame, request.targetStartFrame), Math.max(current.endFrameExclusive, targetEndFrameExclusive))
+  track.units = nextUnits.sort((left, right) => left.startFrame - right.startFrame)
+  track.revision = revision.revision
+  track.origin = 'user'
+  track.revisions.push(revision)
+  touchUnit(unit, request.now)
+}
+
+export function moveKanaSegmentBoundary(
+  unit: SynthesisUnitObjectNode,
+  request: MoveKanaSegmentBoundaryRequest,
+) {
+  const track = unit.synthesisUnit.kanaTrack
+  track.boundaryFrameContract = 'object-frame.v1'
+  const sorted = [...track.boundaries].sort((left, right) => left.frame - right.frame)
+  const index = sorted.findIndex(item => item.id === request.boundaryId)
+  if (index < 0) throw new Error('Kana SEG 不存在')
+  const current = sorted[index]
+  const currentSegFrame = current.frame
+  const frameCount = unit.synthesisUnit.frameContract.frameCount
+  if (!Number.isInteger(request.targetFrame) || request.targetFrame < 0 || request.targetFrame >= frameCount) {
+    throw new Error('Kana SEG 必须位于有效的整数 frame')
+  }
+  if (request.targetFrame === currentSegFrame) return
+  const previous = sorted[index - 1]
+  const next = sorted[index + 1]
+  if ((previous && request.targetFrame <= previous.frame) || (next && request.targetFrame >= next.frame)) {
+    throw new Error('Kana SEG 不能跨过相邻 SEG')
+  }
+  const containingKana = track.units.find(item => (
+    request.targetFrame < item.endFrameExclusive && item.startFrame < request.targetFrame + 1
+  ))
+  if (containingKana) {
+    throw new Error(`SEG frame ${request.targetFrame} 会切入 Kana「${containingKana.kana}」内部`)
+  }
+  if (track.boundaries.some(item => item.id !== current.id && item.frame === request.targetFrame)) {
+    throw new Error(`frame ${request.targetFrame} 已有另一个 SEG`)
+  }
+
+  const nextBoundaries = clone(track.boundaries)
+  const moved = nextBoundaries.find(item => item.id === current.id)!
+  moved.frame = request.targetFrame
+  moved.origin = 'user'
+  const revision = nextRevision(unit, 'kana', {
+    operation: request.operation ?? 'move Kana SEG object',
+    sourceRefs: [],
+    now: request.now,
+    revisionId: request.revisionId,
+  }, Math.min(currentSegFrame, request.targetFrame), Math.max(currentSegFrame, request.targetFrame) + 1)
+  track.boundaries = nextBoundaries.sort((left, right) => left.frame - right.frame)
   track.revision = revision.revision
   track.origin = 'user'
   track.revisions.push(revision)

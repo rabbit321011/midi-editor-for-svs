@@ -38,6 +38,42 @@ test('global resources copy into projects and survive global removal', () => {
   }
 })
 
+test('global SynthesisUnit resources are copied without timeline provenance', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aisvc-global-resource-synth-'))
+  try {
+    const projectDir = path.join(root, 'projects', 'synth')
+    fs.mkdirSync(projectDir, { recursive: true })
+    fs.writeFileSync(path.join(projectDir, 'project.json'), JSON.stringify(projectFixture(), null, 2))
+    const repo = new GlobalResourceRepository(root)
+    repo.publish({
+      id: 'node:synthesisUnit:global',
+      name: 'Global SYN',
+      node: {
+        id: 'node:synthesisUnit:global',
+        kind: 'synthesisUnit',
+        name: 'Global SYN',
+        synthesisUnit: {
+          timelineTrackId: 'trk_old',
+          defaultTimelineStart: 11.633333333333333,
+          unitRevision: 7,
+        },
+      },
+      assets: {},
+      blobKeys: [],
+    })
+
+    assert.deepEqual(repo.syncProject('synth').added, ['node:synthesisUnit:global'])
+    const synced = JSON.parse(fs.readFileSync(path.join(projectDir, 'project.json'), 'utf-8'))
+    const unit = synced.objectTree.root.children[0].children[0]
+    assert.equal(unit.kind, 'synthesisUnit')
+    assert.equal(unit.synthesisUnit.timelineTrackId, null)
+    assert.equal(unit.synthesisUnit.defaultTimelineStart, null)
+    assert.equal(unit.synthesisUnit.unitRevision, 7)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('legacy projects without an object tree still open before migration', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aisvc-global-resource-legacy-'))
   try {

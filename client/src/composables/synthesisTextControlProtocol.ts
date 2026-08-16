@@ -42,6 +42,7 @@ export interface SynthesisTextControlResult {
     pulFrameCount: number
     lockedEventTokenSHA256: string
     phraseModes: CompiledHPlacementMode[]
+    boundaryMode: 'free' | 'kana-hard'
   }
   runtimeHashes: Record<string, string>
   compilerSHA256: string
@@ -81,6 +82,7 @@ export function readSynthesisTextControlResult(
       pulFrameCount: integer(result.hAudit.pulFrameCount, 'pulFrameCount'),
       lockedEventTokenSHA256: string(result.hAudit.lockedEventTokenSHA256, 'lockedEventTokenSHA256'),
       phraseModes: result.hAudit.phraseModes.map(readPhraseMode),
+      boundaryMode: result.hAudit.boundaryMode === 'kana-hard' ? 'kana-hard' : 'free',
     },
     runtimeHashes: Object.fromEntries(Object.entries(result.runtimeHashes).map(([key, value]) => [key, string(value, key)])),
     compilerSHA256: result.compilerSHA256,

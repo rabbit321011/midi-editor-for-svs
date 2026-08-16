@@ -12,23 +12,52 @@ MSST_ROOT = Path(r"E:\MyProject\cyanAI\nodeServer\src\utility\MSST\msst_webui")
 MODELS = {
     "duality": {
         "id": "duality",
+        "kind": "msst",
+        "msst_model_type": "mel_band_roformer",
         "model": "pretrain/vocal_models/melband_roformer_instvox_duality_v2.ckpt",
         "config": "configs/vocal_models/melband_roformer_instvox_duality_v2.ckpt.yaml",
         "outputs": {"Vocals": "vocals", "Instrumental": "instrumental"},
     },
     "dereverb": {
         "id": "dereverb",
+        "kind": "msst",
+        "msst_model_type": "mel_band_roformer",
         "model": "pretrain/single_stem_models/dereverb_echo_mbr_fused_0.5_v2_0.25_big_0.25_super.ckpt",
         "config": "configs/single_stem_models/dereverb_echo_mbr_fused_0.5_v2_0.25_big_0.25_super.ckpt.yaml",
         "outputs": {"dry": "dry", "other": "other"},
     },
     "denoise": {
         "id": "denoise",
+        "kind": "msst",
+        "msst_model_type": "mel_band_roformer",
         "model": "pretrain/single_stem_models/denoise_mel_band_roformer_aufr33_sdr_27.9959.ckpt",
         "config": "configs/single_stem_models/denoise_mel_band_roformer_aufr33_sdr_27.9959.ckpt.yaml",
         "outputs": {"dry": "dry", "other": "other"},
     },
+    "apollo": {
+        "id": "apollo",
+        "kind": "msst",
+        "msst_model_type": "apollo",
+        "model": "pretrain/single_stem_models/apollo_model_uni.ckpt",
+        "config": "configs/single_stem_models/apollo_model_uni.ckpt.yaml",
+        "outputs": {"restored": "restored", "addition": "addition"},
+    },
+    "aspiration": {
+        "id": "aspiration",
+        "kind": "msst",
+        "msst_model_type": "mel_band_roformer",
+        "model": "pretrain/single_stem_models/aspiration_mel_band_roformer_sdr_18.9845.ckpt",
+        "config": "configs/single_stem_models/aspiration_mel_band_roformer_sdr_18.9845.ckpt.yaml",
+        "outputs": {"aspiration": "aspiration", "other": "other"},
+    },
+    "bve": {
+        "id": "bve",
+        "kind": "vr",
+        "model": "pretrain/VR_Models/UVR-BVE-4B_SN-44100-1.pth",
+        "outputs": {"Vocals": "vocals", "Instrumental": "instrumental"},
+    },
 }
+OUTPUT_IDS = sorted({result_id for step in MODELS.values() for result_id in step["outputs"].values()})
 
 
 def emit(event_type, **payload):
@@ -43,10 +72,44 @@ def find_output(directory, input_stem, instrument):
     return matches[0]
 
 
+def create_separator(step, device, output_dir):
+    sys.path.insert(0, str(MSST_ROOT))
+    os.chdir(MSST_ROOT)
+    if step["kind"] == "vr":
+        from inference.vr_infer import VRSeparator
+
+        return VRSeparator(
+            model_file=str(MSST_ROOT / step["model"]),
+            output_dir=str(output_dir),
+            output_format="wav",
+            use_cpu=device == "cpu",
+            vr_params={
+                "batch_size": 16,
+                "window_size": 512,
+                "aggression": 5,
+                "enable_tta": False,
+                "enable_post_process": False,
+                "post_process_threshold": 0.2,
+                "high_end_process": False,
+            },
+        )
+    from inference.msst_infer import MSSeparator
+
+    return MSSeparator(
+        model_type=step["msst_model_type"],
+        config_path=str(MSST_ROOT / step["config"]),
+        model_path=str(MSST_ROOT / step["model"]),
+        device=device,
+        device_ids=[0],
+        output_format="wav",
+        use_tta=False,
+        store_dirs=str(output_dir),
+    )
+
+
 def run_model(model_id, input_wav, output_dir, device):
     sys.path.insert(0, str(MSST_ROOT))
     os.chdir(MSST_ROOT)
-    from inference.msst_infer import MSSeparator
 
     output_dir.mkdir(parents=True, exist_ok=True)
     saved = {}
@@ -62,16 +125,7 @@ def run_model(model_id, input_wav, output_dir, device):
         shutil.copy2(input_wav, local_input)
         emit("progress", progress=0, stage=model_id)
 
-        separator = MSSeparator(
-            model_type="mel_band_roformer",
-            config_path=str(MSST_ROOT / step["config"]),
-            model_path=str(MSST_ROOT / step["model"]),
-            device=device,
-            device_ids=[0],
-            output_format="wav",
-            use_tta=False,
-            store_dirs=str(stage_output),
-        )
+        separator = create_separator(step, device, stage_output)
         try:
             emit("progress", progress=15, stage=model_id)
             separator.process_folder(str(stage_input))
@@ -92,7 +146,6 @@ def run_model(model_id, input_wav, output_dir, device):
 def run_folder(model_id, input_dir, output_dir, device, output_only=None):
     sys.path.insert(0, str(MSST_ROOT))
     os.chdir(MSST_ROOT)
-    from inference.msst_infer import MSSeparator
 
     input_files = sorted(input_dir.glob("*.wav"))
     if not input_files:
@@ -103,16 +156,7 @@ def run_folder(model_id, input_dir, output_dir, device, output_only=None):
     with tempfile.TemporaryDirectory(prefix="aisvc_msst_batch_") as temp_root:
         stage_output = Path(temp_root) / "output"
         stage_output.mkdir()
-        separator = MSSeparator(
-            model_type="mel_band_roformer",
-            config_path=str(MSST_ROOT / step["config"]),
-            model_path=str(MSST_ROOT / step["model"]),
-            device=device,
-            device_ids=[0],
-            output_format="wav",
-            use_tta=False,
-            store_dirs=str(stage_output),
-        )
+        separator = create_separator(step, device, stage_output)
         try:
             emit("progress", progress=5, stage=model_id, files=len(input_files))
             separator.process_folder(str(input_dir))
@@ -143,7 +187,7 @@ def main():
     input_group.add_argument("--input-dir")
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--device", choices=["cpu", "cuda"], default="cuda")
-    parser.add_argument("--output-only", choices=["vocals", "instrumental", "dry", "other"])
+    parser.add_argument("--output-only", choices=OUTPUT_IDS)
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir).resolve()

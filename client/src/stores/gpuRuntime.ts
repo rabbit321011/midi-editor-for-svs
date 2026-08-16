@@ -64,6 +64,21 @@ export interface GpuPolicyEstimate {
   steps?: number
   requiredIfLoadedMiB: number
   requiredIfUnloadedMiB: number
+  guidanceMode?: 'unified' | 'three-way'
+  estimatedTimeFactor?: number
+  profilePolicy?: 'measured' | 'sequential-branch-peak'
+}
+
+export type CompositeRuntimeRoute = 'resident' | 'oneshot'
+
+export interface CompositeRuntimePlan {
+  ok: boolean
+  route: CompositeRuntimeRoute
+  modelIds: string[]
+  requiredMiB: number
+  freeMiB: number
+  evictions: ModelRuntimeStatus[]
+  residentModelIds: string[]
 }
 
 interface GpuStatusPayload {
@@ -126,7 +141,11 @@ export const useGpuRuntimeStore = defineStore('gpuRuntime', () => {
     const result = await response.json()
     if (!response.ok || !result.ok) throw new Error(result.reason || '本应用显存释放失败')
     await refresh()
-    return result as { released: string[]; failed: Array<{ id: string; reason: string }> }
+    return result as {
+      released: string[]
+      failed: Array<{ id: string; reason: string }>
+      runtimes?: { released: string[]; failed: Array<{ id: string; reason: string }> }
+    }
   }
 
   async function loadRuntime(id: string) {
@@ -135,6 +154,75 @@ export const useGpuRuntimeStore = defineStore('gpuRuntime', () => {
     if (!response.ok || !result.ok) throw new Error(result.reason || 'Runtime 加载失败')
     await refresh()
     return result.runtime as ModelRuntimeStatus
+  }
+
+  async function ensureResidentRuntime(modelId: string) {
+    const loaded = runtimes.value.some(item => item.modelId === modelId
+      && (item.state === 'ready' || item.state === 'busy'))
+    if (!loaded) await loadRuntime(modelId)
+  }
+
+  async function planCompositeRoute(modelIds: string[], durationSeconds: number): Promise<CompositeRuntimePlan> {
+    await refresh()
+    const freeMiB = status.value?.gpus[0]?.freeMiB ?? 0
+    let residentToLoad = 0
+    let maxInferenceDelta = 0
+    let oneShotRequired = 0
+    for (const modelId of modelIds) {
+      const policy = await estimatePolicy(modelId, durationSeconds)
+      const runtime = runtimes.value.find(item => item.modelId === modelId
+        && (item.state === 'ready' || item.state === 'busy'))
+      if (!runtime) {
+        residentToLoad += policy.estimate.residentMiB ?? policy.estimate.requiredIfUnloadedMiB
+        oneShotRequired = Math.max(oneShotRequired, policy.estimate.peakDeltaMiB)
+      } else {
+        oneShotRequired = Math.max(oneShotRequired, policy.estimate.requiredIfLoadedMiB)
+      }
+      maxInferenceDelta = Math.max(maxInferenceDelta, policy.estimate.inferenceDeltaMiB)
+    }
+    const residentRequired = residentToLoad + maxInferenceDelta
+    const residentEvictions = selectEvictions(runtimes.value, modelIds, residentRequired, freeMiB)
+    const oneShotEvictions = selectEvictions(runtimes.value, modelIds, oneShotRequired, freeMiB)
+    const residentAvailable = freeMiB + residentEvictions.reduce((sum, item) => sum + (item.residentMiB ?? 0), 0)
+    const oneShotAvailable = freeMiB + oneShotEvictions.reduce((sum, item) => sum + (item.residentMiB ?? 0), 0)
+    if (residentAvailable >= residentRequired) {
+      return {
+        ok: true,
+        route: 'resident',
+        modelIds,
+        requiredMiB: residentRequired,
+        freeMiB,
+        evictions: residentEvictions,
+        residentModelIds: modelIds,
+      }
+    }
+    if (oneShotAvailable >= oneShotRequired) {
+      return {
+        ok: true,
+        route: 'oneshot',
+        modelIds,
+        requiredMiB: oneShotRequired,
+        freeMiB,
+        evictions: oneShotEvictions,
+        residentModelIds: [],
+      }
+    }
+    return {
+      ok: false,
+      route: 'oneshot',
+      modelIds,
+      requiredMiB: Math.min(residentRequired, oneShotRequired),
+      freeMiB,
+      evictions: [],
+      residentModelIds: [],
+    }
+  }
+
+  async function applyCompositePlan(plan: CompositeRuntimePlan) {
+    for (const item of plan.evictions) await unloadRuntime(item.id)
+    await refresh()
+    if (plan.route !== 'resident') return
+    for (const modelId of plan.residentModelIds) await ensureResidentRuntime(modelId)
   }
 
   async function unloadRuntime(id: string) {
@@ -169,11 +257,15 @@ export const useGpuRuntimeStore = defineStore('gpuRuntime', () => {
     activeStageReleases.value = []
   }
 
-  async function estimatePolicy(modelId: string, durationSeconds: number) {
+  async function estimatePolicy(
+    modelId: string,
+    durationSeconds: number,
+    guidanceMode: 'unified' | 'three-way' = 'unified',
+  ) {
     const response = await fetch('/api/gpu/policy/estimate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ modelId, durationSeconds }),
+      body: JSON.stringify({ modelId, durationSeconds, guidanceMode }),
     })
     const payload = await response.json()
     if (!response.ok || !payload.ok) throw new Error(payload.reason || '显存策略估算失败')
@@ -186,9 +278,13 @@ export const useGpuRuntimeStore = defineStore('gpuRuntime', () => {
     }
   }
 
-  async function prepareRuntime(modelId: string, durationSeconds: number) {
+  async function prepareRuntime(
+    modelId: string,
+    durationSeconds: number,
+    guidanceMode: 'unified' | 'three-way' = 'unified',
+  ) {
     await refresh()
-    const policy = await estimatePolicy(modelId, durationSeconds)
+    const policy = await estimatePolicy(modelId, durationSeconds, guidanceMode)
     const runtime = runtimes.value.find(item => item.modelId === modelId
       && (item.state === 'ready' || item.state === 'busy'))
     if (runtime?.state === 'busy') {
@@ -209,7 +305,7 @@ export const useGpuRuntimeStore = defineStore('gpuRuntime', () => {
     }
     if (runtimeMode.value === 'auto') {
       for (const item of needed) await unloadRuntime(item.id)
-      const after = await estimatePolicy(modelId, durationSeconds)
+      const after = await estimatePolicy(modelId, durationSeconds, guidanceMode)
       if (after.freeMiB < required) {
         return { ok: false as const, insufficient: true, policy, required, evictions: needed }
       }
@@ -315,11 +411,41 @@ export const useGpuRuntimeStore = defineStore('gpuRuntime', () => {
     }
     const needed = [...releaseSet.values()]
     if (needed.length === 0) {
+      if (modelIds.length === 1) await ensureResidentRuntime(modelIds[0])
+      else {
+        const plan = await planCompositeRoute(modelIds, durationSeconds)
+        if (!plan.ok) {
+          return {
+            ok: false as const,
+            insufficient: true,
+            required: plan.requiredMiB,
+            freeMiB,
+            policy: policyForDialog,
+            evictions: [],
+          }
+        }
+        if (plan.route === 'resident') {
+          if (runtimeMode.value === 'auto' || plan.evictions.length === 0) {
+            await applyCompositePlan(plan)
+          } else {
+            return {
+              ok: false as const,
+              action: 'confirm' as const,
+              required: plan.requiredMiB,
+              freeMiB,
+              policy: policyForDialog,
+              evictions: plan.evictions,
+              stageReleases,
+            }
+          }
+        }
+      }
       return { ok: true as const, required: 0, freeMiB, policy: policyForDialog, stageReleases }
     }
     if (runtimeMode.value === 'auto') {
       for (const item of needed) await unloadRuntime(item.id)
       await refresh()
+      if (modelIds.length === 1) await ensureResidentRuntime(modelIds[0])
       return { ok: true as const, required, freeMiB, policy: policyForDialog, evictions: needed, stageReleases }
     }
     return {
@@ -362,6 +488,8 @@ export const useGpuRuntimeStore = defineStore('gpuRuntime', () => {
     setActiveStageReleases,
     clearActiveStageReleases,
     estimatePolicy,
+    planCompositeRoute,
+    applyCompositePlan,
     prepareRuntime,
     prepareTransientTask,
     prepareCompositeTask,
@@ -371,6 +499,22 @@ export const useGpuRuntimeStore = defineStore('gpuRuntime', () => {
 
 function evictionOrder(runtimes: ModelRuntimeStatus[], activeModelId: string): ModelRuntimeStatus[] {
   return evictionOrderExcluding(runtimes, [activeModelId])
+}
+
+function selectEvictions(
+  runtimes: ModelRuntimeStatus[],
+  excludedModelIds: string[],
+  requiredMiB: number,
+  freeMiB: number,
+): ModelRuntimeStatus[] {
+  let available = freeMiB
+  const evictions: ModelRuntimeStatus[] = []
+  for (const runtime of evictionOrderExcluding(runtimes, excludedModelIds)) {
+    if (available >= requiredMiB) break
+    available += runtime.residentMiB ?? 0
+    evictions.push(runtime)
+  }
+  return evictions
 }
 
 function evictionOrderExcluding(runtimes: ModelRuntimeStatus[], excludedModelIds: string[]): ModelRuntimeStatus[] {

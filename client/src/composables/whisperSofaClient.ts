@@ -41,6 +41,66 @@ export async function runWhisperSofa(options: RunWhisperSofaOptions): Promise<Wh
   }
 }
 
+export async function runWhisperTranscribe(options: {
+  inputWav: string
+  outputName: string
+  vad?: boolean
+  device?: string
+  computeType?: string
+  onProgress?: (progress: number, message: string) => void
+}): Promise<string> {
+  const jobId = crypto.randomUUID().slice(0, 8)
+  const ws = await openRenderWebSocket(jobId)
+  try {
+    const done = waitForTranscribeDone(ws, options.onProgress)
+    const response = await fetch('/api/whisper/transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        inputWav: options.inputWav,
+        outputName: options.outputName,
+        vad: options.vad ?? true,
+        device: options.device ?? 'cuda',
+        computeType: options.computeType ?? 'float16',
+      }),
+    })
+    if (!response.ok) throw new Error(await readError(response) || 'Whisper 启动失败')
+    return await done
+  } finally {
+    ws.close()
+  }
+}
+
+export async function runSofaAlign(options: {
+  inputWav: string
+  transcriptFile: string
+  outputName: string
+  device?: string
+  onProgress?: (progress: number, message: string) => void
+}): Promise<WhisperSofaResult> {
+  const jobId = crypto.randomUUID().slice(0, 8)
+  const ws = await openRenderWebSocket(jobId)
+  try {
+    const done = waitForSofaAlignDone(ws, options.onProgress)
+    const response = await fetch('/api/sofa/align', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId,
+        inputWav: options.inputWav,
+        transcriptFile: options.transcriptFile,
+        outputName: options.outputName,
+        device: options.device ?? 'cuda',
+      }),
+    })
+    if (!response.ok) throw new Error(await readError(response) || 'SOFA 启动失败')
+    return await done
+  } finally {
+    ws.close()
+  }
+}
+
 function waitForWhisperSofaDone(
   ws: WebSocket,
   onProgress?: RunWhisperSofaOptions['onProgress'],
@@ -94,7 +154,120 @@ function waitForWhisperSofaDone(
   })
 }
 
-async function uploadTempWav(groupId: string, blob: Blob, sampleRate: number): Promise<{ path: string; sampleRate: number }> {
+function waitForTranscribeDone(
+  ws: WebSocket,
+  onProgress?: RunWhisperSofaOptions['onProgress'],
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let transcriptFile = ''
+    let settled = false
+    ws.onmessage = event => {
+      if (settled) return
+      try {
+        const message = JSON.parse(event.data)
+        if (message.type === 'progress') {
+          onProgress?.(Number(message.progress || 0) * 0.5, whisperSofaProgressLabel(message))
+          return
+        }
+        if (message.type === 'log' && message.message) {
+          onProgress?.(Number(message.progress || 0) * 0.5, String(message.message))
+          return
+        }
+        if (message.type === 'error') {
+          settled = true
+          reject(new Error(message.message || 'Whisper 执行失败'))
+          return
+        }
+        if (message.type === 'done') {
+          if (typeof message.transcriptFile === 'string') transcriptFile = message.transcriptFile
+          if (!transcriptFile) {
+            settled = true
+            reject(new Error('Whisper 未返回 transcript 文件'))
+            return
+          }
+          settled = true
+          resolve(transcriptFile)
+        }
+      } catch (error: any) {
+        settled = true
+        reject(error)
+      }
+    }
+    ws.onerror = () => {
+      if (settled) return
+      settled = true
+      reject(new Error('Whisper WebSocket 连接失败'))
+    }
+    ws.onclose = () => {
+      if (!settled) {
+        settled = true
+        reject(new Error('Whisper WebSocket 已断开'))
+      }
+    }
+  })
+}
+
+function waitForSofaAlignDone(
+  ws: WebSocket,
+  onProgress?: RunWhisperSofaOptions['onProgress'],
+): Promise<WhisperSofaResult> {
+  return new Promise((resolve, reject) => {
+    let result: WhisperSofaResult | null = null
+    let settled = false
+    ws.onmessage = event => {
+      if (settled) return
+      try {
+        const message = JSON.parse(event.data)
+        if (message.type === 'progress') {
+          onProgress?.(50 + Number(message.progress || 0) * 0.5, whisperSofaProgressLabel(message))
+          return
+        }
+        if (message.type === 'log' && message.message) {
+          onProgress?.(50 + Number(message.progress || 0) * 0.5, String(message.message))
+          return
+        }
+        if (message.type === 'result') {
+          result = readWhisperSofaResult(message)
+          if (!result) {
+            settled = true
+            reject(new Error('未收到 JPN_Test2_Plus 全段对齐结果'))
+          }
+          return
+        }
+        if (message.type === 'error') {
+          settled = true
+          reject(new Error(message.message || 'SOFA 执行失败'))
+          return
+        }
+        if (message.type === 'done') {
+          if (!result) {
+            settled = true
+            reject(new Error('SOFA 未返回对齐结果'))
+            return
+          }
+          settled = true
+          resolve(result)
+        }
+      } catch (error: any) {
+        settled = true
+        reject(error)
+      }
+    }
+    ws.onerror = () => {
+      if (settled) return
+      settled = true
+      reject(new Error('SOFA WebSocket 连接失败'))
+    }
+    ws.onclose = () => {
+      if (!settled) {
+        settled = true
+        reject(new Error('SOFA WebSocket 已断开'))
+      }
+    }
+  })
+}
+
+export async function uploadTempWav(groupId: string, blob: Blob, sampleRate: number): Promise<{ path: string; sampleRate: number }> {
   const response = await fetch('/api/combine', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

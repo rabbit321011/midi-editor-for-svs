@@ -15,6 +15,7 @@ const RUNTIME_DIR = path.join(PROJECT_ROOT, 'data', 'analysis-runtime')
 const WHISPER_WORKER = path.join(PROJECT_ROOT, 'server', 'scripts', 'whisper_resident_worker.py')
 const SOFA_WORKER = path.join(PROJECT_ROOT, 'server', 'scripts', 'sofa_resident_worker.py')
 const GAME_WORKER = path.join(PROJECT_ROOT, 'server', 'scripts', 'game_resident_worker.py')
+const SOME_WORKER = path.join(PROJECT_ROOT, 'server', 'scripts', 'some_resident_worker.py')
 const MSST_WORKER = path.join(PROJECT_ROOT, 'server', 'scripts', 'msst_resident_worker.py')
 const MSST_PYTHON = 'E:/MyProject/cyanAI/nodeServer/src/utility/MSST/msst_webui/venv/Scripts/python.exe'
 
@@ -47,6 +48,17 @@ const ANALYSIS_PRESETS = {
       '--device', device,
     ],
   },
+  'OpenVPI-SOME': {
+    python: APP_PYTHON,
+    worker: SOME_WORKER,
+    requestType: 'extract',
+    args: (device: string) => [
+      '--some-repo', 'E:/MyProject/ToLinuxServer/TEMP/OpenVPI-SOME',
+      '--singer-repo', 'E:/MyProject/ToLinuxServer/YingMusic-Singer-Plus-src',
+      '--checkpoint', 'E:/MyProject/ToLinuxServer/TEMP/uploads_models/some.pt',
+      '--device', device,
+    ],
+  },
   MSST_duality: {
     python: MSST_PYTHON,
     worker: MSST_WORKER,
@@ -64,6 +76,24 @@ const ANALYSIS_PRESETS = {
     worker: MSST_WORKER,
     requestType: 'separate',
     args: (device: string) => ['--model', 'denoise', '--device', device],
+  },
+  MSST_apollo: {
+    python: MSST_PYTHON,
+    worker: MSST_WORKER,
+    requestType: 'separate',
+    args: (device: string) => ['--model', 'apollo', '--device', device],
+  },
+  MSST_aspiration: {
+    python: MSST_PYTHON,
+    worker: MSST_WORKER,
+    requestType: 'separate',
+    args: (device: string) => ['--model', 'aspiration', '--device', device],
+  },
+  MSST_bve: {
+    python: MSST_PYTHON,
+    worker: MSST_WORKER,
+    requestType: 'separate',
+    args: (device: string) => ['--model', 'bve', '--device', device],
   },
 } as const
 
@@ -234,6 +264,14 @@ function handleWorkerLine(record: AnalysisRuntimeRecord, line: string): void {
     record.lastUsedAt = new Date().toISOString()
     record.pendingLoad?.resolve(publicRuntime(record))
     record.pendingLoad = undefined
+    return
+  }
+  if (event.type === 'resident_updated') {
+    const residentMiB = Number(event.residentMiB)
+    if (Number.isFinite(residentMiB) && residentMiB >= 0) {
+      record.residentMiB = residentMiB
+      persistResidentProfile(record.modelId, residentMiB)
+    }
     return
   }
   if (event.type === 'error') {

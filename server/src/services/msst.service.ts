@@ -9,17 +9,22 @@ const MSST_ROOT = 'E:/MyProject/cyanAI/nodeServer/src/utility/MSST/msst_webui'
 const PYTHON = path.join(MSST_ROOT, 'venv', 'Scripts', 'python.exe')
 const RUNNER = 'E:/AIscene/AISVC-midi-web/server/scripts/msst_runner.py'
 
-export const MSST_MODEL_IDS = ['duality', 'dereverb', 'denoise'] as const
-export const MSST_OUTPUT_IDS = ['vocals', 'instrumental', 'dry', 'other'] as const
+export const MSST_MODEL_IDS = ['duality', 'dereverb', 'denoise', 'apollo', 'aspiration', 'bve'] as const
+export const MSST_OUTPUT_IDS = ['vocals', 'instrumental', 'dry', 'other', 'restored', 'addition', 'aspiration'] as const
 export type MsstModelId = typeof MSST_MODEL_IDS[number]
 
 const REQUIRED_RESOURCES = [
   'configs/vocal_models/melband_roformer_instvox_duality_v2.ckpt.yaml',
   'configs/single_stem_models/dereverb_echo_mbr_fused_0.5_v2_0.25_big_0.25_super.ckpt.yaml',
   'configs/single_stem_models/denoise_mel_band_roformer_aufr33_sdr_27.9959.ckpt.yaml',
+  'configs/single_stem_models/apollo_model_uni.ckpt.yaml',
+  'configs/single_stem_models/aspiration_mel_band_roformer_sdr_18.9845.ckpt.yaml',
   'pretrain/vocal_models/melband_roformer_instvox_duality_v2.ckpt',
   'pretrain/single_stem_models/dereverb_echo_mbr_fused_0.5_v2_0.25_big_0.25_super.ckpt',
   'pretrain/single_stem_models/denoise_mel_band_roformer_aufr33_sdr_27.9959.ckpt',
+  'pretrain/single_stem_models/apollo_model_uni.ckpt',
+  'pretrain/single_stem_models/aspiration_mel_band_roformer_sdr_18.9845.ckpt',
+  'pretrain/VR_Models/UVR-BVE-4B_SN-44100-1.pth',
 ] as const
 
 export interface MsstRequest {

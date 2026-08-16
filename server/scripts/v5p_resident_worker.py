@@ -25,6 +25,16 @@ def emit(event_type, **payload):
     print(json.dumps({"type": event_type, **payload}, ensure_ascii=False), flush=True)
 
 
+def emit_resident_updated(model_id):
+    try:
+        import torch
+        torch.cuda.empty_cache()
+        resident_mib = round(torch.cuda.memory_reserved() / 1024 / 1024, 1)
+        emit("resident_updated", modelId=model_id, residentMiB=resident_mib)
+    except Exception:
+        pass
+
+
 def load_runtime(runner, preset):
     resources = runner.require_record(preset["resources"], "V5-P runtime resources")
     direct_adapter = runner.require_resource(resources, "directControlAdapter")
@@ -163,6 +173,7 @@ def main():
                 emit("pong", presetId=runtime["presetId"])
             elif request_type == "infer":
                 result_path = infer_job(runner, runtime, request)
+                emit_resident_updated(runtime["presetId"])
                 emit("infer_done", resultFile=str(result_path))
             elif request_type == "shutdown":
                 emit("shutdown_ok")

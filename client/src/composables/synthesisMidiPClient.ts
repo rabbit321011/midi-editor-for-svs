@@ -7,6 +7,11 @@ export interface RunSynthesisMidiPOptions {
   frameCount: number
   midiPRevision: number
   onProgress?: (progress: number, message: string) => void
+  extractor?: 'game' | 'some'
+  startFrame?: number
+  endFrameExclusive?: number
+  contextFrames?: number
+  parameters?: Record<string, number>
 }
 
 export async function runSynthesisMidiP(options: RunSynthesisMidiPOptions): Promise<SynthesisMidiPResult> {
@@ -15,7 +20,8 @@ export async function runSynthesisMidiP(options: RunSynthesisMidiPOptions): Prom
   const upload = await uploadTempWav(`render_${jobId}_guide`, options.blob, options.sampleRate)
   const ws = await openRenderWebSocket(jobId)
   try {
-    const done = waitForMidiPDone(ws, options.frameCount, options.onProgress)
+    const expectedFrames = (options.endFrameExclusive ?? options.frameCount) - (options.startFrame ?? 0)
+    const done = waitForMidiPDone(ws, expectedFrames, options.onProgress)
     const response = await fetch('/api/synthesis/midi-p/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -25,6 +31,11 @@ export async function runSynthesisMidiP(options: RunSynthesisMidiPOptions): Prom
         guideSHA256: options.guideSHA256,
         frameCount: options.frameCount,
         midiPRevision: options.midiPRevision,
+        extractor: options.extractor ?? 'game',
+        startFrame: options.startFrame,
+        endFrameExclusive: options.endFrameExclusive,
+        contextFrames: options.contextFrames,
+        parameters: options.parameters,
         device: 'cuda:0',
       }),
     })

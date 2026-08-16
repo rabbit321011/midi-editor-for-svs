@@ -4,7 +4,7 @@ import { useObjectTreeStore } from '@/stores/objectTree'
 import { useProjectStore } from '@/stores/project'
 import { useRenderPanelStore } from '@/stores/renderPanel'
 import { useTracksStore } from '@/stores/tracks'
-import { runWhisperSofa } from './whisperSofaClient'
+import { runSofaAlign, runWhisperTranscribe, uploadTempWav } from './whisperSofaClient'
 import { isGpuCancellation } from './gpuCancellation'
 import { ensureRenderCapacity } from './renderCapacity'
 
@@ -33,12 +33,23 @@ export function useRenderWhisperPipeline() {
       })
       renderPanel.updateWhisperProgress(10, mergeWarnings('合并转写音频', resolved.warnings))
       const blob = await combineSegmentsToBlob(resolved.segmentInputs, resolved.duration, resolved.sampleRate)
-      if (!(await ensureRenderCapacity(['Whisper large-v3', 'SOFA Japanese'], resolved.duration))) return
-      const resultSegments = await runWhisperSofa({
-        blob,
-        sampleRate: resolved.sampleRate,
+      const capacityOk = await ensureRenderCapacity(['Whisper large-v3', 'SOFA Japanese'], resolved.duration)
+      if (!capacityOk) {
+        if (renderPanel.whisperStatus === 'running') renderPanel.setWhisperCancelled('已放弃运行')
+        return
+      }
+      const outputName = renderPanel.whisper.outputName || defaultWhisperOutputName()
+      const upload = await uploadTempWav(`render_${crypto.randomUUID().slice(0, 8)}_whisper`, blob, resolved.sampleRate)
+      const transcriptFile = await runWhisperTranscribe({
+        inputWav: upload.path,
         outputName: renderPanel.whisper.outputName || defaultWhisperOutputName(),
         vad: renderPanel.whisper.vad,
+        onProgress: (progress, message) => renderPanel.updateWhisperProgress(20 + progress * 0.75, message),
+      })
+      const resultSegments = await runSofaAlign({
+        inputWav: upload.path,
+        transcriptFile,
+        outputName,
         onProgress: (progress, message) => renderPanel.updateWhisperProgress(20 + progress * 0.75, message),
       })
       renderPanel.updateWhisperProgress(96, '写入 SOFA TextObject')

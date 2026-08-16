@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { NButton, NDropdown, NIcon, NInput, NInputNumber, NModal, NRadioButton, NRadioGroup, NSlider } from 'naive-ui'
-import { Add, ColorWandOutline, DownloadOutline, EllipsisHorizontal, LinkOutline, MicOutline, MusicalNotesOutline, OpenOutline, Pause, Play, Remove, Stop, UnlinkOutline } from '@vicons/ionicons5'
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
+import { NButton, NDropdown, NIcon, NInput, NInputNumber, NModal, NPopover, NRadioButton, NRadioGroup, NSelect, NSlider } from 'naive-ui'
+import { Add, ColorWandOutline, DownloadOutline, EllipsisHorizontal, LinkOutline, MicOutline, MusicalNotesOutline, OpenOutline, OptionsOutline, Pause, Play, Remove, Stop, UnlinkOutline } from '@vicons/ionicons5'
 import { useObjectTreeStore } from '@/stores/objectTree'
-import { useGpuRuntimeStore } from '@/stores/gpuRuntime'
+import { useGpuRuntimeStore, type ModelRuntimeStatus } from '@/stores/gpuRuntime'
 import { useTracksStore } from '@/stores/tracks'
 import { useHistoryStore } from '@/stores/history'
 import { useEditorWorkspaceStore } from '@/stores/editorWorkspace'
@@ -11,8 +11,24 @@ import HTokenPicker from './HTokenPicker.vue'
 import { V5P_H_TOKEN_BY_ID, type V5PHTokenCatalogEntry } from '@/generated/v5pHTokenCatalog'
 import { useSynthesisUnitAnalysis } from '@/composables/useSynthesisUnitAnalysis'
 import type { SegmentTextControlTarget } from '@/composables/useSynthesisUnitAnalysis'
-import { createSynthesisMaterialSnapshot, getKanaControlRange, type SynthesisHTokenEvent } from '@/object-workbench'
+type SegmentAlignmentTarget = SegmentTextControlTarget | 'current-kana-h' | 'pul'
+import {
+  createSynthesisMaterialSnapshot,
+  getKanaControlRange,
+  getKanaPhraseForSegment,
+  isV5PModelId,
+  V5P_DEFAULT_SAMPLING_SETTINGS,
+  V5P_DEFAULT_MODEL,
+  V5P_MODEL_META,
+  type SynthesisHTokenEvent,
+  type SynthesisSegmentObject,
+  type SynthesisTake,
+  type V5PModelId,
+  type V5PSamplingSettings,
+} from '@/object-workbench'
 import { runSynthesisV5P } from '@/composables/synthesisV5PClient'
+import { runSynthesisMidiP } from '@/composables/synthesisMidiPClient'
+import type { SynthesisMidiPResult } from '@/composables/synthesisMidiPProtocol'
 import { kanaToRomaji, romajiToKana } from '@/utils/kanaRomaji'
 import { kanaToHTokens } from '@/utils/kanaToHTokens'
 
@@ -39,23 +55,55 @@ const referencePlaying = ref(false)
 const referenceDropActive = ref(false)
 const auditionSource = ref<'guide' | 'midi-p' | 'take'>('guide')
 const playbackRate = ref(1)
+const takePreparation = ref({ running: false, progress: 0, message: '' })
 const takeGeneration = ref({ running: false, progress: 0, message: '' })
+const samplingMenuOpen = ref(false)
+const unifiedCfgDraft = ref(1)
+const threeWayDraft = ref({ audio: 1, text: 1, midi: 1 })
 const forceCapacity = ref(false)
-const capacityRetry = ref<'v5p' | 'transcribe' | 'sofa' | 'game'>('v5p')
+const capacityRetry = ref<'v5p' | 'transcribe' | 'segment-transcribe' | 'sofa' | 'game' | 'midi-local'>('v5p')
 const capacityDialog = ref<{
   modelId: string
   requiredMiB: number
   freeMiB: number
   insufficient: boolean
   estimate: any
-  evictions: Array<{ modelId: string; residentMiB?: number }>
+  evictions: ModelRuntimeStatus[]
 } | null>(null)
+const capacityPreparing = ref<{ kind: string; message: string } | null>(null)
 const pendingAnalysis = ref<{
-  kind: 'transcribe' | 'sofa' | 'game'
+  kind: 'transcribe' | 'segment-transcribe' | 'sofa' | 'game' | 'midi-local'
   segmentId?: string
-  target?: SegmentTextControlTarget
+  target?: SegmentAlignmentTarget
   kanaUnitId?: string
+  extractor?: MidiLocalExtractor
 } | null>(null)
+type MidiLocalExtractor = 'game' | 'some'
+const midiLocal = ref<{
+  show: boolean
+  segmentId: string
+  extractor: 'game' | 'some' | 'compare'
+  boundaryThreshold: number
+  boundaryRadius: number
+  presenceThreshold: number
+  nsteps: number
+  seed: number | null
+  boundaryBias: number
+  restThreshold: number
+  minNoteFrames: number
+  contextFrames: number
+  running: boolean
+  message: string
+  progress: number
+  game: SynthesisMidiPResult | null
+  some: SynthesisMidiPResult | null
+  audition: 'current' | 'game' | 'some'
+}>({
+  show: false, segmentId: '', extractor: 'compare',
+  boundaryThreshold: 0.2, boundaryRadius: 2, presenceThreshold: 0.2, nsteps: 4, seed: null,
+  boundaryBias: 0, restThreshold: 0.1, minNoteFrames: 2, contextFrames: 7,
+  running: false, message: '', progress: 0, game: null, some: null, audition: 'current',
+})
 const hPicker = ref({ show: false, frame: 0 })
 const hoveredHTokenId = ref<number | null>(null)
 const hTokenTooltip = ref({ show: false, x: 0, y: 0, frame: 0 })
@@ -66,7 +114,8 @@ const hDrag = ref<{
   startX: number
 } | null>(null)
 const statusNotice = ref('')
-const segmentMenu = ref({ show: false, x: 0, y: 0, segmentId: '' })
+const blockingError = ref({ show: false, title: '操作失败', message: '' })
+const segmentMenu = ref({ show: false, x: 0, y: 0, segmentId: '', mode: 'object' as 'object' | 'empty', startFrame: 0, endFrameExclusive: 1 })
 const kanaMenu = ref({ show: false, x: 0, y: 0, kanaUnitId: '' })
 type EditorSelection =
   | { type: 'guide' }
@@ -98,7 +147,7 @@ const midiMoveConfirm = ref({
 const alignmentConfirm = ref({
   show: false,
   segmentId: '',
-  target: 'kana' as SegmentTextControlTarget,
+  target: 'kana' as SegmentAlignmentTarget,
   startFrame: 0,
   endFrameExclusive: 0,
   objectCount: 0,
@@ -115,6 +164,7 @@ const kanaAlignmentConfirm = ref({
 })
 const segmentEditor = ref({
   show: false,
+  mode: 'edit' as 'edit' | 'create',
   id: '',
   text: '',
   kana: '',
@@ -143,6 +193,19 @@ const kanaDrag = ref<{
   minFrame: number
   maxFrame: number
 } | null>(null)
+const kanaObjectDrag = ref<{
+  unitId: string
+  startX: number
+  originalStartFrame: number
+  widthFrames: number
+  previewStartFrame: number
+} | null>(null)
+const kanaSegDrag = ref<{
+  boundaryId: string
+  startX: number
+  originalFrame: number
+  previewFrame: number
+} | null>(null)
 let animationFrame = 0
 let noticeTimer = 0
 let midiAudioContext: AudioContext | null = null
@@ -158,10 +221,147 @@ const unit = computed(() => {
   return node?.kind === 'synthesisUnit' ? node : null
 })
 const synthesis = computed(() => unit.value?.synthesisUnit ?? null)
+const unitModel = computed<V5PModelId>({
+  get: () => {
+    const value = synthesis.value?.presetId
+    return value && isV5PModelId(value) ? value : V5P_DEFAULT_MODEL
+  },
+  set: value => {
+    if (unit.value) objectTree.setSynthesisUnitPreset(unit.value.id, value)
+  },
+})
+const unitModelMeta = computed(() => V5P_MODEL_META[unitModel.value])
+const modelOptions = Object.entries(V5P_MODEL_META).map(([value, meta]) => ({
+  label: meta.label,
+  value,
+}))
+const samplingSettings = computed(() => synthesis.value?.samplingSettings ?? V5P_DEFAULT_SAMPLING_SETTINGS)
+const guidanceMode = computed<'unified' | 'three-way'>({
+  get: () => samplingSettings.value.guidance.mode,
+  set: mode => {
+    if (!unit.value || mode === samplingSettings.value.guidance.mode) return
+    const current = samplingSettings.value
+    if (current.guidance.mode === 'unified') {
+      unifiedCfgDraft.value = current.guidance.cfg
+      threeWayDraft.value = {
+        audio: current.guidance.cfg,
+        text: current.guidance.cfg,
+        midi: current.guidance.cfg,
+      }
+    } else {
+      threeWayDraft.value = {
+        audio: current.guidance.audio,
+        text: current.guidance.text,
+        midi: current.guidance.midi,
+      }
+    }
+    updateSamplingSettings({
+      ...current,
+      guidance: mode === 'unified'
+        ? { mode: 'unified', cfg: unifiedCfgDraft.value }
+        : { mode: 'three-way', ...threeWayDraft.value, formula: 'audio-text-midi-telescoping.v1' },
+    })
+  },
+})
+const unifiedCfg = computed<number>({
+  get: () => samplingSettings.value.guidance.mode === 'unified'
+    ? samplingSettings.value.guidance.cfg
+    : unifiedCfgDraft.value,
+  set: value => {
+    unifiedCfgDraft.value = value
+    if (samplingSettings.value.guidance.mode === 'unified') {
+      updateSamplingSettings({ ...samplingSettings.value, guidance: { mode: 'unified', cfg: value } })
+    }
+  },
+})
+const audioCfg = channelCfg('audio')
+const textCfg = channelCfg('text')
+const midiCfg = channelCfg('midi')
+const samplingSteps = computed<number>({
+  get: () => samplingSettings.value.steps,
+  set: steps => updateSamplingSettings({ ...samplingSettings.value, steps }),
+})
+const samplingSeed = computed<number>({
+  get: () => samplingSettings.value.seed,
+  set: seed => updateSamplingSettings({ ...samplingSettings.value, seed }),
+})
+const samplingSummary = computed(() => {
+  const guidance = samplingSettings.value.guidance
+  return guidance.mode === 'unified'
+    ? `CFG ${guidance.cfg.toFixed(1)}`
+    : `3CFG A${guidance.audio.toFixed(1)} T${guidance.text.toFixed(1)} M${guidance.midi.toFixed(1)}`
+})
+
+function channelCfg(channel: 'audio' | 'text' | 'midi') {
+  return computed<number>({
+    get: () => samplingSettings.value.guidance.mode === 'three-way'
+      ? samplingSettings.value.guidance[channel]
+      : threeWayDraft.value[channel],
+    set: value => {
+      threeWayDraft.value = { ...threeWayDraft.value, [channel]: value }
+      const current = samplingSettings.value
+      if (current.guidance.mode === 'three-way') {
+        updateSamplingSettings({
+          ...current,
+          guidance: { ...current.guidance, [channel]: value },
+        })
+      }
+    },
+  })
+}
+
+function updateSamplingSettings(settings: V5PSamplingSettings) {
+  if (unit.value) objectTree.setSynthesisUnitSamplingSettings(unit.value.id, settings)
+}
+
+function freezeSamplingSettings(settings: V5PSamplingSettings): V5PSamplingSettings {
+  const guidance = settings.guidance.mode === 'unified'
+    ? { mode: 'unified' as const, cfg: Number(settings.guidance.cfg) }
+    : {
+        mode: 'three-way' as const,
+        audio: Number(settings.guidance.audio),
+        text: Number(settings.guidance.text),
+        midi: Number(settings.guidance.midi),
+        formula: 'audio-text-midi-telescoping.v1' as const,
+      }
+  return {
+    guidance,
+    steps: Number(settings.steps),
+    seed: Number(settings.seed),
+  }
+}
+
+function takeSamplingLabel(take: SynthesisTake) {
+  const settings = take.samplingSettings
+  if (!settings) return `legacy CFG · seed ${take.seed}`
+  const guidance = settings.guidance
+  const cfg = guidance.mode === 'unified'
+    ? `CFG ${guidance.cfg.toFixed(1)}`
+    : `3CFG A${guidance.audio.toFixed(1)} T${guidance.text.toFixed(1)} M${guidance.midi.toFixed(1)}`
+  return `${cfg} · ${settings.steps} steps · seed ${settings.seed}`
+}
 const frameCount = computed(() => synthesis.value?.frameContract.frameCount ?? 1)
 const frameRate = computed(() => synthesis.value?.frameContract.frameRate ?? (44100 / 2048))
 const timelineWidth = computed(() => Math.max(640, frameCount.value * pxPerFrame.value))
 const modelDuration = computed(() => (synthesis.value?.frameContract.modelSampleCount ?? 0) / 44100)
+
+// The editor has one horizontal coordinate system: the V5-P latent frame grid.
+// Audio and MIDI are playback backends only; neither owns display geometry.
+function frameToDisplayX(frame: number): number {
+  return frame * pxPerFrame.value
+}
+
+function frameToAudioTime(frame: number): number {
+  return frame / frameRate.value
+}
+
+function audioTimeToFrame(time: number): number {
+  return Math.max(0, Math.min(frameCount.value - 1, Math.floor(time * frameRate.value)))
+}
+
+function displayXToFrame(x: number): number {
+  return Math.max(0, Math.min(frameCount.value - 1, Math.floor(x / pxPerFrame.value)))
+}
 const guideAsset = computed(() => {
   const assetId = synthesis.value?.guide.assetId
   return assetId ? objectTree.tree.assets[assetId] : null
@@ -183,6 +383,12 @@ const referenceGuideAsset = computed(() => {
 const referenceGuideBlob = computed(() => {
   const key = referenceGuideAsset.value?.blobKey
   return key ? tracks.sourceBlobs.get(key) ?? null : null
+})
+const takePrerequisiteMessage = computed(() => {
+  if (!referenceUnit.value) return '请先绑定 A 区参考合成单元'
+  if (!guideBlob.value) return '当前 B 区 Guide 尚未加载'
+  if (!referenceGuideBlob.value) return 'A 区参考 Guide 尚未加载'
+  return ''
 })
 const activeTake = computed(() => synthesis.value?.takes.find(take => (
   take.id === synthesis.value?.activeTakeId
@@ -219,6 +425,39 @@ const referenceMenuOptions = computed(() => Object.values(objectTree.index.nodes
 const frameTicks = computed(() => Array.from({ length: frameCount.value }, (_, frame) => frame))
 const majorTickEvery = computed(() => pxPerFrame.value >= 18 ? 5 : pxPerFrame.value >= 10 ? 10 : 20)
 const midiReady = computed(() => synthesis.value?.midiPTokenTrack.status === 'ready')
+const localMidiRange = computed(() => {
+  const items = [...(synthesis.value?.segmentTrack.items ?? [])].sort((left, right) => left.startFrame - right.startFrame)
+  const index = items.findIndex(item => item.id === midiLocal.value.segmentId)
+  if (index < 0) return null
+  return {
+    segment: items[index],
+    startFrame: items[index].startFrame,
+    endFrameExclusive: items[index + 1]?.startFrame ?? frameCount.value,
+  }
+})
+const localMidiCandidate = computed(() => {
+  if (midiLocal.value.audition === 'game') return midiLocal.value.game
+  if (midiLocal.value.audition === 'some') return midiLocal.value.some
+  return null
+})
+const midiPlaybackClasses = computed(() => {
+  const classes = [...(synthesis.value?.midiPTokenTrack.classes ?? [])]
+  const candidate = localMidiCandidate.value
+  const range = localMidiRange.value
+  if (!candidate || !range || candidate.classes.length !== range.endFrameExclusive - range.startFrame) return classes
+  classes.splice(range.startFrame, candidate.classes.length, ...candidate.classes)
+  return classes
+})
+const midiPlaybackRange = ref<{ startFrame: number; endFrameExclusive: number } | null>(null)
+const midiPlaybackFlowFrameSet = computed(() => {
+  if (!localMidiCandidate.value) return new Set(synthesis.value?.midiPTokenTrack.flowFrames ?? [])
+  const flow = new Set<number>()
+  for (let frame = 1; frame < midiPlaybackClasses.value.length; frame++) {
+    if (midiPlaybackClasses.value[frame] < 255
+      && midiPlaybackClasses.value[frame] === midiPlaybackClasses.value[frame - 1]) flow.add(frame)
+  }
+  return flow
+})
 const midiFlowFrameSet = computed(() => new Set(synthesis.value?.midiPTokenTrack.flowFrames ?? []))
 const midiPitchRange = computed(() => {
   const classes = synthesis.value?.midiPTokenTrack.classes.filter(value => value < 255) ?? []
@@ -268,6 +507,15 @@ const selectedKana = computed(() => {
     ? synthesis.value?.kanaTrack.units.find(item => item.id === selection.id) ?? null
     : null
 })
+const selectedKanaDirectHTokens = computed(() => {
+  const kana = selectedKana.value
+  if (!kana) return []
+  try {
+    return kanaToHTokens(kana.kana)
+  } catch {
+    return []
+  }
+})
 const selectedHFrame = computed(() => editorSelection.value?.type === 'h' ? editorSelection.value.frame : null)
 const selectedHEvent = computed(() => selectedHFrame.value == null ? null
   : synthesis.value?.hTokenTrack.events.find(event => event.frame === selectedHFrame.value) ?? null)
@@ -283,10 +531,18 @@ const textAnalysisRunning = computed(() => analysisJob.value.running && ['segmen
 const midiAnalysisRunning = computed(() => analysisJob.value.running && analysisJob.value.kind === 'midi-p')
 const analysisProgress = computed(() => Math.max(0, Math.min(100, Math.round(analysisJob.value.progress))))
 const analysisBusy = computed(() => analysisJob.value.running)
-const segmentMenuOptions = computed(() => [
-  { label: '自动对齐至 Kana', key: 'kana', disabled: analysisJob.value.running },
-  { label: '自动对齐至 H Token', key: 'h', disabled: analysisJob.value.running },
-])
+const segmentMenuOptions = computed(() => segmentMenu.value.mode === 'empty'
+  ? [{ label: '在此处新建 Segment', key: 'create', disabled: frameCount.value < 1 }]
+  : [
+    { label: '自动对齐至 Kana', key: 'kana', disabled: analysisJob.value.running },
+    { label: '按当前 Kana 边界对齐至 H Token', key: 'current-kana-h', disabled: analysisJob.value.running },
+    { label: '按 Segment 文本自由对齐至 H Token（忽略 Kana 边界）', key: 'h', disabled: analysisJob.value.running },
+    { label: '按 PUL 生成 H Token', key: 'pul-h', disabled: analysisJob.value.running },
+    { label: '重新转录本 Segment 文本', key: 'retranscribe-text', disabled: analysisJob.value.running },
+    { label: '清空区域内 Kana', key: 'clear-kana', disabled: analysisJob.value.running },
+    { label: '清空区域内 H Token', key: 'clear-h', disabled: analysisJob.value.running },
+    { label: '重提取本句 MIDI-P', key: 'midi-local', disabled: analysisJob.value.running || midiLocal.value.running },
+  ])
 const kanaMenuOptions = computed(() => [
   { label: '自动对齐至 H Token', key: 'h', disabled: analysisJob.value.running },
   { label: '映射至 H Token', key: 'map-h', disabled: analysisJob.value.running },
@@ -319,15 +575,41 @@ watch(playbackRate, () => {
   syncAudioPlaybackRate()
   if (auditionSource.value === 'midi-p' && playing.value) restartMidiPlayback()
 })
+watch(() => midiLocal.value.show, (show, wasShowing) => {
+  if (show || !wasShowing) return
+  stopPlayback()
+  midiLocal.value.audition = 'current'
+})
 watch(() => midiEditor.value.midiClass, (value, previous) => {
   if (midiEditor.value.show && value !== previous) previewMidiClass(value)
 })
 
-onMounted(() => {
+function bindEditorKeyboard() {
   ;(window as any).__synthesisUnitEditorActive = true
+  window.removeEventListener('keydown', handleEditorKeydown, true)
+  window.addEventListener('keydown', handleEditorKeydown, true)
+}
+
+function unbindEditorKeyboard() {
+  ;(window as any).__synthesisUnitEditorActive = false
+  window.removeEventListener('keydown', handleEditorKeydown, true)
+  stopPlayback()
+}
+
+onMounted(() => {
+  bindEditorKeyboard()
   ;(window as any).__playbackStop?.()
   syncAudioPlaybackRate()
-  window.addEventListener('keydown', handleEditorKeydown, true)
+})
+
+onActivated(() => {
+  bindEditorKeyboard()
+})
+
+onDeactivated(() => {
+  unbindEditorKeyboard()
+  clearKanaObjectDragListeners()
+  clearKanaSegDragListeners()
 })
 
 async function loadGuide(blob: Blob | null) {
@@ -346,7 +628,11 @@ async function loadGuide(blob: Blob | null) {
       const channel = decoded.getChannelData(channelIndex)
       for (let index = 0; index < channel.length; index++) mono[index] += channel[index] / decoded.numberOfChannels
     }
-    waveform.value = mono
+    const modelSampleCount = synthesis.value?.frameContract.modelSampleCount ?? mono.length
+    // Trailing samples belong to the owned Guide but not to a V5-P latent
+    // frame. Keep them out of the waveform geometry so it shares the same
+    // horizontal axis as Text and MIDI-P.
+    waveform.value = mono.slice(0, Math.min(modelSampleCount, mono.length))
     await nextTick()
     drawWaveform()
   } finally {
@@ -368,7 +654,7 @@ function loadActiveTake(blob: Blob | null) {
 }
 
 function syncAudioPlaybackPosition() {
-  const time = playheadFrame.value / frameRate.value
+  const time = frameToAudioTime(playheadFrame.value)
   if (audioElement.value) audioElement.value.currentTime = time
   if (takeAudioElement.value) takeAudioElement.value.currentTime = time
 }
@@ -543,6 +829,7 @@ function stopPrimaryPlayback() {
   stopScheduledMidiNodes()
   playing.value = false
   playheadFrame.value = 0
+  midiPlaybackRange.value = null
 }
 
 function stopReferencePlayback() {
@@ -568,22 +855,30 @@ async function toggleMidiPPlayback() {
     if (generation !== midiPlaybackGeneration) return
     if (playing.value) {
       const elapsed = Math.max(0, context.currentTime - midiPlaybackStartTime)
-      playheadFrame.value = Math.min(frameCount.value - 1, midiPlaybackStartFrame + Math.floor(elapsed * frameRate.value))
+      playheadFrame.value = Math.min(
+        frameCount.value - 1,
+        midiPlaybackStartFrame + Math.floor(elapsed * frameRate.value * playbackRate.value),
+      )
       stopScheduledMidiNodes()
       cancelAnimationFrame(animationFrame)
       playing.value = false
       return
     }
-    const classes = synthesis.value?.midiPTokenTrack.classes ?? []
-    const flowFrames = midiFlowFrameSet.value
-    if (playheadFrame.value >= frameCount.value - 1) playheadFrame.value = 0
+    const classes = midiPlaybackClasses.value
+    const flowFrames = midiPlaybackFlowFrameSet.value
+    const range = midiPlaybackRange.value
+    const playbackEnd = range?.endFrameExclusive ?? frameCount.value
+    if (playbackEnd <= 0) return
+    if (playheadFrame.value < (range?.startFrame ?? 0) || playheadFrame.value >= playbackEnd - 1) {
+      playheadFrame.value = range?.startFrame ?? 0
+    }
     midiPlaybackStartFrame = playheadFrame.value
     midiPlaybackStartTime = context.currentTime + 0.04
     let runStart = midiPlaybackStartFrame
-    while (runStart < classes.length) {
+    while (runStart < Math.min(classes.length, playbackEnd)) {
       const midiClass = classes[runStart]
       let runEnd = runStart + 1
-      while (runEnd < classes.length
+      while (runEnd < Math.min(classes.length, playbackEnd)
         && classes[runEnd] === midiClass
         && (midiClass >= 255 || flowFrames.has(runEnd))) runEnd++
       if (midiClass < 255) {
@@ -620,8 +915,14 @@ function tickMidiPlayback() {
   if (!playing.value || auditionSource.value !== 'midi-p' || !midiAudioContext) return
   const elapsedFrames = Math.floor(Math.max(0, midiAudioContext.currentTime - midiPlaybackStartTime) * frameRate.value * playbackRate.value)
   const frame = midiPlaybackStartFrame + elapsedFrames
-  if (frame >= frameCount.value) {
-    stopPlayback()
+  const playbackEnd = midiPlaybackRange.value?.endFrameExclusive ?? frameCount.value
+  if (frame >= playbackEnd) {
+    midiPlaybackGeneration++
+    midiPlaybackStarting = false
+    stopScheduledMidiNodes()
+    cancelAnimationFrame(animationFrame)
+    playing.value = false
+    playheadFrame.value = Math.max(0, playbackEnd - 1)
     return
   }
   playheadFrame.value = Math.max(midiPlaybackStartFrame, frame)
@@ -677,7 +978,7 @@ function tickPlayback() {
     stopPlayback()
     return
   }
-  playheadFrame.value = Math.min(frameCount.value - 1, Math.floor(audio.currentTime * frameRate.value))
+  playheadFrame.value = audioTimeToFrame(audio.currentTime)
   animationFrame = requestAnimationFrame(tickPlayback)
 }
 
@@ -685,10 +986,9 @@ function seekFromPointer(event: MouseEvent) {
   const target = event.currentTarget as HTMLElement
   const rect = target.getBoundingClientRect()
   const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
-  const frame = Math.min(frameCount.value - 1, Math.floor(ratio * frameCount.value))
+  const frame = displayXToFrame(ratio * timelineWidth.value)
   playheadFrame.value = frame
-  if (audioElement.value) audioElement.value.currentTime = frame / frameRate.value
-  if (takeAudioElement.value) takeAudioElement.value.currentTime = frame / frameRate.value
+  syncAudioPlaybackPosition()
 }
 
 function seekGuideFromPointer(event: MouseEvent) {
@@ -697,8 +997,8 @@ function seekGuideFromPointer(event: MouseEvent) {
   const target = event.currentTarget as HTMLElement
   const rect = target.getBoundingClientRect()
   const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
-  const frame = Math.min(frameCount.value - 1, Math.floor(ratio * frameCount.value))
-  const time = frame / frameRate.value
+  const frame = displayXToFrame(ratio * timelineWidth.value)
+  const time = frameToAudioTime(frame)
   playheadFrame.value = frame
   if (restartMidi) {
     stopScheduledMidiNodes()
@@ -730,47 +1030,62 @@ async function generateTake() {
     flashStatus('请先绑定可用的 A 区参考和完整 Guide')
     return
   }
-  if (takeGeneration.value.running) return
-  if (forceCapacity.value) {
-    forceCapacity.value = false
+  if (takeGeneration.value.running || takePreparation.value.running) return
+  takePreparation.value = { running: true, progress: 1, message: '准备生成 Take' }
+  try {
+    if (forceCapacity.value) {
+      forceCapacity.value = false
+      takePreparation.value = { running: false, progress: 0, message: '' }
+      await generateTakeCore()
+      return
+    }
+    const durationSeconds = unit.value.synthesisUnit.guide.duration ?? 0
+    const modelId = unitModel.value
+    takePreparation.value = { running: true, progress: 8, message: '检查显存与 V5-P Runtime' }
+    const prepared = await gpuRuntime.prepareRuntime(
+      modelId,
+      durationSeconds,
+      samplingSettings.value.guidance.mode,
+    ) as any
+    if (!prepared.ok) {
+      takePreparation.value = { running: false, progress: 0, message: '' }
+      if (prepared.busy) {
+        flashStatus(prepared.reason || '模型正在运行其他任务')
+        return
+      }
+      if (prepared.action === 'confirm') {
+        capacityRetry.value = 'v5p'
+        capacityDialog.value = {
+          modelId,
+          requiredMiB: prepared.required,
+          freeMiB: prepared.policy.freeMiB,
+          insufficient: false,
+          estimate: prepared.policy.estimate,
+          evictions: prepared.evictions,
+        }
+        return
+      }
+      if (prepared.insufficient) {
+        capacityRetry.value = 'v5p'
+        capacityDialog.value = {
+          modelId,
+          requiredMiB: prepared.required,
+          freeMiB: prepared.policy.freeMiB,
+          insufficient: true,
+          estimate: prepared.policy.estimate,
+          evictions: [],
+        }
+        return
+      }
+      flashStatus(prepared.reason || '显存策略检查失败')
+      return
+    }
+    takePreparation.value = { running: false, progress: 0, message: '' }
     await generateTakeCore()
-    return
+  } catch (error: any) {
+    takePreparation.value = { running: false, progress: 0, message: '' }
+    flashStatus(error?.message || 'Take 准备失败')
   }
-  const durationSeconds = unit.value.synthesisUnit.guide.duration ?? 0
-  const prepared = await gpuRuntime.prepareRuntime('V5P_40K_EMA', durationSeconds) as any
-  if (!prepared.ok) {
-    if (prepared.busy) {
-      flashStatus(prepared.reason || '模型正在运行其他任务')
-      return
-    }
-    if (prepared.action === 'confirm') {
-      capacityRetry.value = 'v5p'
-      capacityDialog.value = {
-        modelId: 'V5P_40K_EMA',
-        requiredMiB: prepared.required,
-        freeMiB: prepared.policy.freeMiB,
-        insufficient: false,
-        estimate: prepared.policy.estimate,
-        evictions: prepared.evictions,
-      }
-      return
-    }
-    if (prepared.insufficient) {
-      capacityRetry.value = 'v5p'
-      capacityDialog.value = {
-        modelId: 'V5P_40K_EMA',
-        requiredMiB: prepared.required,
-        freeMiB: prepared.policy.freeMiB,
-        insufficient: true,
-        estimate: prepared.policy.estimate,
-        evictions: [],
-      }
-      return
-    }
-    flashStatus(prepared.reason || '显存策略检查失败')
-    return
-  }
-  await generateTakeCore()
 }
 
 async function generateTakeCore() {
@@ -788,6 +1103,11 @@ async function generateTakeCore() {
   }
   const targetUnitId = unit.value.id
   const takeId = `take:${crypto.randomUUID()}`
+  const modelId = unitModel.value
+  const modelMeta = unitModelMeta.value
+  // samplingSettings is a Vue computed value; build a plain transport object
+  // instead of passing its reactive Proxy to structuredClone/fetch.
+  const frozenSampling = freezeSamplingSettings(samplingSettings.value)
   const queued = objectTree.queueSynthesisTake(targetUnitId, {
     id: takeId,
     name: `Take ${(synthesis.value?.takes.length ?? 0) + 1}`,
@@ -795,11 +1115,12 @@ async function generateTakeCore() {
     targetUnitRevision: snapshot.target.unitRevision,
     referenceUnitId: snapshot.reference.unitId,
     referenceUnitRevision: snapshot.reference.unitRevision,
-    presetId: 'V5P_40K_EMA',
-    checkpointSHA256: '3a532f5bd5965dff7d011996b7ca72d7884c5494a2d44d6c28b0bab21bace96c',
-    vaeSHA256: 'dc2c4a8ec9731594951a27eff4a188a89b82859649c341c51d050101d1ce0b39',
-    adapterSHA256: 'a61f6c9987b718555375b92ac4395384085d3f03c016d8cbb961f19f8ea7db38',
-    seed: 42,
+    presetId: modelId,
+    checkpointSHA256: modelMeta.checkpointSHA256,
+    vaeSHA256: modelMeta.vaeSHA256,
+    adapterSHA256: modelMeta.adapterSHA256,
+    seed: frozenSampling.seed,
+    samplingSettings: frozenSampling,
     createdAt: new Date().toISOString(),
   })
   if (!queued.ok) {
@@ -812,9 +1133,10 @@ async function generateTakeCore() {
       referenceBlob: referenceGuideBlob.value,
       targetBlob: guideBlob.value,
       snapshot,
-      steps: 32,
-      cfg: 1,
-      seed: 42,
+      presetId: modelId,
+      steps: frozenSampling.steps,
+      guidance: frozenSampling.guidance,
+      seed: frozenSampling.seed,
       onProgress: (progress, message) => {
         takeGeneration.value = { running: true, progress, message }
       },
@@ -857,54 +1179,69 @@ function closeCapacityDialog() {
 
 async function ensureAnalysisCapacity(
   requests: Array<{ modelId: string }>,
-  kind: 'transcribe' | 'sofa' | 'game',
-  context?: { segmentId?: string; target?: SegmentTextControlTarget; kanaUnitId?: string },
+  kind: 'transcribe' | 'segment-transcribe' | 'sofa' | 'game' | 'midi-local',
+  context?: { segmentId?: string; target?: SegmentAlignmentTarget; kanaUnitId?: string; extractor?: MidiLocalExtractor },
 ): Promise<boolean> {
-  if (forceCapacity.value) {
-    forceCapacity.value = false
-    gpuRuntime.clearActiveStageReleases()
-    return true
+  capacityPreparing.value = {
+    kind,
+    message: kind === 'game' || kind === 'midi-local'
+      ? `检查显存 / 加载 ${context?.extractor === 'some' ? 'SOME' : 'GAME'}`
+      : kind === 'transcribe' || kind === 'segment-transcribe'
+        ? '检查显存 / 加载 Whisper + SOFA'
+        : '检查显存 / 加载 SOFA',
   }
-  const durationSeconds = unit.value?.synthesisUnit.guide.duration ?? 0
-  const prepared = await gpuRuntime.prepareCompositeTask(
-    requests.map(request => request.modelId),
-    durationSeconds,
-  ) as any
-  if (prepared.ok) {
-    pendingAnalysis.value = null
-    gpuRuntime.setActiveStageReleases(prepared.stageReleases ?? [])
-    return true
-  }
-  if (prepared.busy) {
-    flashStatus(prepared.reason || '模型正在运行其他任务')
-    return false
-  }
-  pendingAnalysis.value = { kind, ...context }
-  capacityRetry.value = kind
-  if (prepared.action === 'confirm') {
-    capacityDialog.value = {
-      modelId: requests[0].modelId,
-      requiredMiB: prepared.required,
-      freeMiB: prepared.policy.freeMiB,
-      insufficient: false,
-      estimate: prepared.policy.estimate,
-      evictions: prepared.evictions,
+  try {
+    if (forceCapacity.value) {
+      forceCapacity.value = false
+      gpuRuntime.clearActiveStageReleases()
+      return true
     }
-    return false
-  }
-  if (prepared.insufficient) {
-    capacityDialog.value = {
-      modelId: requests[0].modelId,
-      requiredMiB: prepared.required,
-      freeMiB: prepared.policy.freeMiB,
-      insufficient: true,
-      estimate: prepared.policy.estimate,
-      evictions: [],
+    const durationSeconds = unit.value?.synthesisUnit.guide.duration ?? 0
+    const prepared = await gpuRuntime.prepareCompositeTask(
+      requests.map(request => request.modelId),
+      durationSeconds,
+    ) as any
+    if (prepared.ok) {
+      pendingAnalysis.value = null
+      gpuRuntime.setActiveStageReleases(prepared.stageReleases ?? [])
+      return true
     }
+    if (prepared.busy) {
+      showBlockingError(prepared.reason || '模型正在运行其他任务', '无法开始分析')
+      return false
+    }
+    pendingAnalysis.value = { kind, ...context }
+    capacityRetry.value = kind
+    if (prepared.action === 'confirm') {
+      capacityDialog.value = {
+        modelId: requests[0].modelId,
+        requiredMiB: prepared.required,
+        freeMiB: prepared.policy.freeMiB,
+        insufficient: false,
+        estimate: prepared.policy.estimate,
+        evictions: prepared.evictions,
+      }
+      return false
+    }
+    if (prepared.insufficient) {
+      capacityDialog.value = {
+        modelId: requests[0].modelId,
+        requiredMiB: prepared.required,
+        freeMiB: prepared.policy.freeMiB,
+        insufficient: true,
+        estimate: prepared.policy.estimate,
+        evictions: [],
+      }
+      return false
+    }
+    showBlockingError(prepared.reason || '显存策略检查失败', '显存准备失败')
     return false
+  } catch (error: any) {
+    showBlockingError(error?.message || '显存准备失败', '显存准备失败')
+    return false
+  } finally {
+    capacityPreparing.value = null
   }
-  flashStatus(prepared.reason || '显存策略检查失败')
-  return false
 }
 
 async function runCapacityRetry() {
@@ -917,13 +1254,26 @@ async function runCapacityRetry() {
     await transcribeSegmentTrack()
     return
   }
+  if (kind === 'segment-transcribe') {
+    const pending = pendingAnalysis.value
+    if (pending?.segmentId) await retranscribeSegmentText(pending.segmentId)
+    return
+  }
   if (kind === 'game') {
     await generateMidiPTrack()
     return
   }
+  if (kind === 'midi-local') {
+    const pending = pendingAnalysis.value
+    if (pending?.segmentId && pending.extractor) await runLocalMidiExtraction(pending.segmentId, pending.extractor, true)
+    return
+  }
   const pending = pendingAnalysis.value
   if (pending?.kanaUnitId) await executeKanaAlignment(pending.kanaUnitId)
-  else if (pending?.segmentId && pending.target) await executeSegmentAlignment(pending.segmentId, pending.target)
+  else if (pending?.segmentId && pending.target === 'current-kana-h') await executeSegmentKanaAlignment(pending.segmentId)
+  else if (pending?.segmentId && (pending.target === 'kana' || pending.target === 'h')) {
+    await executeSegmentAlignment(pending.segmentId, pending.target)
+  }
 }
 
 function selectTake(takeId: string) {
@@ -981,13 +1331,13 @@ async function exportActiveTake() {
 function frameFromPointer(event: MouseEvent | PointerEvent) {
   const target = event.currentTarget as HTMLElement
   const rect = target.getBoundingClientRect()
-  return Math.max(0, Math.min(frameCount.value - 1, Math.floor((event.clientX - rect.left) / pxPerFrame.value)))
+  return displayXToFrame(event.clientX - rect.left)
 }
 
 function selectHFrame(frame: number) {
   editorSelection.value = { type: 'h', frame }
   playheadFrame.value = frame
-  const time = frame / frameRate.value
+  const time = frameToAudioTime(frame)
   if (audioElement.value) audioElement.value.currentTime = time
   if (takeAudioElement.value) takeAudioElement.value.currentTime = time
 }
@@ -1042,6 +1392,20 @@ async function transcribeSegmentTrack() {
   }
 }
 
+async function retranscribeSegmentText(segmentId: string) {
+  const ok = await ensureAnalysisCapacity([
+    { modelId: 'Whisper large-v3' },
+    { modelId: 'SOFA Japanese' },
+  ], 'segment-transcribe', { segmentId })
+  if (!ok) return
+  try {
+    const result = await analysis.transcribeSegmentText(props.objectId, segmentId)
+    flashStatus(result.ok ? analysisJob.value.message : result.reason ?? 'Segment 文本转录失败')
+  } finally {
+    gpuRuntime.clearActiveStageReleases()
+  }
+}
+
 function openGuideMenu(event: MouseEvent) {
   event.preventDefault()
   event.stopPropagation()
@@ -1076,6 +1440,143 @@ async function generateMidiPTrack() {
   flashStatus(result.ok ? analysisJob.value.message : result.reason ?? 'GAME MIDI-P 失败')
 }
 
+function openLocalMidiExtraction(segmentId: string) {
+  const range = [...(synthesis.value?.segmentTrack.items ?? [])]
+    .sort((left, right) => left.startFrame - right.startFrame)
+  const segment = range.find(item => item.id === segmentId)
+  if (!segment) return
+  midiLocal.value = {
+    ...midiLocal.value,
+    show: true,
+    segmentId,
+    game: null,
+    some: null,
+    audition: 'current',
+    message: `frame ${segment.startFrame}..${(range[range.indexOf(segment) + 1]?.startFrame ?? frameCount.value) - 1}`,
+  }
+}
+
+function localMidiParameters(extractor: MidiLocalExtractor): Record<string, number> {
+  return extractor === 'game'
+    ? {
+        boundaryThreshold: midiLocal.value.boundaryThreshold,
+        boundaryRadius: midiLocal.value.boundaryRadius,
+        presenceThreshold: midiLocal.value.presenceThreshold,
+        nsteps: midiLocal.value.nsteps,
+        contextFrames: midiLocal.value.contextFrames,
+        ...(midiLocal.value.seed == null ? {} : { seed: midiLocal.value.seed }),
+      }
+    : {
+        boundaryBias: midiLocal.value.boundaryBias,
+        restThreshold: midiLocal.value.restThreshold,
+        minNoteFrames: midiLocal.value.minNoteFrames,
+        contextFrames: midiLocal.value.contextFrames,
+      }
+}
+
+async function runLocalMidiExtraction(segmentId: string, extractor: MidiLocalExtractor, capacityReady = false) {
+  const range = [...(synthesis.value?.segmentTrack.items ?? [])].sort((left, right) => left.startFrame - right.startFrame)
+  const index = range.findIndex(item => item.id === segmentId)
+  const segment = range[index]
+  if (!segment || !guideBlob.value) {
+    flashStatus('本句或 Owned Guide 不存在')
+    return
+  }
+  const startFrame = segment.startFrame
+  const endFrameExclusive = range[index + 1]?.startFrame ?? frameCount.value
+  const modelId = extractor === 'game' ? 'GAME-1.0-medium' : 'OpenVPI-SOME'
+  if (!capacityReady) {
+    const ok = await ensureAnalysisCapacity([{ modelId }], 'midi-local', { segmentId, extractor })
+    if (!ok) return
+  }
+  midiLocal.value.running = true
+  midiLocal.value.progress = 2
+  midiLocal.value.message = `${extractor.toUpperCase()} 上传本句`
+  try {
+    const result = await runSynthesisMidiP({
+      blob: guideBlob.value,
+      sampleRate: synthesis.value?.guide.sampleRate ?? 44100,
+      guideSHA256: synthesis.value?.guide.audioSHA256 ?? '',
+      frameCount: frameCount.value,
+      midiPRevision: synthesis.value?.midiPTokenTrack.revision ?? 0,
+      extractor,
+      startFrame,
+      endFrameExclusive,
+      contextFrames: midiLocal.value.contextFrames,
+      parameters: localMidiParameters(extractor),
+      onProgress: (progress, message) => {
+        midiLocal.value.progress = progress
+        midiLocal.value.message = message
+      },
+    })
+    if (extractor === 'game') midiLocal.value.game = result
+    else midiLocal.value.some = result
+    midiLocal.value.audition = extractor
+    midiLocal.value.message = `${extractor.toUpperCase()} 候选完成 · ${result.classes.length} frames`
+    flashStatus(`${extractor.toUpperCase()} 本句候选已生成，确认后才会覆盖`)
+  } catch (error: any) {
+    midiLocal.value.message = error?.message || `${extractor.toUpperCase()} 提取失败`
+    flashStatus(midiLocal.value.message)
+  } finally {
+    midiLocal.value.running = false
+  }
+}
+
+async function runSelectedLocalMidiExtraction() {
+  const segmentId = midiLocal.value.segmentId
+  if (!segmentId || midiLocal.value.running) return
+  if (midiLocal.value.extractor === 'compare') {
+    await runLocalMidiExtraction(segmentId, 'game')
+    if (midiLocal.value.game) await runLocalMidiExtraction(segmentId, 'some')
+  } else {
+    await runLocalMidiExtraction(segmentId, midiLocal.value.extractor)
+  }
+}
+
+function applyLocalMidiCandidate(extractor: MidiLocalExtractor) {
+  const candidate = extractor === 'game' ? midiLocal.value.game : midiLocal.value.some
+  const range = localMidiRange.value
+  if (!candidate || !range || !unit.value) return
+  stopPlayback()
+  const before = objectTree.snapshotTree()
+  const result = objectTree.replaceSynthesisMidiPTrackRange(
+    unit.value.id,
+    range.startFrame,
+    range.endFrameExclusive,
+    candidate.classes,
+    extractor,
+    candidate.runtimeHashes.game_model ?? candidate.runtimeHashes.some_model,
+    candidate.compilerSHA256,
+  )
+  if (!result.ok) {
+    flashStatus(result.reason ?? '本句 MIDI-P 应用失败')
+    return
+  }
+  history.push({
+    description: `应用 ${extractor.toUpperCase()} 本句 MIDI-P`, patches: [], inversePatches: [],
+    objectTree: { kind: 'snapshot', before, after: objectTree.snapshotTree() },
+  })
+  midiLocal.value.show = false
+  midiLocal.value.audition = 'current'
+  flashStatus(`${extractor.toUpperCase()} 已应用，仅覆盖本句 frame ${range.startFrame}..${range.endFrameExclusive - 1}`)
+}
+
+async function auditionLocalMidiCandidate(source: 'current' | 'game' | 'some') {
+  const range = localMidiRange.value
+  if (!range || !midiReady.value) return
+  stopPlayback()
+  midiLocal.value.audition = source
+  auditionSource.value = 'midi-p'
+  await nextTick()
+  midiPlaybackRange.value = { startFrame: range.startFrame, endFrameExclusive: range.endFrameExclusive }
+  playheadFrame.value = range.startFrame
+  await toggleMidiPPlayback()
+}
+
+function stopLocalMidiAudition() {
+  stopPlayback()
+}
+
 function openMidiEditor(event: MouseEvent, frame?: number) {
   event.preventDefault()
   event.stopPropagation()
@@ -1086,9 +1587,21 @@ function openMidiEditor(event: MouseEvent, frame?: number) {
 function selectMidiFrame(frame: number) {
   editorSelection.value = { type: 'midi-p', frame }
   playheadFrame.value = frame
-  const time = frame / frameRate.value
+  const time = frameToAudioTime(frame)
   if (audioElement.value) audioElement.value.currentTime = time
   if (takeAudioElement.value) takeAudioElement.value.currentTime = time
+}
+
+function clickMidiFrame(frame: number, midiClass: number) {
+  selectMidiFrame(frame)
+  const resolvedClass = midiClassAt(frame, midiClass)
+  if (isMidiFlowFrame(frame)) {
+    const headFrame = midiFlowHeadFrame(frame)
+    const headClass = synthesis.value?.midiPTokenTrack.classes[headFrame] ?? 255
+    if (headClass < 255) previewMidiClass(headClass)
+    return
+  }
+  if (resolvedClass < 255) previewMidiClass(resolvedClass)
 }
 
 function selectMidiFrameFromPointer(event: MouseEvent) {
@@ -1140,6 +1653,11 @@ function setMidiEditorRest() {
 }
 
 function setMidiEditorFlow() {
+  if (midiEditor.value.asFlow) {
+    midiEditor.value.asFlow = false
+    if (midiEditor.value.midiClass < 255) previewMidiClass(midiEditor.value.midiClass)
+    return
+  }
   const frame = midiEditor.value.frame
   const previousClass = synthesis.value?.midiPTokenTrack.classes[frame - 1]
   if (frame === 0 || previousClass == null || previousClass >= 255) {
@@ -1314,10 +1832,10 @@ function midiCellTitle(frame: number, midiClass: number): string {
 
 function midiCellStyle(frame: number, midiClass: number) {
   const value = midiClassAt(frame, midiClass)
-  if (value === 255) return { left: `${frame * pxPerFrame.value}px`, width: `${pxPerFrame.value}px`, top: '606px', height: '6px' }
-  if (value === 256) return { left: `${frame * pxPerFrame.value}px`, width: `${pxPerFrame.value}px`, top: '630px', height: '4px' }
+  if (value === 255) return { left: `${frameToDisplayX(frame)}px`, width: `${pxPerFrame.value}px`, top: '606px', height: '6px' }
+  if (value === 256) return { left: `${frameToDisplayX(frame)}px`, width: `${pxPerFrame.value}px`, top: '630px', height: '4px' }
   return {
-    left: `${frame * pxPerFrame.value}px`,
+    left: `${frameToDisplayX(frame)}px`,
     width: `${pxPerFrame.value}px`,
     top: midiPitchTop(value),
     height: '8px',
@@ -1349,8 +1867,27 @@ function midiPitchName(midiClass: number) {
 function handleEditorKeydown(event: KeyboardEvent) {
   const targetElement = event.target instanceof HTMLElement ? event.target : null
   const isEditorTabTarget = Boolean(targetElement?.closest('.editor-tab'))
-  if (isEditableTarget(event.target) && !isEditorTabTarget) return
   const ctrl = event.ctrlKey || event.metaKey
+  if (ctrl && event.key.toLocaleLowerCase() === 's') {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    ;(window as any).__saveProject?.()
+    return
+  }
+  if (ctrl && event.key.toLocaleLowerCase() === 'o') {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    ;(window as any).__loadProject?.()
+    return
+  }
+  const isTextEntry = Boolean(targetElement?.closest('input, textarea, select, [contenteditable="true"]'))
+  if (!isTextEntry && (event.code === 'Space' || event.key === ' ') && !event.repeat) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    void togglePlayback()
+    return
+  }
+  if (isEditableTarget(event.target) && !isEditorTabTarget) return
   if (ctrl && event.key.toLocaleLowerCase() === 'z') {
     event.preventDefault()
     event.stopImmediatePropagation()
@@ -1419,7 +1956,37 @@ function isEditableTarget(target: EventTarget | null) {
 function openSegmentMenu(event: MouseEvent, segmentId: string) {
   event.preventDefault()
   event.stopPropagation()
-  segmentMenu.value = { show: false, x: event.clientX, y: event.clientY, segmentId }
+  segmentMenu.value = { show: false, x: event.clientX, y: event.clientY, segmentId, mode: 'object', startFrame: 0, endFrameExclusive: 1 }
+  nextTick(() => { segmentMenu.value.show = true })
+}
+
+function openEmptySegmentMenu(event: MouseEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+  const startFrame = frameFromPointer(event)
+  if ((synthesis.value?.segmentTrack.items ?? []).some(segment => (
+    startFrame >= segment.startFrame && startFrame < segment.speechEndFrameExclusive
+  ))) {
+    flashStatus('此 frame 已属于一个 Segment')
+    return
+  }
+  const nextSegment = [...(synthesis.value?.segmentTrack.items ?? [])]
+    .filter(segment => segment.startFrame > startFrame)
+    .sort((left, right) => left.startFrame - right.startFrame)[0]
+  const endFrameExclusive = nextSegment?.startFrame ?? frameCount.value
+  if (endFrameExclusive <= startFrame) {
+    flashStatus('此处没有可用的 Segment frame')
+    return
+  }
+  segmentMenu.value = {
+    show: false,
+    x: event.clientX,
+    y: event.clientY,
+    segmentId: '',
+    mode: 'empty',
+    startFrame,
+    endFrameExclusive,
+  }
   nextTick(() => { segmentMenu.value.show = true })
 }
 
@@ -1502,7 +2069,7 @@ function clearPulsesAfterFrame(frame: number) {
   flashStatus(`已清除 ${result.affectedFrames} 个连续 PUL frame`)
 }
 
-function alignSelectedSegment(target: SegmentTextControlTarget) {
+function alignSelectedSegment(target: SegmentAlignmentTarget) {
   if (!selectedSegmentId.value) {
     flashStatus('请先点击一个 Segment，再执行对齐')
     return
@@ -1510,13 +2077,72 @@ function alignSelectedSegment(target: SegmentTextControlTarget) {
   chooseSegmentMenuFor(selectedSegmentId.value, target)
 }
 
-function chooseSegmentMenuFor(segmentId: string, target: SegmentTextControlTarget) {
+function clearSegmentKanaRange(segment: SynthesisSegmentObject, endFrameExclusive: number) {
+  if (!unit.value) return
+  const before = objectTree.snapshotTree()
+  const result = objectTree.replaceSynthesisKanaTrackRange(
+    unit.value.id,
+    segment.startFrame,
+    endFrameExclusive,
+    [],
+    [],
+    endFrameExclusive,
+    'clear Segment Kana range',
+  )
+  if (!result.ok) {
+    flashStatus(result.reason ?? 'Kana 清空失败')
+    return
+  }
+  history.push({
+    description: `清空 Segment Kana · frame ${segment.startFrame}..${endFrameExclusive - 1}`,
+    patches: [], inversePatches: [],
+    objectTree: { kind: 'snapshot', before, after: objectTree.snapshotTree() },
+  })
+  flashStatus(`已清空 Segment Kana · frame ${segment.startFrame}..${endFrameExclusive - 1}`)
+}
+
+function clearSegmentHTokenRange(segment: SynthesisSegmentObject, endFrameExclusive: number) {
+  if (!unit.value) return
+  const before = objectTree.snapshotTree()
+  const result = objectTree.replaceSynthesisHTokenTrackRange(
+    unit.value.id,
+    segment.startFrame,
+    endFrameExclusive,
+    [],
+    undefined,
+    undefined,
+    'clear Segment H range',
+    'segment',
+    [],
+    'user',
+  )
+  if (!result.ok) {
+    flashStatus(result.reason ?? 'H Token 清空失败')
+    return
+  }
+  history.push({
+    description: `清空 Segment H Token · frame ${segment.startFrame}..${endFrameExclusive - 1}`,
+    patches: [], inversePatches: [],
+    objectTree: { kind: 'snapshot', before, after: objectTree.snapshotTree() },
+  })
+  flashStatus(`已清空 Segment H Token · frame ${segment.startFrame}..${endFrameExclusive - 1}`)
+}
+
+function chooseSegmentMenuFor(segmentId: string, target: SegmentAlignmentTarget) {
   segmentMenu.value.segmentId = segmentId
   chooseSegmentMenu(target)
 }
 
-function chooseSegmentMenu(target: SegmentTextControlTarget) {
+function chooseSegmentMenu(target: string) {
   segmentMenu.value.show = false
+  if (target === 'create') {
+    openCreateSegmentEditor(segmentMenu.value.startFrame, segmentMenu.value.endFrameExclusive)
+    return
+  }
+  if (target === 'retranscribe-text') {
+    void retranscribeSegmentText(segmentMenu.value.segmentId)
+    return
+  }
   const synthesisUnit = synthesis.value
   if (!synthesisUnit) return
   const items = [...synthesisUnit.segmentTrack.items].sort((left, right) => left.startFrame - right.startFrame)
@@ -1524,10 +2150,37 @@ function chooseSegmentMenu(target: SegmentTextControlTarget) {
   if (index < 0) return
   const segment = items[index]
   const startFrame = segment.startFrame
-  const endFrameExclusive = target === 'kana'
-    ? segment.speechEndFrameExclusive
-    : items[index + 1]?.startFrame ?? frameCount.value
-  const affected = target === 'kana'
+  const kanaEndFrameExclusive = segment.speechEndFrameExclusive
+  const hEndFrameExclusive = items[index + 1]?.startFrame ?? frameCount.value
+  if (target === 'current-kana-h') {
+    requestSegmentKanaAlignment(segment, hEndFrameExclusive)
+    return
+  }
+  if (target === 'clear-kana') {
+    clearSegmentKanaRange(segment, kanaEndFrameExclusive)
+    return
+  }
+  if (target === 'clear-h') {
+    clearSegmentHTokenRange(segment, hEndFrameExclusive)
+    return
+  }
+  if (target === 'pul-h') {
+    requestSegmentPulGeneration(segment, hEndFrameExclusive)
+    return
+  }
+  if (target === 'midi-local') {
+    openLocalMidiExtraction(segment.id)
+    return
+  }
+  if (target !== 'kana' && target !== 'h') {
+    flashStatus(`未知的 Segment 操作：${target}`)
+    return
+  }
+  const textTarget = target
+  const endFrameExclusive = textTarget === 'kana'
+    ? kanaEndFrameExclusive
+    : hEndFrameExclusive
+  const affected = textTarget === 'kana'
     ? synthesisUnit.kanaTrack.units.filter(item => item.startFrame < endFrameExclusive && startFrame < item.endFrameExclusive)
     : synthesisUnit.hTokenTrack.events.filter(item => item.frame >= startFrame && item.frame < endFrameExclusive)
   const manualCount = affected.filter(item => item.origin === 'user').length
@@ -1535,7 +2188,7 @@ function chooseSegmentMenu(target: SegmentTextControlTarget) {
     alignmentConfirm.value = {
       show: true,
       segmentId: segment.id,
-      target,
+      target: textTarget,
       startFrame,
       endFrameExclusive,
       objectCount: affected.length,
@@ -1543,20 +2196,160 @@ function chooseSegmentMenu(target: SegmentTextControlTarget) {
     }
     return
   }
-  void executeSegmentAlignment(segment.id, target)
+  void executeSegmentAlignment(segment.id, textTarget)
+}
+
+function requestSegmentPulGeneration(segment: SynthesisSegmentObject, endFrameExclusive: number) {
+  const affected = synthesis.value?.hTokenTrack.events.filter(event => (
+    event.frame >= segment.startFrame && event.frame < endFrameExclusive
+  )) ?? []
+  const manualCount = affected.filter(event => event.origin === 'user').length
+  if (manualCount > 0) {
+    alignmentConfirm.value = {
+      show: true,
+      segmentId: segment.id,
+      target: 'pul',
+      startFrame: segment.startFrame,
+      endFrameExclusive,
+      objectCount: affected.length,
+      manualCount,
+    }
+    return
+  }
+  generateSegmentPulHTokens(segment, endFrameExclusive)
+}
+
+function generateSegmentPulHTokens(segment: SynthesisSegmentObject, endFrameExclusive: number) {
+  if (!unit.value) return
+  let mapped
+  try {
+    mapped = kanaToHTokens(segment.kana)
+  } catch (error: any) {
+    flashStatus(error?.message || '当前 Segment Kana 无法生成 H Token')
+    return
+  }
+  const rangeWidth = endFrameExclusive - segment.startFrame
+  if (mapped.length + 1 > rangeWidth) {
+    flashStatus(`当前 Segment H 范围不足：需要 ${mapped.length + 1} 帧，当前只有 ${rangeWidth} 帧`)
+    return
+  }
+
+  const sourceRef = {
+    unitId: unit.value.id,
+    track: 'segment' as const,
+    revision: synthesis.value?.segmentTrack.revision ?? 0,
+    guideSHA256: synthesis.value?.guide.audioSHA256,
+  }
+  const sepFrame = endFrameExclusive - 1
+  const events: SynthesisHTokenEvent[] = []
+  for (let offset = 0; offset < rangeWidth; offset++) {
+    const frame = segment.startFrame + offset
+    const mappedToken = mapped[offset]
+    const isSep = frame === sepFrame
+    const tokenId = isSep ? 365 : mappedToken?.tokenId ?? 366
+    const symbol = isSep ? '<SEP>' : mappedToken?.symbol ?? '<PUL>'
+    events.push({
+      id: `h:pul:${segment.id}:${frame}`,
+      frame,
+      tokenId,
+      symbol,
+      origin: 'segment-align',
+      generatedFrom: sourceRef,
+    })
+  }
+  const before = objectTree.snapshotTree()
+  const result = objectTree.replaceSynthesisHTokenTrackRange(
+    unit.value.id,
+    segment.startFrame,
+    endFrameExclusive,
+    events,
+    undefined,
+    undefined,
+    'Segment -> H by PUL',
+    'segment',
+    [{
+      phraseId: segment.id,
+      startFrame: segment.startFrame,
+      endFrameExclusive,
+      placementMode: 'pul',
+      fallbackReason: null,
+    }],
+    'alignment',
+  )
+  if (!result.ok) {
+    flashStatus(result.reason ?? '按 PUL 生成 H Token 失败')
+    return
+  }
+  history.push({
+    description: `按 PUL 生成 Segment H Token · frame ${segment.startFrame}..${endFrameExclusive - 1}`,
+    patches: [], inversePatches: [],
+    objectTree: { kind: 'snapshot', before, after: objectTree.snapshotTree() },
+  })
+  flashStatus(`已按 PUL 生成 H Token · 覆盖 frame ${segment.startFrame}..${endFrameExclusive - 1}`)
 }
 
 async function confirmSegmentAlignment() {
   const confirmation = { ...alignmentConfirm.value }
   alignmentConfirm.value.show = false
-  await executeSegmentAlignment(confirmation.segmentId, confirmation.target)
+  if (confirmation.target === 'current-kana-h') {
+    await executeSegmentKanaAlignment(confirmation.segmentId)
+  } else if (confirmation.target === 'pul') {
+    const segment = synthesis.value?.segmentTrack.items.find(item => item.id === confirmation.segmentId)
+    if (segment) generateSegmentPulHTokens(segment, confirmation.endFrameExclusive)
+  } else {
+    await executeSegmentAlignment(confirmation.segmentId, confirmation.target)
+  }
+}
+
+function requestSegmentKanaAlignment(segment: SynthesisSegmentObject, endFrameExclusive: number) {
+  const synthesisUnit = synthesis.value
+  if (!synthesisUnit) return
+  try {
+    getKanaPhraseForSegment(synthesisUnit.kanaTrack, frameCount.value, {
+      segmentStartFrame: segment.startFrame,
+      segmentSpeechEndFrameExclusive: segment.speechEndFrameExclusive,
+      segmentControlEndFrameExclusive: endFrameExclusive,
+    })
+  } catch (error: any) {
+    showBlockingError(error?.message || '当前 Segment 的 Kana 分句无效', '无法按当前 Kana 对齐 H Token')
+    return
+  }
+  const affected = synthesisUnit.hTokenTrack.events.filter(event => (
+    event.frame >= segment.startFrame && event.frame < endFrameExclusive
+  )) ?? []
+  const manualCount = affected.filter(event => event.origin === 'user').length
+  if (manualCount > 0) {
+    alignmentConfirm.value = {
+      show: true,
+      segmentId: segment.id,
+      target: 'current-kana-h',
+      startFrame: segment.startFrame,
+      endFrameExclusive,
+      objectCount: affected.length,
+      manualCount,
+    }
+    return
+  }
+  void executeSegmentKanaAlignment(segment.id)
+}
+
+async function executeSegmentKanaAlignment(segmentId: string) {
+  const ok = await ensureAnalysisCapacity([{ modelId: 'SOFA Japanese' }], 'sofa', {
+    segmentId,
+    target: 'current-kana-h',
+  })
+  if (!ok) return
+  const result = await analysis.alignSegmentFromKana(props.objectId, segmentId)
+  if (result.ok) flashStatus(analysisJob.value.message)
+  else showBlockingError(result.reason ?? '按当前 Kana 对齐 H Token 失败', 'H Token 对齐失败')
 }
 
 async function executeSegmentAlignment(segmentId: string, target: SegmentTextControlTarget) {
   const ok = await ensureAnalysisCapacity([{ modelId: 'SOFA Japanese' }], 'sofa', { segmentId, target })
   if (!ok) return
   const result = await analysis.alignSegmentTextControl(props.objectId, segmentId, target)
-  flashStatus(result.ok ? analysisJob.value.message : result.reason ?? 'Text Control 对齐失败')
+  if (result.ok) flashStatus(analysisJob.value.message)
+  else showBlockingError(result.reason ?? 'Text Control 对齐失败', 'Text Control 对齐失败')
 }
 
 function openKanaMenu(event: MouseEvent, kanaUnitId: string) {
@@ -1660,7 +2453,7 @@ function requestKanaAlignment(kanaUnitId: string) {
     }
     void executeKanaAlignment(kanaUnitId)
   } catch (error: any) {
-    flashStatus(error?.message || 'Kana control range 无效')
+    showBlockingError(error?.message || 'Kana control range 无效', '无法对齐 Kana H Token')
   }
 }
 
@@ -1674,7 +2467,8 @@ async function executeKanaAlignment(kanaUnitId: string) {
   const ok = await ensureAnalysisCapacity([{ modelId: 'SOFA Japanese' }], 'sofa', { kanaUnitId })
   if (!ok) return
   const result = await analysis.alignKanaTextControl(props.objectId, kanaUnitId)
-  flashStatus(result.ok ? analysisJob.value.message : result.reason ?? 'Kana → H 对齐失败')
+  if (result.ok) flashStatus(analysisJob.value.message)
+  else showBlockingError(result.reason ?? 'Kana → H 对齐失败', 'Kana → H 对齐失败')
 }
 
 function beginHTokenDrag(event: PointerEvent, eventId: string, sourceFrame: number) {
@@ -1728,7 +2522,7 @@ function hEventStyle(eventId: string, frame: number) {
   const drag = hDrag.value
   const target = drag?.eventId === eventId ? drag.targetFrame : frame
   return {
-    left: `${target * pxPerFrame.value}px`,
+    left: `${frameToDisplayX(target)}px`,
     width: `${Math.max(2, pxPerFrame.value - 1)}px`,
   }
 }
@@ -1741,17 +2535,37 @@ function flashStatus(message: string) {
   }, 2400)
 }
 
+function showBlockingError(message: string, title = '操作失败') {
+  window.clearTimeout(noticeTimer)
+  statusNotice.value = ''
+  blockingError.value = { show: true, title, message }
+}
+
 function openSegmentEditor(segmentId: string) {
   const segment = synthesis.value?.segmentTrack.items.find(item => item.id === segmentId)
   if (!segment) return
   segmentEditor.value = {
     show: true,
+    mode: 'edit',
     id: segment.id,
     text: segment.text,
     kana: segment.kana,
     romaji: segment.romaji,
     startFrame: segment.startFrame,
     speechEndFrameExclusive: segment.speechEndFrameExclusive,
+  }
+}
+
+function openCreateSegmentEditor(startFrame: number, endFrameExclusive: number) {
+  segmentEditor.value = {
+    show: true,
+    mode: 'create',
+    id: '',
+    text: '',
+    kana: '',
+    romaji: '',
+    startFrame,
+    speechEndFrameExclusive: endFrameExclusive,
   }
 }
 
@@ -1769,23 +2583,33 @@ function saveSegmentEditor() {
   if (!unit.value) return
   const before = objectTree.snapshotTree()
   const edit = segmentEditor.value
-  const result = objectTree.updateSynthesisSegment(unit.value.id, edit.id, {
-    text: edit.text,
-    kana: edit.kana,
-    romaji: edit.romaji,
-    startFrame: edit.startFrame,
-    speechEndFrameExclusive: edit.speechEndFrameExclusive,
-  }, 'edit Segment content and range')
+  const result = edit.mode === 'create'
+    ? objectTree.createSynthesisSegment(unit.value.id, {
+      id: `segment:user:${crypto.randomUUID()}`,
+      text: edit.text,
+      kana: edit.kana,
+      romaji: edit.romaji,
+      startFrame: edit.startFrame,
+      speechEndFrameExclusive: edit.speechEndFrameExclusive,
+      origin: 'user',
+    })
+    : objectTree.updateSynthesisSegment(unit.value.id, edit.id, {
+      text: edit.text,
+      kana: edit.kana,
+      romaji: edit.romaji,
+      startFrame: edit.startFrame,
+      speechEndFrameExclusive: edit.speechEndFrameExclusive,
+    }, 'edit Segment content and range')
   if (!result.ok) {
     flashStatus(result.reason ?? 'Segment 修改失败')
     return
   }
   history.push({
-    description: '编辑 Segment', patches: [], inversePatches: [],
+    description: edit.mode === 'create' ? '新建 Segment' : '编辑 Segment', patches: [], inversePatches: [],
     objectTree: { kind: 'snapshot', before, after: objectTree.snapshotTree() },
   })
   segmentEditor.value.show = false
-  flashStatus('Segment 已更新；Kana/H/MIDI-P 保持不变')
+  flashStatus(edit.mode === 'create' ? 'Segment 已创建；Kana/H/MIDI-P 保持不变' : 'Segment 已更新；Kana/H/MIDI-P 保持不变')
 }
 
 function beginSegmentBoundaryDrag(event: PointerEvent, segmentId: string, edge: 'start' | 'end') {
@@ -1898,6 +2722,115 @@ function saveKanaEditor() {
   flashStatus('Kana 已更新；Segment/H/MIDI-P 保持不变')
 }
 
+function beginKanaObjectDrag(event: PointerEvent, kanaUnitId: string) {
+  if (event.button !== 0) return
+  const kana = synthesis.value?.kanaTrack.units.find(item => item.id === kanaUnitId)
+  if (!kana) return
+  event.preventDefault()
+  event.stopPropagation()
+  selectKana(kanaUnitId)
+  kanaObjectDrag.value = {
+    unitId: kanaUnitId,
+    startX: event.clientX,
+    originalStartFrame: kana.startFrame,
+    widthFrames: kana.endFrameExclusive - kana.startFrame,
+    previewStartFrame: kana.startFrame,
+  }
+  window.addEventListener('pointermove', updateKanaObjectDrag)
+  window.addEventListener('pointerup', finishKanaObjectDrag, { once: true })
+  window.addEventListener('pointercancel', cancelKanaObjectDrag, { once: true })
+}
+
+function updateKanaObjectDrag(event: PointerEvent) {
+  const drag = kanaObjectDrag.value
+  if (!drag) return
+  const delta = Math.round((event.clientX - drag.startX) / pxPerFrame.value)
+  drag.previewStartFrame = Math.max(0, Math.min(
+    frameCount.value - drag.widthFrames,
+    drag.originalStartFrame + delta,
+  ))
+}
+
+function finishKanaObjectDrag() {
+  const drag = kanaObjectDrag.value
+  clearKanaObjectDragListeners()
+  if (!drag || !unit.value || drag.previewStartFrame === drag.originalStartFrame) return
+  const before = objectTree.snapshotTree()
+  const result = objectTree.moveSynthesisKanaUnit(unit.value.id, drag.unitId, drag.previewStartFrame)
+  if (!result.ok) {
+    showBlockingError(result.reason ?? 'Kana 整体移动失败', '无法移动 Kana')
+    return
+  }
+  history.push({
+    description: '整体拖动 Kana', patches: [], inversePatches: [],
+    objectTree: { kind: 'snapshot', before, after: objectTree.snapshotTree() },
+  })
+  flashStatus(`Kana 已整体移动到 frame ${drag.previewStartFrame}`)
+}
+
+function cancelKanaObjectDrag() {
+  clearKanaObjectDragListeners()
+}
+
+function clearKanaObjectDragListeners() {
+  window.removeEventListener('pointermove', updateKanaObjectDrag)
+  window.removeEventListener('pointerup', finishKanaObjectDrag)
+  window.removeEventListener('pointercancel', cancelKanaObjectDrag)
+  kanaObjectDrag.value = null
+}
+
+function beginKanaSegDrag(event: PointerEvent, boundaryId: string) {
+  if (event.button !== 0) return
+  const boundary = synthesis.value?.kanaTrack.boundaries.find(item => item.id === boundaryId)
+  if (!boundary) return
+  event.preventDefault()
+  event.stopPropagation()
+  kanaSegDrag.value = {
+    boundaryId,
+    startX: event.clientX,
+    originalFrame: boundary.frame,
+    previewFrame: boundary.frame,
+  }
+  window.addEventListener('pointermove', updateKanaSegDrag)
+  window.addEventListener('pointerup', finishKanaSegDrag, { once: true })
+  window.addEventListener('pointercancel', cancelKanaSegDrag, { once: true })
+}
+
+function updateKanaSegDrag(event: PointerEvent) {
+  const drag = kanaSegDrag.value
+  if (!drag) return
+  const delta = Math.round((event.clientX - drag.startX) / pxPerFrame.value)
+  drag.previewFrame = Math.max(0, Math.min(frameCount.value - 1, drag.originalFrame + delta))
+}
+
+function finishKanaSegDrag() {
+  const drag = kanaSegDrag.value
+  clearKanaSegDragListeners()
+  if (!drag || !unit.value || drag.previewFrame === drag.originalFrame) return
+  const before = objectTree.snapshotTree()
+  const result = objectTree.moveSynthesisKanaSegmentBoundary(unit.value.id, drag.boundaryId, drag.previewFrame)
+  if (!result.ok) {
+    showBlockingError(result.reason ?? 'Kana SEG 移动失败', '无法移动 Kana SEG')
+    return
+  }
+  history.push({
+    description: '拖动 Kana SEG', patches: [], inversePatches: [],
+    objectTree: { kind: 'snapshot', before, after: objectTree.snapshotTree() },
+  })
+  flashStatus(`Kana SEG 已移动到 frame ${drag.previewFrame}`)
+}
+
+function cancelKanaSegDrag() {
+  clearKanaSegDragListeners()
+}
+
+function clearKanaSegDragListeners() {
+  window.removeEventListener('pointermove', updateKanaSegDrag)
+  window.removeEventListener('pointerup', finishKanaSegDrag)
+  window.removeEventListener('pointercancel', cancelKanaSegDrag)
+  kanaSegDrag.value = null
+}
+
 function beginKanaBoundaryDrag(event: PointerEvent, kanaUnitId: string, edge: 'start' | 'end') {
   if (event.button !== 0) return
   event.preventDefault()
@@ -1959,15 +2892,24 @@ function clearKanaDragListeners() {
 }
 
 function kanaStart(kanaUnitId: string, fallback: number) {
+  const objectDrag = kanaObjectDrag.value
+  if (objectDrag?.unitId === kanaUnitId) return objectDrag.previewStartFrame
   const drag = kanaDrag.value
   if (!drag) return fallback
   return drag.unitId === kanaUnitId && drag.edge === 'start' ? drag.previewFrame : fallback
 }
 
 function kanaEnd(kanaUnitId: string, fallback: number) {
+  const objectDrag = kanaObjectDrag.value
+  if (objectDrag?.unitId === kanaUnitId) return objectDrag.previewStartFrame + objectDrag.widthFrames
   const drag = kanaDrag.value
   if (!drag) return fallback
   return drag.unitId === kanaUnitId && drag.edge === 'end' ? drag.previewFrame : fallback
+}
+
+function kanaSegFrame(boundaryId: string, fallback: number) {
+  const drag = kanaSegDrag.value
+  return drag?.boundaryId === boundaryId ? drag.previewFrame : fallback
 }
 
 function formatTime(seconds: number) {
@@ -1998,12 +2940,12 @@ function hideHTokenTooltip() {
 }
 
 onBeforeUnmount(() => {
-  ;(window as any).__synthesisUnitEditorActive = false
-  window.removeEventListener('keydown', handleEditorKeydown, true)
-  stopPlayback()
+  unbindEditorKeyboard()
   clearHTokenDragListeners()
   clearSegmentDragListeners()
   clearKanaDragListeners()
+  clearKanaObjectDragListeners()
+  clearKanaSegDragListeners()
   window.clearTimeout(noticeTimer)
   if (guideUrl.value) URL.revokeObjectURL(guideUrl.value)
   if (referenceGuideUrl.value) URL.revokeObjectURL(referenceGuideUrl.value)
@@ -2021,7 +2963,7 @@ onBeforeUnmount(() => {
         <NButton quaternary circle title="停止" @click="stopPlayback">
           <template #icon><NIcon><Stop /></NIcon></template>
         </NButton>
-        <span class="time-readout">{{ formatTime(playheadFrame / frameRate) }} / {{ durationLabel }}</span>
+        <span class="time-readout">{{ formatTime(frameToAudioTime(playheadFrame)) }} / {{ durationLabel }}</span>
       </div>
       <NRadioGroup v-model:value="auditionSource" size="small">
         <NRadioButton value="guide">Guide</NRadioButton>
@@ -2040,6 +2982,16 @@ onBeforeUnmount(() => {
       </div>
       <div class="toolbar-spacer" />
     </header>
+
+    <div v-if="takePreparation.running || takeGeneration.running || analysisJob.running || capacityPreparing" class="analysis-progress-top">
+      <div class="analysis-progress-track">
+        <div
+          class="analysis-progress-bar top"
+          :style="{ width: `${takePreparation.running ? takePreparation.progress : takeGeneration.running ? takeGeneration.progress : analysisJob.running ? analysisProgress : 4}%` }"
+        />
+      </div>
+      <span>{{ takePreparation.running ? `${Math.round(takePreparation.progress)}% · ${takePreparation.message}` : takeGeneration.running ? `${Math.round(takeGeneration.progress)}% · ${takeGeneration.message}` : analysisJob.running ? `${analysisProgress}% · ${analysisJob.message}` : capacityPreparing?.message }}</span>
+    </div>
 
     <section
       class="reference-strip"
@@ -2092,23 +3044,63 @@ onBeforeUnmount(() => {
           </NButton>
         </NDropdown>
       </template>
+      <NPopover v-model:show="samplingMenuOpen" trigger="click" placement="bottom-end" class="sampling-popover">
+        <template #trigger>
+          <NButton size="small" secondary :disabled="takePreparation.running || takeGeneration.running" :title="`高级采样控制 · ${samplingSummary}`">
+            <template #icon><NIcon><OptionsOutline /></NIcon></template>
+            {{ samplingSummary }}
+          </NButton>
+        </template>
+        <div class="sampling-panel">
+          <header><strong>高级采样控制</strong><span>设置只影响之后生成的新 Take</span></header>
+          <label class="sampling-mode"><span>引导模式</span>
+            <NRadioGroup v-model:value="guidanceMode" size="small">
+              <NRadioButton value="unified">统一 CFG</NRadioButton>
+              <NRadioButton value="three-way" :disabled="!unitModelMeta.supportsThreeWayCfg">三路 CFG</NRadioButton>
+            </NRadioGroup>
+          </label>
+          <div v-if="guidanceMode === 'unified'" class="sampling-fields">
+            <label><span>统一 CFG</span><small>同时加强 A 区音色、Text/H 和 MIDI-P。当前兼容模式。</small><NInputNumber v-model:value="unifiedCfg" :min="0" :max="10" :step="0.1" /></label>
+          </div>
+          <div v-else class="sampling-fields three-way-fields">
+            <label><span>A 区音色 CFG</span><small>加强对参考音频音色、唱法和声学特征的遵循。</small><NInputNumber v-model:value="audioCfg" :min="0" :max="10" :step="0.1" /></label>
+            <label><span>Text / H CFG</span><small>加强对 H token、歌词和发音时序的遵循。</small><NInputNumber v-model:value="textCfg" :min="0" :max="10" :step="0.1" /></label>
+            <label><span>MIDI-P CFG</span><small>加强对音高和音符边界的遵循。</small><NInputNumber v-model:value="midiCfg" :min="0" :max="10" :step="0.1" /></label>
+            <p>三路均为同一数值时，与该数值的统一 CFG 等价。三路模式顺序执行四个条件分支，预计约为统一 CFG 的 2 倍耗时。</p>
+          </div>
+          <div class="sampling-fields sampling-common">
+            <label><span>采样步数</span><small>默认 32；步数越高通常越慢。</small><NInputNumber v-model:value="samplingSteps" :min="1" :max="256" :step="1" /></label>
+            <label><span>随机 Seed</span><small>相同材料和参数下复现同一结果。</small><NInputNumber v-model:value="samplingSeed" :min="0" :max="4294967295" :step="1" /></label>
+          </div>
+          <div class="sampling-training">训练条件 dropout：A 30% · Text 15% · MIDI 30%</div>
+        </div>
+      </NPopover>
       <NButton
         circle
         size="small"
         type="primary"
-        :loading="takeGeneration.running"
-        :disabled="!referenceUnit || !guideBlob || !referenceGuideBlob"
-        title="生成 V5-P Take"
+        :loading="takePreparation.running || takeGeneration.running"
+        :disabled="takePreparation.running || takeGeneration.running"
+        :title="takePrerequisiteMessage || '生成 V5-P Take'"
         @click="generateTake"
       >
         <template #icon><NIcon><ColorWandOutline /></NIcon></template>
       </NButton>
+      <span v-if="takePrerequisiteMessage" class="take-prerequisite-hint">{{ takePrerequisiteMessage }}</span>
     </section>
 
     <section class="unit-summary">
       <div class="unit-identity">
         <strong>{{ unit.name }}</strong>
         <span>r{{ synthesis.unitRevision }}</span>
+      </div>
+      <div class="unit-model-picker" title="当前合成单元使用的 V5-P 模型">
+        <NSelect
+          v-model:value="unitModel"
+          :options="modelOptions"
+          size="small"
+          :disabled="takePreparation.running || takeGeneration.running"
+        />
       </div>
       <span>{{ frameCount }} frames</span>
       <span>{{ synthesis.guide.sampleCount.toLocaleString() }} samples</span>
@@ -2119,7 +3111,8 @@ onBeforeUnmount(() => {
       >
         尾部 {{ synthesis.frameContract.trailingSampleCount }} samples
       </span>
-      <span v-if="takeGeneration.running" class="status-notice">{{ Math.round(takeGeneration.progress) }}% · {{ takeGeneration.message }}</span>
+      <span v-if="takePreparation.running" class="status-notice">{{ Math.round(takePreparation.progress) }}% · {{ takePreparation.message }}</span>
+      <span v-else-if="takeGeneration.running" class="status-notice">{{ Math.round(takeGeneration.progress) }}% · {{ takeGeneration.message }}</span>
       <span v-else-if="analysisJob.running" class="status-notice">{{ Math.round(analysisJob.progress) }}% · {{ analysisJob.message }}</span>
       <span v-else-if="statusNotice" class="status-notice">{{ statusNotice }}</span>
       <span
@@ -2145,7 +3138,7 @@ onBeforeUnmount(() => {
           class="take-item"
           :class="{ active: take.id === synthesis.activeTakeId, failed: take.status === 'failed' }"
           :disabled="take.status !== 'ready'"
-          :title="take.error || `${take.name} · target r${take.targetUnitRevision} · reference r${take.referenceUnitRevision}`"
+          :title="take.error || `${take.name} · target r${take.targetUnitRevision} · reference r${take.referenceUnitRevision} · ${takeSamplingLabel(take)}`"
           @click="selectTake(take.id)"
         >
           <strong>{{ take.name }}</strong>
@@ -2178,7 +3171,7 @@ onBeforeUnmount(() => {
               :key="frame"
               class="frame-tick"
               :class="{ major: frame % majorTickEvery === 0 }"
-              :style="{ left: `${frame * pxPerFrame}px` }"
+              :style="{ left: `${frameToDisplayX(frame)}px` }"
             >
               <span v-if="frame % majorTickEvery === 0">{{ frame }}</span>
             </div>
@@ -2212,17 +3205,17 @@ onBeforeUnmount(() => {
                 <template #icon><NIcon><MicOutline /></NIcon></template>转录
               </NButton>
               <NButton size="tiny" secondary class="row-action" :disabled="analysisBusy" @click.stop="alignSelectedSegment('kana')">Kana</NButton>
-              <NButton size="tiny" secondary class="row-action" :disabled="analysisBusy" @click.stop="alignSelectedSegment('h')">H</NButton>
+              <NButton size="tiny" secondary class="row-action" :disabled="analysisBusy" title="按当前 Kana 文本与边界重新运行 SOFA 硬边界对齐" @click.stop="alignSelectedSegment('current-kana-h')">H</NButton>
             </div>
           </div>
-          <div class="track-space grid-space" :style="{ width: `${timelineWidth}px` }" @click="seekFromPointer">
+          <div class="track-space grid-space" :style="{ width: `${timelineWidth}px` }" @click="seekFromPointer" @contextmenu="openEmptySegmentMenu">
             <div
               v-for="segment in synthesis.segmentTrack.items"
               :key="segment.id"
               class="segment-object"
               :style="{
-                left: `${segmentStart(segment.id, segment.startFrame) * pxPerFrame}px`,
-                width: `${(segmentEnd(segment.id, segment.speechEndFrameExclusive) - segmentStart(segment.id, segment.startFrame)) * pxPerFrame}px`,
+                left: `${frameToDisplayX(segmentStart(segment.id, segment.startFrame))}px`,
+                width: `${frameToDisplayX(segmentEnd(segment.id, segment.speechEndFrameExclusive) - segmentStart(segment.id, segment.startFrame))}px`,
               }"
               :class="{ selected: selectedSegmentId === segment.id }"
               @click.stop="selectSegment(segment.id)"
@@ -2235,7 +3228,7 @@ onBeforeUnmount(() => {
                 title="拖动句首 frame"
                 @pointerdown="beginSegmentBoundaryDrag($event, segment.id, 'start')"
               />
-              <strong>{{ segment.text || segment.kana }}</strong>
+              <strong>{{ segment.kana || segment.text }}</strong>
               <span>{{ segment.romaji }}</span>
               <button
                 type="button"
@@ -2249,12 +3242,6 @@ onBeforeUnmount(() => {
                 title="拖动句尾 frame"
                 @pointerdown="beginSegmentBoundaryDrag($event, segment.id, 'end')"
               />
-            </div>
-            <div v-if="textAnalysisRunning" class="analysis-progress">
-              <div class="analysis-progress-track">
-                <div class="analysis-progress-bar" :style="{ width: `${analysisProgress}%` }" />
-              </div>
-              <span>{{ analysisProgress }}% · {{ analysisJob.message }}</span>
             </div>
           </div>
         </div>
@@ -2271,12 +3258,13 @@ onBeforeUnmount(() => {
               :key="kana.id"
               class="kana-object"
               :style="{
-                left: `${kanaStart(kana.id, kana.startFrame) * pxPerFrame}px`,
-                width: `${(kanaEnd(kana.id, kana.endFrameExclusive) - kanaStart(kana.id, kana.startFrame)) * pxPerFrame}px`,
+                left: `${frameToDisplayX(kanaStart(kana.id, kana.startFrame))}px`,
+                width: `${frameToDisplayX(kanaEnd(kana.id, kana.endFrameExclusive) - kanaStart(kana.id, kana.startFrame))}px`,
               }"
               :class="{ selected: selectedKanaUnitId === kana.id }"
               @click.stop="selectKana(kana.id)"
-              title="双击编辑 Kana；右键对齐所选 Kana 的 H Token"
+              title="拖动主体整体移动；拖动左右边缘调整宽度；双击编辑"
+              @pointerdown="beginKanaObjectDrag($event, kana.id)"
               @dblclick.stop="openKanaEditor(kana.id)"
               @contextmenu="openKanaMenu($event, kana.id)"
             >
@@ -2298,7 +3286,12 @@ onBeforeUnmount(() => {
               v-for="boundary in synthesis.kanaTrack.boundaries"
               :key="boundary.id"
               class="kana-seg"
-              :style="{ left: `${boundary.frame * pxPerFrame}px` }"
+              :style="{
+                left: `${frameToDisplayX(kanaSegFrame(boundary.id, boundary.frame))}px`,
+                width: `${Math.max(2, frameToDisplayX(1))}px`,
+              }"
+              title="SEG · 固定 1 frame · 拖动调整分句位置"
+              @pointerdown="beginKanaSegDrag($event, boundary.id)"
             >SEG</div>
             <span v-if="synthesis.kanaTrack.status === 'empty'" class="empty-track">尚未生成 Kana</span>
           </div>
@@ -2318,7 +3311,7 @@ onBeforeUnmount(() => {
             <div
               v-if="selectedHFrame != null"
               class="h-selection"
-              :style="{ left: `${selectedHFrame * pxPerFrame}px`, width: `${pxPerFrame}px` }"
+              :style="{ left: `${frameToDisplayX(selectedHFrame)}px`, width: `${pxPerFrame}px` }"
             />
             <div
               v-for="event in synthesis.hTokenTrack.events"
@@ -2385,21 +3378,15 @@ onBeforeUnmount(() => {
                 }"
                 :style="midiCellStyle(frame, midiClass)"
                 :title="midiCellTitle(frame, midiClass)"
-                @click.stop="selectMidiFrame(frame)"
+                @click.stop="clickMidiFrame(frame, midiClass)"
                 @pointerdown="beginMidiClassDrag($event, frame, midiClass)"
                 @contextmenu="openMidiEditor($event, frame)"
               />
             </template>
-            <div v-if="midiAnalysisRunning" class="analysis-progress">
-              <div class="analysis-progress-track">
-                <div class="analysis-progress-bar midi" :style="{ width: `${analysisProgress}%` }" />
-              </div>
-              <span>{{ analysisProgress }}% · {{ analysisJob.message }}</span>
-            </div>
           </div>
         </div>
 
-        <div class="playhead" :style="{ left: `${132 + playheadFrame * pxPerFrame}px` }" />
+        <div class="playhead" :style="{ left: `${132 + frameToDisplayX(playheadFrame)}px` }" />
       </div>
 
       <aside
@@ -2437,9 +3424,9 @@ onBeforeUnmount(() => {
       <template v-else-if="editorSelection?.type === 'segment' && selectedSegment">
         <header class="inspector-header"><strong>Segment</strong><span>{{ selectedSegment.origin }}</span></header>
         <dl class="inspector-properties">
-          <dt>原文</dt><dd>{{ selectedSegment.text || '-' }}</dd>
           <dt>Kana</dt><dd>{{ selectedSegment.kana || '-' }}</dd>
           <dt>Romaji</dt><dd>{{ selectedSegment.romaji || '-' }}</dd>
+          <dt>原文</dt><dd>{{ selectedSegment.text || '-' }}</dd>
           <dt>发声范围</dt><dd>{{ selectedSegment.startFrame }}..{{ selectedSegment.speechEndFrameExclusive - 1 }}</dd>
           <dt>H 控制范围</dt><dd>{{ selectedSegment.startFrame }}..{{ segmentOwnedEnd(selectedSegment.id) - 1 }}</dd>
           <dt>SEP</dt><dd>frame {{ segmentOwnedEnd(selectedSegment.id) - 1 }}</dd>
@@ -2447,7 +3434,7 @@ onBeforeUnmount(() => {
         <div class="inspector-commands">
           <NButton size="small" secondary @click="openSegmentEditor(selectedSegment.id)">编辑</NButton>
           <NButton size="small" secondary :disabled="analysisBusy" @click="alignSelectedSegment('kana')">对齐 Kana</NButton>
-          <NButton size="small" secondary :disabled="analysisBusy" @click="alignSelectedSegment('h')">对齐 H</NButton>
+          <NButton size="small" secondary :disabled="analysisBusy" title="按当前 Kana 文本与边界重新运行 SOFA 硬边界对齐" @click="alignSelectedSegment('current-kana-h')">按当前 Kana 对齐 H</NButton>
         </div>
       </template>
 
@@ -2457,7 +3444,9 @@ onBeforeUnmount(() => {
           <dt>Kana</dt><dd>{{ selectedKana.kana }}</dd>
           <dt>Romaji</dt><dd>{{ selectedKana.romaji || '-' }}</dd>
           <dt>Frame 范围</dt><dd>{{ selectedKana.startFrame }}..{{ selectedKana.endFrameExclusive - 1 }}</dd>
-          <dt>时长</dt><dd>{{ formatTime((selectedKana.endFrameExclusive - selectedKana.startFrame) / frameRate) }}</dd>
+          <dt>时长</dt><dd>{{ formatTime(frameToAudioTime(selectedKana.endFrameExclusive - selectedKana.startFrame)) }}</dd>
+          <dt>直接映射 H</dt>
+          <dd>{{ selectedKanaDirectHTokens.length ? `${selectedKanaDirectHTokens.map(item => item.symbol).join(' ')} · ${selectedKanaDirectHTokens.map(item => item.tokenId).join(', ')}` : (selectedKana.kana ? '无法直接映射' : '-') }}</dd>
         </dl>
         <div class="inspector-commands">
           <NButton size="small" secondary @click="openKanaEditor(selectedKana.id)">编辑</NButton>
@@ -2573,7 +3562,7 @@ onBeforeUnmount(() => {
       <div class="alignment-confirm-content">
         <div class="overwrite-range">frame {{ alignmentConfirm.startFrame }}..{{ alignmentConfirm.endFrameExclusive - 1 }}</div>
         <div>当前范围有 {{ alignmentConfirm.objectCount }} 个对象，其中 {{ alignmentConfirm.manualCount }} 个经过手工修改。</div>
-        <div>本次只覆盖 {{ alignmentConfirm.target === 'kana' ? 'KanaTrack' : 'HTokenTrack' }}；其他轨保持不变。</div>
+        <div>本次只覆盖 {{ alignmentConfirm.target === 'kana' ? 'KanaTrack' : alignmentConfirm.target === 'pul' ? 'HTokenTrack（PUL）' : 'HTokenTrack' }}；其他轨保持不变。</div>
         <div class="modal-actions">
           <NButton @click="alignmentConfirm.show = false">取消</NButton>
           <NButton type="warning" @click="confirmSegmentAlignment">强制覆盖</NButton>
@@ -2591,7 +3580,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </NModal>
-    <NModal v-model:show="segmentEditor.show" preset="card" title="编辑 Segment" class="segment-editor-modal">
+    <NModal v-model:show="segmentEditor.show" preset="card" :title="segmentEditor.mode === 'create' ? '新建 Segment' : '编辑 Segment'" class="segment-editor-modal">
       <div class="segment-form">
         <label><span>原文</span><NInput v-model:value="segmentEditor.text" type="textarea" :autosize="{ minRows: 2, maxRows: 4 }" /></label>
         <label><span>Kana</span><NInput :value="segmentEditor.kana" @update:value="updateSegmentEditorKana" /></label>
@@ -2602,7 +3591,72 @@ onBeforeUnmount(() => {
         </div>
         <div class="modal-actions">
           <NButton @click="segmentEditor.show = false">取消</NButton>
-          <NButton type="primary" @click="saveSegmentEditor">保存 Segment</NButton>
+          <NButton type="primary" @click="saveSegmentEditor">{{ segmentEditor.mode === 'create' ? '创建 Segment' : '保存 Segment' }}</NButton>
+        </div>
+      </div>
+    </NModal>
+    <NModal v-model:show="midiLocal.show" preset="card" title="重提取本句 MIDI-P" class="local-midi-modal">
+      <div class="local-midi-content">
+        <div class="alignment-confirm-content">
+          <div class="overwrite-range">
+            {{ localMidiRange ? `frame ${localMidiRange.startFrame}..${localMidiRange.endFrameExclusive - 1}` : '未选择 Segment' }}
+          </div>
+          <div>只生成候选，不会立即覆盖当前 MIDI-P。</div>
+        </div>
+        <label class="local-midi-field"><span>提取器</span>
+          <NRadioGroup v-model:value="midiLocal.extractor" size="small">
+            <NRadioButton value="game">GAME</NRadioButton>
+            <NRadioButton value="some">SOME</NRadioButton>
+            <NRadioButton value="compare">对比</NRadioButton>
+          </NRadioGroup>
+        </label>
+        <div class="local-midi-grid">
+          <label><span>GAME 边界阈值</span><small>越低越容易接受新的音符边界。</small><NInputNumber v-model:value="midiLocal.boundaryThreshold" :min="0.01" :max="0.99" :step="0.05" /></label>
+          <label><span>GAME 边界半径</span><small>检查边界附近多少帧；越大越不容易出现相邻边界。</small><NInputNumber v-model:value="midiLocal.boundaryRadius" :min="1" :max="12" /></label>
+          <label><span>GAME presence 阈值</span><small>判断有声还是 REST；越低越不容易判成 REST。</small><NInputNumber v-model:value="midiLocal.presenceThreshold" :min="0.01" :max="0.99" :step="0.05" /></label>
+          <label><span>GAME 采样步数</span><small>模型迭代次数；越高通常越慢，结果可能更稳定。</small><NSelect v-model:value="midiLocal.nsteps" :options="[{ label: '4 · 训练默认', value: 4 }, { label: '8', value: 8 }, { label: '16', value: 16 }]" /></label>
+          <label><span>GAME 随机 Seed</span><small>相同音频和参数下复现结果；留空使用稳定默认值。</small><NInputNumber v-model:value="midiLocal.seed" :min="0" :max="4294967295" placeholder="自动" /></label>
+          <label><span>SOME 边界偏置</span><small>整体调整切分敏感度；越高越容易产生音符边界。</small><NInputNumber v-model:value="midiLocal.boundaryBias" :min="-4" :max="4" :step="0.25" /></label>
+          <label><span>SOME REST 阈值</span><small>模型的有声置信度低于此值会判为 REST；越高越容易判成 REST。</small><NInputNumber v-model:value="midiLocal.restThreshold" :min="0.01" :max="0.99" :step="0.05" /></label>
+          <label><span>SOME 最短音符（frame）</span><small>短于此长度的音符会并入前一个音符；20 frame 约 1 秒。</small><NInputNumber v-model:value="midiLocal.minNoteFrames" :min="1" :max="20" /></label>
+          <label><span>前后文（frame）</span><small>额外读取句子两侧的音频，只帮助判断边界，不会覆盖句外 MIDI-P。</small><NInputNumber v-model:value="midiLocal.contextFrames" :min="0" :max="30" /></label>
+        </div>
+        <div v-if="midiLocal.game || midiLocal.some" class="local-midi-candidates">
+          <div class="candidate-help">
+            <strong>候选预览</strong>
+            <span>点击试听按钮会从本句起点播放，到本句末尾自动停止；候选不会自动写入当前 MIDI-P。</span>
+          </div>
+          <div class="candidate-tabs">
+            <NButton size="small" :type="midiLocal.audition === 'current' && playing ? 'primary' : 'default'" @click="auditionLocalMidiCandidate('current')">
+              <template #icon><NIcon><Play /></NIcon></template>试听当前
+            </NButton>
+            <NButton v-if="midiLocal.game" size="small" :type="midiLocal.audition === 'game' && playing ? 'primary' : 'default'" @click="auditionLocalMidiCandidate('game')">
+              <template #icon><NIcon><Play /></NIcon></template>试听 GAME
+            </NButton>
+            <NButton v-if="midiLocal.some" size="small" :type="midiLocal.audition === 'some' && playing ? 'primary' : 'default'" @click="auditionLocalMidiCandidate('some')">
+              <template #icon><NIcon><Play /></NIcon></template>试听 SOME
+            </NButton>
+            <NButton size="small" secondary :disabled="!playing" @click="stopLocalMidiAudition">
+              <template #icon><NIcon><Stop /></NIcon></template>停止试听
+            </NButton>
+          </div>
+          <div class="candidate-summary">
+            <span>GAME {{ midiLocal.game ? `${midiLocal.game.classes.filter(value => value < 255).length} voiced frames` : '未生成' }}</span>
+            <span>SOME {{ midiLocal.some ? `${midiLocal.some.classes.filter(value => value < 255).length} voiced frames` : '未生成' }}</span>
+          </div>
+          <div class="modal-actions">
+            <NButton v-if="midiLocal.game" @click="applyLocalMidiCandidate('game')">应用 GAME 到本句</NButton>
+            <NButton v-if="midiLocal.some" type="primary" @click="applyLocalMidiCandidate('some')">应用 SOME 到本句</NButton>
+          </div>
+        </div>
+        <div v-if="midiLocal.running" class="local-midi-progress">
+          <div class="analysis-progress-track"><div class="analysis-progress-bar" :style="{ width: `${midiLocal.progress}%` }" /></div>
+          <span>{{ Math.round(midiLocal.progress) }}% · {{ midiLocal.message }}</span>
+        </div>
+        <div v-else-if="midiLocal.message" class="local-midi-message">{{ midiLocal.message }}</div>
+        <div class="modal-actions">
+          <NButton @click="midiLocal.show = false">关闭</NButton>
+          <NButton type="primary" :loading="midiLocal.running" @click="runSelectedLocalMidiExtraction">重新提取</NButton>
         </div>
       </div>
     </NModal>
@@ -2640,7 +3694,7 @@ onBeforeUnmount(() => {
           <NButton
             secondary
             :type="midiEditor.asFlow ? 'primary' : 'default'"
-            title="继承前一个 MIDI-P token 的音高；只存在于编辑器"
+            :title="midiEditor.asFlow ? '取消 FLOW，保留当前音高' : '继承前一个 MIDI-P token 的音高；只存在于编辑器'"
             @click="setMidiEditorFlow"
           >FLOW</NButton>
           <NButton secondary @click="setMidiEditorRest">REST</NButton>
@@ -2657,6 +3711,7 @@ onBeforeUnmount(() => {
           <span>需要约 {{ (capacityDialog.requiredMiB / 1024).toFixed(1) }} GB</span>
           <span>当前可用 {{ (capacityDialog.freeMiB / 1024).toFixed(1) }} GB</span>
           <span>估算来自 {{ capacityDialog.estimate.sampleSeconds }}s / {{ capacityDialog.estimate.steps ?? 1 }}步标定</span>
+          <span v-if="capacityDialog.estimate.guidanceMode === 'three-way'">三路 CFG 顺序执行四个条件分支，预计约 {{ capacityDialog.estimate.estimatedTimeFactor ?? 2 }}× 耗时</span>
         </div>
         <div v-if="capacityDialog.insufficient" class="capacity-insufficient">您的显存实在不足。</div>
         <div v-else-if="capacityDialog.evictions.length > 0" class="capacity-evictions">
@@ -2668,6 +3723,14 @@ onBeforeUnmount(() => {
           <NButton v-if="!capacityDialog.insufficient" type="warning" @click="evictFromCapacityDialog">删除最久未使用</NButton>
           <NButton type="error" ghost @click="forceRunFromCapacityDialog">强制运行</NButton>
           <NButton v-if="capacityDialog.insufficient" @click="closeCapacityDialog">放弃运行</NButton>
+        </div>
+      </div>
+    </NModal>
+    <NModal v-model:show="blockingError.show" preset="card" :title="blockingError.title" class="blocking-error-modal">
+      <div class="blocking-error-content">
+        <div class="blocking-error-message">{{ blockingError.message }}</div>
+        <div class="modal-actions">
+          <NButton type="primary" @click="blockingError.show = false">知道了</NButton>
         </div>
       </div>
     </NModal>
@@ -2778,6 +3841,24 @@ onBeforeUnmount(() => {
   color: #778392;
   font-size: 10px;
 }
+:global(.sampling-popover.n-popover) { padding: 0; border-radius: 6px; background: #171c22; }
+.sampling-panel { width: 430px; display: grid; gap: 12px; padding: 14px; color: #aeb8c5; font-size: 11px; }
+.sampling-panel header { display: grid; gap: 2px; }
+.sampling-panel header strong { color: #e4e9ee; font-size: 12px; }
+.sampling-panel header span { color: #778392; font-size: 10px; }
+.sampling-mode { display: grid; gap: 6px; color: #98a4b2; }
+.sampling-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.sampling-fields label { display: grid; gap: 5px; align-content: start; color: #aeb8c5; }
+.sampling-fields label small { min-height: 30px; color: #697585; font-size: 10px; line-height: 1.45; }
+.sampling-fields.three-way-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.sampling-fields.three-way-fields p { grid-column: 1 / -1; margin: 0; color: #d6a86a; font-size: 10px; line-height: 1.5; }
+.sampling-common { padding-top: 10px; border-top: 1px solid #2c343e; }
+.sampling-training { padding: 7px 8px; border-left: 2px solid #5dc9b1; background: #12171c; color: #8f9ba8; font: 10px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.unit-model-picker {
+  flex: 0 0 148px;
+  min-width: 0;
+}
+.unit-model-picker :deep(.n-select) { width: 100%; }
 
 .unit-summary {
   flex: 0 0 34px;
@@ -2824,6 +3905,16 @@ onBeforeUnmount(() => {
   text-transform: uppercase;
 }
 .take-heading small { color: #697584; font-size: 9px; }
+.take-prerequisite-hint {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 260px;
+  overflow: hidden;
+  color: #e7b45d;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .take-list {
   flex: 1;
   min-width: 0;
@@ -3026,10 +4117,27 @@ onBeforeUnmount(() => {
 .boundary-handle:hover { background: rgba(121, 179, 213, 0.2); }
 .kana-boundary { border-right-color: #c3a2eb; }
 .kana-boundary.start { border-right: 0; border-left: 2px solid #c3a2eb; }
-.kana-object { top: 8px; bottom: 8px; display: flex; gap: 5px; align-items: center; border-color: #8f72b8; background: #322746; }
+.kana-object { top: 8px; bottom: 8px; display: flex; gap: 5px; align-items: center; border-color: #8f72b8; background: #322746; cursor: grab; }
+.kana-object:active { cursor: grabbing; }
 .kana-object strong { font-size: 12px; }
 .kana-object span { color: #b8a9cc; font-size: 9px; }
-.kana-seg { position: absolute; top: 2px; bottom: 2px; border-left: 1px dashed #d2a85b; color: #d2a85b; font-size: 8px; padding-left: 2px; }
+.kana-seg {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  z-index: 4;
+  min-width: 2px;
+  overflow: hidden;
+  border: 1px solid #d2a85b;
+  background: #51401f;
+  color: #f4d88e;
+  font-size: 8px;
+  line-height: 34px;
+  text-align: center;
+  cursor: grab;
+  user-select: none;
+}
+.kana-seg:active { cursor: grabbing; }
 
 .h-event {
   position: absolute;
@@ -3126,6 +4234,34 @@ onBeforeUnmount(() => {
 .analysis-progress-bar.midi {
   background: linear-gradient(90deg, #79c0ff, #f0c45c);
 }
+.analysis-progress-top {
+  flex: 0 0 34px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 14px;
+  border-bottom: 1px solid #2a313a;
+  background: #12171c;
+}
+.analysis-progress-top .analysis-progress-track {
+  flex: 1;
+  height: 8px;
+  background: #0b0f14;
+}
+.analysis-progress-top .analysis-progress-bar {
+  background: linear-gradient(90deg, #79c0ff, #f0c45c);
+}
+.analysis-progress-top span {
+  flex: 0 0 auto;
+  max-width: 56vw;
+  color: #f0d48c;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .analysis-progress span {
   color: #8e99a8;
   font-size: 9px;
@@ -3140,6 +4276,9 @@ audio { display: none; }
 :global(.segment-editor-modal.n-card) { width: min(560px, calc(100vw - 48px)); border-radius: 6px; background: #171c22; }
 :global(.kana-editor-modal.n-card) { width: 420px; border-radius: 6px; background: #171c22; }
 :global(.midi-editor-modal.n-card) { width: 400px; border-radius: 6px; background: #171c22; }
+:global(.capacity-modal.n-card) { width: min(460px, calc(100vw - 48px)); border-radius: 6px; background: #171c22; }
+:global(.capacity-modal .n-card__content) { padding: 14px; }
+:global(.local-midi-modal.n-card) { width: min(620px, calc(100vw - 48px)); border-radius: 6px; background: #171c22; }
 .midi-editor-form { display: grid; gap: 14px; }
 .midi-editor-readout { display: flex; justify-content: space-between; align-items: baseline; color: #8f9baa; font-size: 11px; }
 .midi-editor-readout strong { color: #d8dee7; font: 13px ui-monospace, SFMono-Regular, Consolas, monospace; }
@@ -3152,10 +4291,34 @@ audio { display: none; }
 .frame-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
 .capacity-content { display: grid; gap: 12px; color: #b6c0cc; font-size: 12px; }
-.capacity-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.capacity-summary { display: grid; grid-template-columns: 1fr; gap: 8px; }
 .capacity-summary span { padding: 8px; border: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent); border-radius: 4px; }
 .capacity-insufficient { color: #f28b94; }
-.capacity-evictions { color: #d6a86a; }
+.capacity-evictions { color: #d6a86a; overflow-wrap: anywhere; }
+.blocking-error-content { display: grid; gap: 16px; color: var(--app-text); }
+.blocking-error-message {
+  padding: 12px;
+  border-left: 3px solid #e06c75;
+  background: color-mix(in srgb, #e06c75 10%, transparent);
+  color: #f2c5c9;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+:global(.blocking-error-modal.n-card) { width: min(520px, calc(100vw - 48px)); }
+.local-midi-content { display: grid; gap: 14px; color: #b6c0cc; font-size: 12px; }
+.local-midi-field { display: grid; gap: 6px; color: #98a4b2; font-size: 11px; }
+.local-midi-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.local-midi-grid label { display: grid; gap: 5px; align-content: start; color: #98a4b2; font-size: 11px; }
+.local-midi-grid label small { min-height: 30px; color: #697585; font-size: 10px; line-height: 1.45; }
+.local-midi-candidates { display: grid; gap: 9px; padding: 10px; border: 1px solid #303844; border-radius: 4px; background: #12171c; }
+.candidate-tabs { display: flex; gap: 6px; }
+.candidate-help { display: grid; gap: 3px; color: #aeb8c4; font-size: 11px; line-height: 1.5; }
+.candidate-help strong { color: #e4e9ee; font-size: 12px; }
+.candidate-summary { display: flex; gap: 14px; color: #aeb8c5; font: 10px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.local-midi-progress { display: grid; gap: 5px; }
+.local-midi-progress span,
+.local-midi-message { color: #d6a86a; font-size: 11px; }
 
 @container (max-width: 760px) {
   .unit-summary { gap: 12px; }

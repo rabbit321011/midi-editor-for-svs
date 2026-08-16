@@ -6,10 +6,11 @@ const SINGER_ROOT = 'E:/AIscene/YingMusic_Singer_Plus'
 const SVS_MODELS_PATH = path.join(PROJECT_ROOT, 'server', 'models', 'svs_models.json')
 const VRAM_PROFILE_DIR = path.join(PROJECT_ROOT, 'data', 'vram-profile')
 const V5P_CHECKPOINT = 'E:/MyProject/重要模型保存/V5P_40K_EMA/step_040000_final.pt'
+const V5PG_CHECKPOINT = 'E:/MyProject/重要模型保存/V5Pg_20K/step_020000_final.pt'
 const MANAGED_SVS_IDS = new Set(['V4Hg_10k', 'V4fg_10k'])
 
 export type CatalogFamily = 'svs' | 'analysis' | 'svc' | 'msst'
-export type CatalogEngine = 't1' | 'v4h_phone_pul' | 'v5p_direct' | 'game' | 'whisper' | 'sofa' | 'svc' | 'msst'
+export type CatalogEngine = 't1' | 'v4h_phone_pul' | 'v5p_direct' | 'game' | 'some' | 'whisper' | 'sofa' | 'svc' | 'msst'
 
 export interface ModelCatalogEntry {
   id: string
@@ -68,16 +69,39 @@ export function getModelCatalog(): ModelCatalogEntry[] {
     engine: 'v5p_direct',
     checkpoint: V5P_CHECKPOINT,
     runtimeState: fs.existsSync(V5P_CHECKPOINT) ? 'configured' : 'unavailable',
-    capabilities: ['synthesis-unit', 'direct-control', 'midi-p', 'h-token'],
+    capabilities: ['synthesis-unit', 'direct-control', 'midi-p', 'h-token', 'three-way-cfg'],
     vramProfile: readVramProfile('V5P_40K_EMA'),
+  })
+  entries.push({
+    id: 'V5Pg_20K',
+    family: 'svs',
+    engine: 'v5p_direct',
+    checkpoint: V5PG_CHECKPOINT,
+    runtimeState: fs.existsSync(V5PG_CHECKPOINT) ? 'configured' : 'unavailable',
+    capabilities: ['synthesis-unit', 'direct-control', 'midi-p', 'h-token', 'three-way-cfg'],
+    vramProfile: readVramProfile('V5Pg_20K', 'V5P_40K_EMA'),
   })
   entries.push(
     { id: 'GAME-1.0-medium', family: 'analysis', engine: 'game', runtimeState: 'configured', capabilities: ['midi-p'], vramProfile: readVramProfile('GAME-1.0-medium') },
+    {
+      id: 'OpenVPI-SOME', family: 'analysis', engine: 'some',
+      checkpoint: 'E:/MyProject/ToLinuxServer/TEMP/uploads_models/some.pt',
+      runtimeState: fs.existsSync('E:/MyProject/ToLinuxServer/TEMP/uploads_models/some.pt') ? 'configured' : 'unavailable',
+      capabilities: ['midi-p', 'note-boundary'],
+      vramProfile: readVramProfile('OpenVPI-SOME') ?? {
+        device: 'cuda', residentMiB: readResidentMiB('OpenVPI-SOME'),
+        peakDeltaMiB: 3072, sampleSeconds: 300,
+        samples: [{ seconds: 300, peakDeltaMiB: 3072 }],
+      },
+    },
     { id: 'Whisper large-v3', family: 'analysis', engine: 'whisper', runtimeState: 'configured', capabilities: ['segment'], vramProfile: readVramProfile('Whisper large-v3') },
     { id: 'SOFA Japanese', family: 'analysis', engine: 'sofa', runtimeState: 'configured', capabilities: ['kana', 'h-token'], vramProfile: readVramProfile('SOFA Japanese') },
     { id: 'MSST_duality', family: 'analysis', engine: 'msst', runtimeState: 'configured', capabilities: ['vocals', 'instrumental'], vramProfile: readVramProfile('MSST_duality') },
     { id: 'MSST_dereverb', family: 'analysis', engine: 'msst', runtimeState: 'configured', capabilities: ['dry', 'other'], vramProfile: readVramProfile('MSST_dereverb') },
     { id: 'MSST_denoise', family: 'analysis', engine: 'msst', runtimeState: 'configured', capabilities: ['dry', 'other'], vramProfile: readVramProfile('MSST_denoise') },
+    { id: 'MSST_apollo', family: 'analysis', engine: 'msst', runtimeState: 'configured', capabilities: ['restored', 'addition'], vramProfile: readVramProfile('MSST_apollo') },
+    { id: 'MSST_aspiration', family: 'analysis', engine: 'msst', runtimeState: 'configured', capabilities: ['aspiration', 'other'], vramProfile: readVramProfile('MSST_aspiration') },
+    { id: 'MSST_bve', family: 'analysis', engine: 'msst', runtimeState: 'configured', capabilities: ['vocals', 'instrumental'], vramProfile: readVramProfile('MSST_bve') },
   )
   return entries
 }
@@ -86,7 +110,10 @@ function resolveRuntimePath(value: string): string {
   return path.isAbsolute(value) ? value : path.resolve(SINGER_ROOT, value)
 }
 
-function readVramProfile(modelId: string): ModelCatalogEntry['vramProfile'] {
+function readVramProfile(
+  modelId: string,
+  fallbackModelId?: string,
+): ModelCatalogEntry['vramProfile'] {
   const file = path.join(VRAM_PROFILE_DIR, `${modelId}.json`)
   try {
     const payload = JSON.parse(fs.readFileSync(file, 'utf8')) as any
@@ -108,13 +135,8 @@ function readVramProfile(modelId: string): ModelCatalogEntry['vramProfile'] {
         .filter((item: { seconds: number; peakUsedMiB: number; peakDeltaMiB?: number }) => Number.isFinite(item.peakUsedMiB))
         .sort((left: any, right: any) => left.seconds - right.seconds)
       : undefined
-    let residentMiB: number | undefined
-    const residentFile = path.join(VRAM_PROFILE_DIR, `${modelId}.resident.json`)
-    try {
-      residentMiB = Number(JSON.parse(fs.readFileSync(residentFile, 'utf8')).residentMiB)
-    } catch {
-      residentMiB = undefined
-    }
+    let residentMiB: number | undefined = readResidentMiB(modelId)
+      ?? (fallbackModelId ? readResidentMiB(fallbackModelId) : undefined)
     return {
       device: String(payload.device || ''),
       steps: Number.isInteger(Number(payload.steps)) ? Number(payload.steps) : undefined,
@@ -125,6 +147,15 @@ function readVramProfile(modelId: string): ModelCatalogEntry['vramProfile'] {
       measuredAt: String(payload.measuredAt || ''),
       samples,
     }
+  } catch {
+    return fallbackModelId && fallbackModelId !== modelId ? readVramProfile(fallbackModelId) : undefined
+  }
+}
+
+function readResidentMiB(modelId: string): number | undefined {
+  try {
+    const residentFile = path.join(VRAM_PROFILE_DIR, `${modelId}.resident.json`)
+    return Number(JSON.parse(fs.readFileSync(residentFile, 'utf8')).residentMiB)
   } catch {
     return undefined
   }

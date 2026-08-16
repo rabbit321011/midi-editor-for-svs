@@ -1,3 +1,5 @@
+import type { V5PModelId, V5PSamplingSettings } from '@/object-workbench'
+
 export interface SynthesisV5PResult {
   schema: 'aisvc.v5p-direct-result.v1'
   jobId: string
@@ -8,20 +10,25 @@ export interface SynthesisV5PResult {
   sampleCount: number
   duration: number
   auditFile: string
-  presetId: 'V5P_40K_EMA'
+  presetId: V5PModelId
   checkpointSHA256: string
   vaeSHA256: string
   adapterSHA256: string
   seed: number
+  samplingSettings: V5PSamplingSettings
 }
 
-export function readSynthesisV5PResult(message: unknown, expectedJobId: string): SynthesisV5PResult | null {
+export function readSynthesisV5PResult(
+  message: unknown,
+  expectedJobId: string,
+  expectedPresetId: V5PModelId = 'V5P_40K_EMA',
+): SynthesisV5PResult | null {
   if (!isRecord(message) || message.type !== 'v5p-result' || !isRecord(message.result)) return null
   const result = message.result
   if (
     result.schema !== 'aisvc.v5p-direct-result.v1'
     || result.jobId !== expectedJobId
-    || result.presetId !== 'V5P_40K_EMA'
+    || result.presetId !== expectedPresetId
     || result.sampleRate !== 44100
   ) return null
   const hashes = ['snapshotSHA256', 'outputSHA256', 'checkpointSHA256', 'vaeSHA256', 'adapterSHA256'] as const
@@ -31,8 +38,23 @@ export function readSynthesisV5PResult(message: unknown, expectedJobId: string):
   if (!Number.isSafeInteger(result.sampleCount) || result.sampleCount < 1) return null
   if (!Number.isFinite(result.duration) || result.duration <= 0) return null
   if (!Number.isSafeInteger(result.seed) || result.seed < 0) return null
+  if (!readSamplingSettings(result.samplingSettings)) return null
   if (typeof result.outputWav !== 'string' || typeof result.auditFile !== 'string') return null
   return result as SynthesisV5PResult
+}
+
+function readSamplingSettings(value: unknown): value is V5PSamplingSettings {
+  if (!isRecord(value) || !Number.isInteger(value.steps) || value.steps < 1 || value.steps > 256
+    || !Number.isSafeInteger(value.seed) || value.seed < 0 || value.seed > 0xffffffff
+    || !isRecord(value.guidance)) return false
+  if (value.guidance.mode === 'unified') return validCfg(value.guidance.cfg)
+  return value.guidance.mode === 'three-way'
+    && value.guidance.formula === 'audio-text-midi-telescoping.v1'
+    && validCfg(value.guidance.audio) && validCfg(value.guidance.text) && validCfg(value.guidance.midi)
+}
+
+function validCfg(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 10
 }
 
 function isRecord(value: unknown): value is Record<string, any> {

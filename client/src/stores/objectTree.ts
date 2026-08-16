@@ -1,7 +1,7 @@
 import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { AudioSegment, GroupElementSnapshot, Project } from '@/types'
-import type { AudioObjectNode, FolderNode, GroupObjectNode, LegacyObjectTreeMaps, NodeId, ProjectObjectTree, SynthesisClipboardItem, SynthesisHPlacementRange, SynthesisHTokenEvent, SynthesisKanaSegmentBoundary, SynthesisKanaUnit, SynthesisSegmentObject, SynthesisTake, SynthesisUnitObjectNode, TextSegment, TrackFolderNode, TrackObjectContentType, TrackObjectNode, TreeNode } from '@/object-workbench'
+import type { AudioObjectNode, FolderNode, GroupObjectNode, LegacyObjectTreeMaps, NodeId, ProjectObjectTree, SynthesisClipboardItem, SynthesisHPlacementRange, SynthesisHTokenEvent, SynthesisKanaSegmentBoundary, SynthesisKanaUnit, SynthesisSegmentObject, SynthesisTake, SynthesisUnitObjectNode, TextSegment, TrackFolderNode, TrackObjectContentType, TrackObjectNode, TreeNode, V5PModelId, V5PSamplingSettings } from '@/object-workbench'
 import {
   buildNodeIndex,
   canDragIntoTimeline,
@@ -23,12 +23,16 @@ import {
   moveHTokenEvent as applyMoveHTokenEvent,
   moveKanaSharedBoundary as applyMoveKanaSharedBoundary,
   moveKanaBoundary as applyMoveKanaBoundary,
+  moveKanaUnit as applyMoveKanaUnit,
+  moveKanaSegmentBoundary as applyMoveKanaSegmentBoundary,
   moveMidiPFrame as applyMoveMidiPFrame,
   replaceHTokenTrackRange as applyReplaceHTokenTrackRange,
   replaceKanaTrackRange as applyReplaceKanaTrackRange,
   replaceMidiPFrame as applyReplaceMidiPFrame,
   replaceMidiPTrack as applyReplaceMidiPTrack,
+  replaceMidiPTrackRange as applyReplaceMidiPTrackRange,
   replaceSegmentTrack as applyReplaceSegmentTrack,
+  createSegmentObject as applyCreateSegmentObject,
   deleteSegmentObject as applyDeleteSegmentObject,
   deleteKanaUnit as applyDeleteKanaUnit,
   updateSegmentObject as applyUpdateSegmentObject,
@@ -36,6 +40,7 @@ import {
   resolveOwnedGuideSource,
   replaceNode,
   TOP_LEVEL_IDS,
+  V5P_DEFAULT_SAMPLING_SETTINGS,
   V5P_SAMPLE_RATE,
 } from '@/object-workbench'
 import { useTracksStore } from './tracks'
@@ -98,9 +103,23 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
 
   function loadObjectTree(nextTree: ProjectObjectTree) {
     tree.value = nextTree
+    migrateKanaSegFrames()
     ensureSynthesisUnitTrackObjects()
     legacyWarnings.value = []
     legacyMaps.value = null
+  }
+
+  function migrateKanaSegFrames() {
+    const currentIndex = buildNodeIndex(tree.value.root)
+    for (const node of Object.values(currentIndex.nodes)) {
+      if (node.kind !== 'synthesisUnit') continue
+      const kanaTrack = node.synthesisUnit.kanaTrack
+      if (kanaTrack.boundaryFrameContract === 'object-frame.v1') continue
+      // Legacy boundaries stored the exclusive control end. SEG is now a
+      // real one-frame object, so its persisted frame is the occupied frame.
+      for (const boundary of kanaTrack.boundaries) boundary.frame = Math.max(0, boundary.frame - 1)
+      kanaTrack.boundaryFrameContract = 'object-frame.v1'
+    }
   }
 
   function snapshotTree(): ProjectObjectTree {
@@ -792,6 +811,7 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
       vaeSHA256: string
       adapterSHA256: string
       seed: number
+      samplingSettings?: V5PSamplingSettings
     },
     completedAt?: string,
   ): Promise<{ ok: boolean; reason?: string }> {
@@ -831,6 +851,9 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
       vaeSHA256: result.vaeSHA256,
       adapterSHA256: result.adapterSHA256,
       seed: result.seed,
+      samplingSettings: structuredClone(
+        result.samplingSettings ?? take.samplingSettings ?? V5P_DEFAULT_SAMPLING_SETTINGS,
+      ),
       completedAt: completedAt ?? new Date().toISOString(),
       error: undefined,
     })
@@ -876,6 +899,25 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
     const take = unit.synthesisUnit.takes.find(item => item.id === takeId)
     if (!take || take.status !== 'ready') return { ok: false, reason: 'Take 尚未完成' }
     unit.synthesisUnit.activeTakeId = take.id
+    return { ok: true }
+  }
+
+  function setSynthesisUnitPreset(unitId: NodeId, presetId: V5PModelId): { ok: boolean; reason?: string } {
+    const unit = index.value.nodes[unitId]
+    if (!unit || unit.kind !== 'synthesisUnit') return { ok: false, reason: '合成单元不存在' }
+    unit.synthesisUnit.presetId = presetId
+    unit.synthesisUnit.updatedAt = new Date().toISOString()
+    return { ok: true }
+  }
+
+  function setSynthesisUnitSamplingSettings(
+    unitId: NodeId,
+    samplingSettings: V5PSamplingSettings,
+  ): { ok: boolean; reason?: string } {
+    const unit = index.value.nodes[unitId]
+    if (!unit || unit.kind !== 'synthesisUnit') return { ok: false, reason: '合成单元不存在' }
+    unit.synthesisUnit.samplingSettings = structuredClone(samplingSettings)
+    unit.synthesisUnit.updatedAt = new Date().toISOString()
     return { ok: true }
   }
 
@@ -1929,6 +1971,21 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
     }
   }
 
+  function createSynthesisSegment(
+    unitId: NodeId,
+    segment: SynthesisSegmentObject,
+    operation = 'user create Segment',
+  ): { ok: boolean; reason?: string } {
+    const unit = index.value.nodes[unitId]
+    if (!unit || unit.kind !== 'synthesisUnit') return { ok: false, reason: '合成单元不存在' }
+    try {
+      applyCreateSegmentObject(unit, { segment, operation })
+      return { ok: true }
+    } catch (error: any) {
+      return { ok: false, reason: error?.message || 'Segment 创建失败' }
+    }
+  }
+
   function deleteSynthesisSegment(unitId: NodeId, segmentId: string): { ok: boolean; reason?: string } {
     const unit = index.value.nodes[unitId]
     if (!unit || unit.kind !== 'synthesisUnit') return { ok: false, reason: '合成单元不存在' }
@@ -1995,6 +2052,36 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
       return { ok: true }
     } catch (error: any) {
       return { ok: false, reason: error?.message || 'Kana 边界修改失败' }
+    }
+  }
+
+  function moveSynthesisKanaUnit(
+    synthesisUnitId: NodeId,
+    kanaUnitId: string,
+    targetStartFrame: number,
+  ): { ok: boolean; reason?: string } {
+    const unit = index.value.nodes[synthesisUnitId]
+    if (!unit || unit.kind !== 'synthesisUnit') return { ok: false, reason: '合成单元不存在' }
+    try {
+      applyMoveKanaUnit(unit, { unitId: kanaUnitId, targetStartFrame })
+      return { ok: true }
+    } catch (error: any) {
+      return { ok: false, reason: error?.message || 'Kana 整体移动失败' }
+    }
+  }
+
+  function moveSynthesisKanaSegmentBoundary(
+    synthesisUnitId: NodeId,
+    boundaryId: string,
+    targetFrame: number,
+  ): { ok: boolean; reason?: string } {
+    const unit = index.value.nodes[synthesisUnitId]
+    if (!unit || unit.kind !== 'synthesisUnit') return { ok: false, reason: '合成单元不存在' }
+    try {
+      applyMoveKanaSegmentBoundary(unit, { boundaryId, targetFrame })
+      return { ok: true }
+    } catch (error: any) {
+      return { ok: false, reason: error?.message || 'Kana SEG 移动失败' }
     }
   }
 
@@ -2073,6 +2160,34 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
       return { ok: true }
     } catch (error: any) {
       return { ok: false, reason: error?.message || 'MIDI-P Track 替换失败' }
+    }
+  }
+
+  function replaceSynthesisMidiPTrackRange(
+    unitId: NodeId,
+    startFrame: number,
+    endFrameExclusive: number,
+    classes: number[],
+    extractor: 'game' | 'some',
+    modelHash?: string,
+    compilerHash?: string,
+  ): { ok: boolean; reason?: string } {
+    const unit = index.value.nodes[unitId]
+    if (!unit || unit.kind !== 'synthesisUnit') return { ok: false, reason: '合成单元不存在' }
+    try {
+      applyReplaceMidiPTrackRange(unit, {
+        operation: `${extractor.toUpperCase()} local MIDI-P · frame ${startFrame}..${endFrameExclusive - 1}`,
+        origin: extractor === 'game' ? 'game' : 'imported',
+        startFrame,
+        endFrameExclusive,
+        classes,
+        gameModelHash: extractor === 'game' ? modelHash : undefined,
+        compilerHash,
+        sourceRefs: [{ unitId, guideSHA256: unit.synthesisUnit.guide.audioSHA256 }],
+      })
+      return { ok: true }
+    } catch (error: any) {
+      return { ok: false, reason: error?.message || 'MIDI-P 局部替换失败' }
     }
   }
 
@@ -2281,25 +2396,20 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
   function ensureSynthesisUnitTrackObjects() {
     const currentIndex = buildNodeIndex(tree.value.root)
     for (const unit of Object.values(currentIndex.nodes).filter((node): node is SynthesisUnitObjectNode => node.kind === 'synthesisUnit')) {
+      const area = getProjectArea(currentIndex, unit.id)
+      if (area !== 'trackSources' && area !== 'workspace') continue
       const existing = Object.values(currentIndex.nodes).find((node): node is TrackObjectNode => (
         node.kind === 'trackObject'
         && node.trackObject.sourceObjectId === unit.id
       ))
       if (existing) {
         const parent = currentIndex.nodes[currentIndex.parentById[existing.id] ?? '']
-        const currentTrackId = existing.legacy?.trackId
-        const currentTrack = currentTrackId ? useTracksStore().tracks[currentTrackId] : null
-        const alreadyDedicated = parent?.kind === 'trackFolder'
-          && parent.children.length === 1
-          && currentTrack?.segments.length === 0
-        if (parent?.kind === 'trackFolder' && !alreadyDedicated) {
-          const trackId = useTracksStore().addObjectTrack('audio', `${unit.name} · 合成`)
-          const trackFolder = createObjectTrackFolder('audio', `${unit.name} · 合成`, trackId)
-          const moved = removeNode(tree.value.root, existing.id)
-          if (moved?.kind === 'trackObject') {
-            moved.legacy = { trackId }
-            insertChild(trackFolder, moved)
+        if (parent?.kind === 'trackFolder') {
+          const trackId = parent.legacy?.trackId ?? trackIdFromTrackFolderId(parent.id)
+          if (trackId) {
+            existing.legacy = { ...(existing.legacy ?? {}), trackId }
             unit.synthesisUnit.timelineTrackId = trackId
+            unit.synthesisUnit.defaultTimelineStart = existing.trackObject.timelineStart
           }
         }
         continue
@@ -2426,6 +2536,8 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
     failSynthesisTake,
     cancelSynthesisTake,
     setActiveSynthesisTake,
+    setSynthesisUnitPreset,
+    setSynthesisUnitSamplingSettings,
     dropAudioObjectToTimeline,
     addRenderedAudioToTimeline,
     addRenderedTextToTimeline,
@@ -2453,15 +2565,19 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
     replaceSynthesisKanaTrackRange,
     replaceSynthesisHTokenTrackRange,
     updateSynthesisSegment,
+    createSynthesisSegment,
     deleteSynthesisSegment,
     updateSynthesisKana,
     deleteSynthesisKana,
     moveSynthesisKanaSharedBoundary,
     moveSynthesisKanaBoundary,
+    moveSynthesisKanaUnit,
+    moveSynthesisKanaSegmentBoundary,
     moveSynthesisHToken,
     setSynthesisMidiPFrame,
     moveSynthesisMidiPFrame,
     replaceSynthesisMidiPTrack,
+    replaceSynthesisMidiPTrackRange,
   }
 })
 

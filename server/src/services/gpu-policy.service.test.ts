@@ -10,6 +10,15 @@ test('duration estimate uses the next larger calibrated sample and falls back to
   assert.equal(beyond.sampleSeconds, 60)
 })
 
+test('three-way CFG keeps sequential peak estimate and reports its time factor', () => {
+  const unified = estimateGpuMemory('V5P_40K_EMA', 35, 'unified')
+  const threeWay = estimateGpuMemory('V5P_40K_EMA', 35, 'three-way')
+  assert.equal(threeWay.peakDeltaMiB, unified.peakDeltaMiB)
+  assert.equal(threeWay.guidanceMode, 'three-way')
+  assert.equal(threeWay.estimatedTimeFactor, 2)
+  assert.equal(threeWay.profilePolicy, 'sequential-branch-peak')
+})
+
 test('eviction order excludes the active model and sorts by last use', () => {
   const runtimes: ModelRuntimeStatus[] = [
     runtime('V4fg_10k', '2026-08-12T10:00:00Z'),

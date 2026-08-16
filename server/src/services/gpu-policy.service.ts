@@ -18,9 +18,16 @@ export interface GpuEstimate {
   steps?: number
   requiredIfLoadedMiB: number
   requiredIfUnloadedMiB: number
+  guidanceMode: 'unified' | 'three-way'
+  estimatedTimeFactor: number
+  profilePolicy: 'measured' | 'sequential-branch-peak'
 }
 
-export function estimateGpuMemory(modelId: string, durationSeconds: number): GpuEstimate {
+export function estimateGpuMemory(
+  modelId: string,
+  durationSeconds: number,
+  guidanceMode: 'unified' | 'three-way' = 'unified',
+): GpuEstimate {
   const model = getModelCatalog().find(item => item.id === modelId)
   if (!model?.vramProfile) throw new Error(`${modelId} 尚未标定显存`)
   const samples = [...(model.vramProfile.samples ?? [])].sort((left, right) => left.seconds - right.seconds)
@@ -41,6 +48,9 @@ export function estimateGpuMemory(modelId: string, durationSeconds: number): Gpu
     steps: model.vramProfile.steps,
     requiredIfLoadedMiB: inferenceDeltaMiB,
     requiredIfUnloadedMiB: inferenceDeltaMiB + (residentMiB ?? 0),
+    guidanceMode,
+    estimatedTimeFactor: guidanceMode === 'three-way' ? 2 : 1,
+    profilePolicy: guidanceMode === 'three-way' ? 'sequential-branch-peak' : 'measured',
   }
 }
 

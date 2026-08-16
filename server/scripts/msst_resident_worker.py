@@ -20,6 +20,16 @@ def emit(event_type, **payload):
     print(json.dumps({"type": event_type, **payload}, ensure_ascii=False), flush=True)
 
 
+def emit_resident_updated(model_id):
+    try:
+        import torch
+        torch.cuda.empty_cache()
+        resident_mib = round(torch.cuda.memory_reserved() / 1024 / 1024, 1)
+        emit("resident_updated", modelId=model_id, residentMiB=resident_mib)
+    except Exception:
+        pass
+
+
 def load_runner():
     spec = importlib.util.spec_from_file_location("msst_runner", RUNNER)
     if spec is None or spec.loader is None:
@@ -51,32 +61,23 @@ def separate(runner, separator, model_id, runtime_output, request):
             stale.unlink()
         emit("progress", progress=100, stage="complete")
         emit("result", outputs=saved)
+        emit_resident_updated(f"MSST_{model_id}")
         emit("separate_done", outputs=saved)
 
 
 def main():
+    runner = load_runner()
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", choices=["duality", "dereverb", "denoise"], required=True)
+    parser.add_argument("--model", choices=sorted(runner.MODELS), required=True)
     parser.add_argument("--device", choices=["cpu", "cuda"], default="cuda")
     args = parser.parse_args()
-    runner = load_runner()
     sys.path.insert(0, str(MSST_ROOT))
     os.chdir(MSST_ROOT)
-    from inference.msst_infer import MSSeparator
 
     step = runner.MODELS[args.model]
     runtime_output = Path(tempfile.mkdtemp(prefix="aisvc_msst_resident_out_")) / "output"
     runtime_output.mkdir()
-    separator = MSSeparator(
-        model_type="mel_band_roformer",
-        config_path=str(MSST_ROOT / step["config"]),
-        model_path=str(MSST_ROOT / step["model"]),
-        device=args.device,
-        device_ids=[0],
-        output_format="wav",
-        use_tta=False,
-        store_dirs=str(runtime_output),
-    )
+    separator = runner.create_separator(step, args.device, runtime_output)
     separator.model_id = args.model
     try:
         import torch

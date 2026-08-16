@@ -207,6 +207,14 @@ function handleWorkerLine(record: SvsRuntimeRecord, line: string): void {
     record.pendingLoad = undefined
     return
   }
+  if (event.type === 'resident_updated') {
+    const residentMiB = Number(event.residentMiB)
+    if (Number.isFinite(residentMiB) && residentMiB >= 0) {
+      record.residentMiB = residentMiB
+      persistResidentProfile(record.modelId, residentMiB)
+    }
+    return
+  }
   if (event.type === 'error') {
     record.lastError = String(event.message || 'SVS Runtime 错误')
     if (record.state === 'loading') {

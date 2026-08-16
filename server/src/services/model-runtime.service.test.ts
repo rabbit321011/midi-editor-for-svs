@@ -13,6 +13,9 @@ test('unloaded V5-P runtime is reported without a worker', () => {
   assert.equal(status.state, 'unloaded')
   assert.equal(status.pid, undefined)
   assert.equal(isV5PRuntimeReady(), false)
+  const pg = getV5PRuntimeStatus('V5Pg_20K')
+  assert.equal(pg.id, 'V5Pg_20K')
+  assert.equal(pg.state, 'unloaded')
 })
 
 test('releasing an already unloaded runtime is not a release-all failure', async () => {

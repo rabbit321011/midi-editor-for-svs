@@ -71,7 +71,7 @@ export async function runWhisper(req: WhisperRequest, ws: WebSocket): Promise<vo
   await runSofaStage(req, ws, transcriptFile)
 }
 
-async function runWhisperStage(req: WhisperRequest, ws: WebSocket): Promise<string> {
+export async function runWhisperStage(req: WhisperRequest, ws: WebSocket): Promise<string> {
   if (isAnalysisRuntimeReady('Whisper large-v3')) {
     return await new Promise<string>((resolve, reject) => {
       let transcriptFile = ''
@@ -143,7 +143,7 @@ async function runWhisperStage(req: WhisperRequest, ws: WebSocket): Promise<stri
   })
 }
 
-async function runSofaStage(req: WhisperRequest, ws: WebSocket, transcriptFile: string): Promise<void> {
+export async function runSofaStage(req: WhisperRequest, ws: WebSocket, transcriptFile: string): Promise<void> {
   if (isAnalysisRuntimeReady('SOFA Japanese')) {
     return await new Promise<void>((resolve, reject) => {
       void runAnalysisInfer('SOFA Japanese', {

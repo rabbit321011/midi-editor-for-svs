@@ -7,13 +7,58 @@ import {
   replaceHTokenTrackRange,
   replaceKanaTrackRange,
   replaceMidiPTrack,
+  replaceMidiPTrackRange,
   replaceSegmentTrack,
+  createSegmentObject,
   moveKanaSharedBoundary,
+  moveKanaUnit,
+  moveKanaSegmentBoundary,
   updateKanaUnit,
   updateSegmentObject,
 } from './synthesisTrackTransactions'
 
 describe('SynthesisUnit track transactions', () => {
+  it('creates a user Segment without changing any other control track', () => {
+    const unit = fixtureUnit()
+    replaceMidiPTrack(unit, { operation: 'fixture midi', origin: 'user', classes: Array(16).fill(120) })
+    const before = structuredClone({
+      kana: unit.synthesisUnit.kanaTrack,
+      h: unit.synthesisUnit.hTokenTrack,
+      midi: unit.synthesisUnit.midiPTokenTrack,
+    })
+
+    createSegmentObject(unit, {
+      segment: {
+        id: 'segment:user:1', text: '', kana: '', romaji: '',
+        startFrame: 3, speechEndFrameExclusive: 9, origin: 'user',
+      },
+      now: '2026-08-10T02:00:00.000Z',
+      revisionId: 'revision:segment:user:1',
+    })
+
+    expect(unit.synthesisUnit.segmentTrack.items).toEqual([expect.objectContaining({
+      id: 'segment:user:1', startFrame: 3, speechEndFrameExclusive: 9, origin: 'user',
+    })])
+    expect(unit.synthesisUnit.segmentTrack.status).toBe('ready')
+    expect(unit.synthesisUnit.segmentTrack.revisions.at(-1)).toMatchObject({
+      operation: 'create Segment', affectedStartFrame: 3, affectedEndFrameExclusive: 9,
+    })
+    expect(unit.synthesisUnit.kanaTrack).toEqual(before.kana)
+    expect(unit.synthesisUnit.hTokenTrack).toEqual(before.h)
+    expect(unit.synthesisUnit.midiPTokenTrack).toEqual(before.midi)
+  })
+
+  it('rejects a user Segment that overlaps an existing Segment', () => {
+    const unit = fixtureUnit()
+    replaceSegmentTrack(unit, {
+      operation: 'fixture segment', origin: 'user',
+      items: [{ id: 'segment:existing', text: '', kana: '', romaji: '', startFrame: 2, speechEndFrameExclusive: 8, origin: 'user' }],
+    })
+    expect(() => createSegmentObject(unit, {
+      segment: { id: 'segment:user:overlap', text: '', kana: '', romaji: '', startFrame: 7, speechEndFrameExclusive: 10, origin: 'user' },
+    })).toThrow('Segment speech ranges must not overlap')
+  })
+
   it('replaces only the requested H range and leaves every other track unchanged', () => {
     const unit = fixtureUnit()
     replaceSegmentTrack(unit, {
@@ -114,6 +159,26 @@ describe('SynthesisUnit track transactions', () => {
     expect(unit.synthesisUnit.midiPTokenTrack.flowFrames).toEqual([2, 3, 6, 8, 13])
     replaceMidiPFrame(unit, { frame: 3, midiClass: 120 })
     expect(unit.synthesisUnit.midiPTokenTrack.flowFrames).toEqual([2, 6, 8, 13])
+  })
+
+  it('replaces only one MIDI-P range and clears manual provenance inside it', () => {
+    const unit = fixtureUnit()
+    replaceMidiPTrack(unit, { operation: 'GAME', origin: 'game', classes: Array(16).fill(120) })
+    replaceMidiPFrame(unit, { frame: 5, midiClass: 130 })
+
+    replaceMidiPTrackRange(unit, {
+      operation: 'SOME local', origin: 'imported', startFrame: 4, endFrameExclusive: 8,
+      classes: [122, 122, 124, 124],
+    })
+
+    expect(unit.synthesisUnit.midiPTokenTrack.classes.slice(0, 4)).toEqual(Array(4).fill(120))
+    expect(unit.synthesisUnit.midiPTokenTrack.classes.slice(4, 8)).toEqual([122, 122, 124, 124])
+    expect(unit.synthesisUnit.midiPTokenTrack.classes.slice(8)).toEqual(Array(8).fill(130))
+    expect(unit.synthesisUnit.midiPTokenTrack.manualFrames).not.toContain(5)
+    expect(unit.synthesisUnit.midiPTokenTrack.revisions.at(-1)).toMatchObject({
+      affectedStartFrame: 4,
+      affectedEndFrameExclusive: 8,
+    })
   })
 
   it('blocks H collisions unless force replacement is explicit', () => {
@@ -280,6 +345,38 @@ describe('SynthesisUnit track transactions', () => {
       boundaries: [],
     })
     expect(unit.synthesisUnit.kanaTrack.boundaries).toMatchObject([{ frame: 10, kind: 'SEG' }])
+  })
+
+  it('moves a Kana object without changing its width', () => {
+    const unit = fixtureUnit()
+    replaceKanaTrackRange(unit, {
+      operation: 'fixture', origin: 'alignment', startFrame: 2, endFrameExclusive: 12,
+      units: [
+        { id: 'kana:a', kana: 'き', romaji: 'ki', startFrame: 2, endFrameExclusive: 5, origin: 'segment-align' },
+        { id: 'kana:b', kana: 'み', romaji: 'mi', startFrame: 8, endFrameExclusive: 12, origin: 'segment-align' },
+      ],
+      boundaries: [],
+    })
+    moveKanaUnit(unit, { unitId: 'kana:a', targetStartFrame: 5 })
+    expect(unit.synthesisUnit.kanaTrack.units.find(item => item.id === 'kana:a')).toMatchObject({
+      startFrame: 5, endFrameExclusive: 8, origin: 'user',
+    })
+  })
+
+  it('moves a one-frame Kana SEG only between Kana objects', () => {
+    const unit = fixtureUnit()
+    replaceKanaTrackRange(unit, {
+      operation: 'fixture', origin: 'alignment', startFrame: 2, endFrameExclusive: 12,
+      boundaryEndFrameExclusive: 15,
+      units: [
+        { id: 'kana:a', kana: 'き', romaji: 'ki', startFrame: 2, endFrameExclusive: 6, origin: 'segment-align' },
+        { id: 'kana:b', kana: 'み', romaji: 'mi', startFrame: 9, endFrameExclusive: 12, origin: 'segment-align' },
+      ],
+      boundaries: [{ id: 'seg:a', frame: 8, kind: 'SEG', origin: 'segment-align' }],
+    })
+    moveKanaSegmentBoundary(unit, { boundaryId: 'seg:a', targetFrame: 6 })
+    expect(unit.synthesisUnit.kanaTrack.boundaries[0]).toMatchObject({ frame: 6, kind: 'SEG', origin: 'user' })
+    expect(() => moveKanaSegmentBoundary(unit, { boundaryId: 'seg:a', targetFrame: 4 })).toThrow('切入 Kana')
   })
 })
 

@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import type { RenderInputRef, RenderPanelMode, RenderSlotId } from '@/object-workbench'
 import { makeRenderInputRef, validateRenderSlot } from '@/object-workbench'
 import { useObjectTreeStore } from './objectTree'
+import type { MsstModelId, MsstOutputMode } from '@/composables/msstModels'
 
 export type SvcRenderStatus = 'idle' | 'running' | 'done' | 'failed' | 'cancelled'
 export type SvsRenderStatus = 'idle' | 'running' | 'done' | 'failed' | 'cancelled'
@@ -68,8 +69,8 @@ export const useRenderPanelStore = defineStore('renderPanel', () => {
   const msst = reactive({
     audio: null as RenderInputRef | null,
     outputName: '',
-    model: 'duality' as 'duality' | 'dereverb' | 'denoise',
-    outputMode: 'both' as 'primary' | 'secondary' | 'both',
+    model: 'duality' as MsstModelId,
+    outputMode: 'both' as MsstOutputMode,
     backfillAll: true,
   })
 

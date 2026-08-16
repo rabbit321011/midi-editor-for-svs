@@ -23,6 +23,11 @@ export interface SynthesisMidiPRequest {
   frameCount: number
   midiPRevision: number
   device?: string
+  extractor?: 'game' | 'some'
+  startFrame?: number
+  endFrameExclusive?: number
+  contextFrames?: number
+  parameters?: Record<string, number>
 }
 
 interface ProcessEvent {
@@ -39,11 +44,23 @@ export function validateSynthesisMidiPRequest(req: SynthesisMidiPRequest): void 
   if (!/^[a-f0-9]{64}$/i.test(req.guideSHA256 || '')) throw new Error('Owned Guide SHA256 无效')
   if (!Number.isInteger(req.frameCount) || req.frameCount < 1) throw new Error('frameCount 必须是正整数')
   if (!Number.isInteger(req.midiPRevision) || req.midiPRevision < 0) throw new Error('MIDI-P revision 无效')
+  const start = req.startFrame ?? 0
+  const end = req.endFrameExclusive ?? req.frameCount
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start || end > req.frameCount) {
+    throw new Error('MIDI-P 局部 frame 范围无效')
+  }
+  if (req.extractor !== undefined && req.extractor !== 'game' && req.extractor !== 'some') {
+    throw new Error('MIDI-P extractor 无效')
+  }
 }
 
 export function verifySynthesisMidiPResources(req: SynthesisMidiPRequest): void {
   validateSynthesisMidiPRequest(req)
-  for (const resource of [req.inputWav, GAME_PYTHON, GAME_REPO, GAME_DEPS, GAME_MODEL, SINGER_REPO, RUNNER]) {
+  const extractor = req.extractor ?? 'game'
+  const resources = extractor === 'some'
+    ? [req.inputWav, SINGER_REPO, 'E:/MyProject/ToLinuxServer/TEMP/OpenVPI-SOME', 'E:/MyProject/ToLinuxServer/TEMP/uploads_models/some.pt']
+    : [req.inputWav, GAME_PYTHON, GAME_REPO, GAME_DEPS, GAME_MODEL, SINGER_REPO, RUNNER]
+  for (const resource of resources) {
     if (!fs.existsSync(resource)) throw new Error(`MIDI-P resource is missing: ${resource}`)
   }
   verifyOwnedGuideWav(req.inputWav, req.guideSHA256, req.frameCount)
@@ -56,22 +73,32 @@ export async function runSynthesisMidiP(req: SynthesisMidiPRequest, ws?: WebSock
     const outputFile = path.join(outputDir, 'midi-p.json')
     fs.mkdirSync(outputDir, { recursive: true })
     fs.rmSync(outputFile, { force: true })
-    send(ws, { type: 'progress', progress: 5, message: '校验 GAME medium K=4 运行时' })
+    const extractor = req.extractor ?? 'game'
+    const modelId = extractor === 'some' ? 'OpenVPI-SOME' : 'GAME-1.0-medium'
+    const startFrame = req.startFrame ?? 0
+    const endFrameExclusive = req.endFrameExclusive ?? req.frameCount
+    const isLocal = startFrame !== 0 || endFrameExclusive !== req.frameCount
+    send(ws, { type: 'progress', progress: 5, message: `校验 ${extractor.toUpperCase()} 运行时` })
     let summary: ProcessEvent = {}
-    if (isAnalysisRuntimeReady('GAME-1.0-medium')) {
-      await runAnalysisInfer('GAME-1.0-medium', {
+    if (isAnalysisRuntimeReady(modelId)) {
+      const parameters = req.parameters ?? {}
+      await runAnalysisInfer(modelId, {
         input: path.resolve(req.inputWav),
         output: outputFile,
         guideSha256: req.guideSHA256,
         frameCount: req.frameCount,
+        startFrame,
+        endFrameExclusive,
+        contextFrames: req.contextFrames ?? 0,
+        ...parameters,
         language: 'ja',
       }, event => {
-        if (event.type === 'loading_model') send(ws, { type: 'progress', progress: 15, message: '加载 GAME medium' })
-        if (event.type === 'loaded_model') send(ws, { type: 'progress', progress: 55, message: 'GAME medium 已加载' })
-        if (event.type === 'extracting') send(ws, { type: 'progress', progress: 65, message: 'GAME K=4 提取音符区域' })
+        if (event.type === 'loading_model') send(ws, { type: 'progress', progress: 15, message: `加载 ${modelId}` })
+        if (event.type === 'loaded_model') send(ws, { type: 'progress', progress: 55, message: `${modelId} 已加载` })
+        if (event.type === 'extracting') send(ws, { type: 'progress', progress: 65, message: `${extractor.toUpperCase()} 提取本句音符` })
         if (event.type === 'complete') summary = event
       })
-    } else {
+    } else if (extractor === 'game' && !isLocal) {
       await runJsonProcess(GAME_PYTHON, [
         RUNNER,
         '--input', path.resolve(req.inputWav),
@@ -90,10 +117,10 @@ export async function runSynthesisMidiP(req: SynthesisMidiPRequest, ws?: WebSock
         if (event.type === 'extracting') send(ws, { type: 'progress', progress: 65, message: 'GAME K=4 提取音符区域' })
         if (event.type === 'complete') summary = event
       }, { id: `game:${req.jobId}`, kind: 'analysis', modelId: 'GAME-1.0-medium', device: req.device || 'cuda:0' })
-    }
+    } else throw new Error(`${modelId} Runtime 未加载；请先通过显存管理准备模型`)
     const result = JSON.parse(fs.readFileSync(outputFile, 'utf-8'))
-    if (result.schema !== 'aisvc.v5p-midi-p.v1' || result.frameCount !== req.frameCount) {
-      throw new Error('GAME runner 返回了不兼容的 MIDI-P 结果')
+    if (result.schema !== 'aisvc.v5p-midi-p.v1' || result.frameCount !== endFrameExclusive - startFrame) {
+      throw new Error(`${extractor.toUpperCase()} runner 返回了不兼容的 MIDI-P 结果`)
     }
     send(ws, { type: 'midi-p-result', result })
     send(ws, {

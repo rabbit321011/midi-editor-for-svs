@@ -16,6 +16,16 @@ def emit(event_type, **payload):
     print(json.dumps({"type": event_type, **payload}, ensure_ascii=False), flush=True)
 
 
+def emit_resident_updated(model_id):
+    try:
+        import torch
+        torch.cuda.empty_cache()
+        resident_mib = round(torch.cuda.memory_reserved() / 1024 / 1024, 1)
+        emit("resident_updated", modelId=model_id, residentMiB=resident_mib)
+    except Exception:
+        pass
+
+
 def load_runner():
     spec = importlib.util.spec_from_file_location("v5p_generate_midi_p", RUNNER)
     if spec is None or spec.loader is None:
@@ -26,26 +36,36 @@ def load_runner():
 
 
 def extract(runner, runtime, request):
+    from src.YingMusicSinger.melody.game_cache_v4ph import GAME_CACHE_SCHEMA
     input_path = Path(str(request["input"])).resolve()
     output_path = Path(str(request["output"])).resolve()
     guide_sha = str(request["guideSha256"]).lower()
     frame_count = int(request["frameCount"])
+    start_frame = int(request.get("startFrame", 0))
+    end_frame = int(request.get("endFrameExclusive", frame_count))
+    context_frames = max(0, int(request.get("contextFrames", 0)))
+    boundary_threshold = float(request.get("boundaryThreshold", 0.2))
+    boundary_radius = int(request.get("boundaryRadius", 2))
+    presence_threshold = float(request.get("presenceThreshold", 0.2))
+    nsteps = int(request.get("nsteps", GAME_CACHE_SCHEMA["nsteps"]))
     language = str(request.get("language", "ja"))
     if not input_path.is_file():
         raise FileNotFoundError(input_path)
     if frame_count < 1:
         raise ValueError("frame-count must be positive")
+    if not (0 <= start_frame < end_frame <= frame_count):
+        raise ValueError("invalid local MIDI-P frame range")
+    if not (0.01 <= boundary_threshold <= 0.99 and 0.01 <= presence_threshold <= 0.99):
+        raise ValueError("GAME thresholds must be inside 0.01..0.99")
+    if not (1 <= boundary_radius <= 12 and 1 <= nsteps <= 64):
+        raise ValueError("GAME boundary radius or nsteps is outside the supported range")
     source_hash = runner.sha256_file(input_path)
     if source_hash != guide_sha:
         raise ValueError(f"Owned Guide SHA256 mismatch: {source_hash} != {guide_sha}")
 
     import soundfile as sf
     import torch
-    from src.YingMusicSinger.melody.game_cache_v4ph import (
-        GAME_CACHE_SCHEMA,
-        canonicalize_game_cache,
-        game_cache_to_model_tracks,
-    )
+    from src.YingMusicSinger.melody.game_cache_v4ph import canonicalize_game_cache, game_cache_to_model_tracks
     from src.YingMusicSinger.melody.game_runtime_v4ph import (
         extract_game_notes_with_posterior,
         stable_game_seed,
@@ -60,36 +80,46 @@ def extract(runner, runtime, request):
     if actual_frame_count != frame_count:
         raise ValueError(f"Owned Guide frameCount mismatch: {actual_frame_count} != {frame_count}")
 
+    crop_start = max(0, start_frame - context_frames)
+    crop_end = min(frame_count, end_frame + context_frames)
+    crop_mono = mono[crop_start * 2048:crop_end * 2048]
+    crop_sample_count = int(crop_mono.size)
     language_id = int((runtime["languageMap"] or {}).get(language, 0))
-    seed = stable_game_seed(source_hash, runner.BASE_SEED)
-    emit("extracting", seed=seed, frameCount=frame_count)
-    notes = extract_game_notes_with_posterior(
-        model=runtime["model"],
-        waveform=torch.from_numpy(mono.copy()),
-        duration=sample_count / sample_rate,
-        language_id=language_id,
-        nsteps=GAME_CACHE_SCHEMA["nsteps"],
-        seed=seed,
-        device=runtime["device"],
+    default_seed = stable_game_seed(f"{source_hash}:{crop_start}:{crop_end}", runner.BASE_SEED)
+    seed = int(request.get("seed", default_seed))
+    emit("extracting", seed=seed, frameCount=crop_end - crop_start)
+    notes = extract_parameterized_game_notes(
+        model=runtime["model"], waveform=torch.from_numpy(crop_mono.copy()),
+        duration=crop_sample_count / sample_rate, language_id=language_id,
+        nsteps=nsteps, seed=seed, device=runtime["device"],
+        boundary_threshold=boundary_threshold, boundary_radius=boundary_radius,
+        presence_threshold=presence_threshold,
     )
     arrays = canonicalize_game_cache(notes)
     cache = {name: torch.from_numpy(value.copy()) for name, value in arrays.items()}
     tracks = game_cache_to_model_tracks(
         cache,
-        num_samples=sample_count,
-        target_len=frame_count,
+        num_samples=crop_sample_count,
+        target_len=crop_end - crop_start,
         sample_rate=sample_rate,
     )
-    classes = [int(value) for value in tracks["p_classes"].tolist()]
-    if len(classes) != frame_count or any(value < 0 or value > 255 for value in classes):
+    offset = start_frame - crop_start
+    length = end_frame - start_frame
+    classes = [int(value) for value in tracks["p_classes"][offset:offset + length].tolist()]
+    note_ids = [int(value) for value in tracks["note_ids"][offset:offset + length].tolist()]
+    if len(classes) != length or any(value < 0 or value > 255 for value in classes):
         raise AssertionError("GAME adapter produced invalid B-local MIDI-P classes")
     payload = {
         "schema": runner.SCHEMA,
         "sourceSHA256": source_hash,
         "sourceSampleCount": sample_count,
-        "frameCount": frame_count,
+        "frameCount": length,
+        "sourceFrameCount": frame_count,
+        "startFrame": start_frame,
+        "endFrameExclusive": end_frame,
+        "extractor": "game",
         "classes": classes,
-        "noteIds": [int(value) for value in tracks["note_ids"].tolist()],
+        "noteIds": note_ids,
         "rawNotes": [
             {
                 "duration": float(duration),
@@ -110,6 +140,14 @@ def extract(runner, runtime, request):
         "effectiveSeed": seed,
         "language": language,
         "languageId": language_id,
+        "parameters": {
+            "boundaryThreshold": boundary_threshold,
+            "boundaryRadius": boundary_radius,
+            "presenceThreshold": presence_threshold,
+            "nsteps": nsteps,
+            "seed": seed,
+            "contextFrames": context_frames,
+        },
         "gameCommit": runtime["commit"],
         "gameSchema": GAME_CACHE_SCHEMA,
         "runtimeHashes": runtime["hashes"],
@@ -124,7 +162,50 @@ def extract(runner, runtime, request):
         voicedNoteCount=sum(bool(valid and presence) for valid, presence in zip(arrays["valid"], arrays["presence"])),
         restFrameCount=sum(value == 255 for value in classes),
     )
+    emit_resident_updated("GAME-1.0-medium")
     emit("extract_done", output=str(output_path))
+
+
+def extract_parameterized_game_notes(model, waveform, duration, language_id, nsteps, seed,
+                                     device, boundary_threshold, boundary_radius,
+                                     presence_threshold):
+    import torch
+    from modules.decoding import decode_gaussian_blurred_probs
+
+    schedule = torch.arange(nsteps, device=device, dtype=torch.float32) / nsteps
+    known_durations = torch.tensor([[duration]], device=device, dtype=torch.float32)
+    language = torch.tensor([language_id], device=device, dtype=torch.long)
+    waveform = waveform.unsqueeze(0).to(device)
+    cuda_devices = [device.index or 0] if device.type == "cuda" else []
+    with torch.random.fork_rng(devices=cuda_devices):
+        torch.manual_seed(seed)
+        if device.type == "cuda":
+            torch.cuda.manual_seed_all(seed)
+        with torch.inference_mode():
+            x_seg, x_est, time_mask = model.forward_encoder(
+                waveform=waveform, duration=known_durations.sum(dim=1))
+            durations, regions, max_n = model.forward_segmenter(
+                x_seg, known_durations=known_durations, mask=time_mask,
+                language=language, t=schedule,
+                threshold=torch.tensor(boundary_threshold, device=device),
+                radius=torch.tensor(boundary_radius, device=device, dtype=torch.long))
+            note_index = torch.arange(max_n, dtype=torch.long, device=device).unsqueeze(0)
+            note_mask = note_index < regions.amax(dim=-1, keepdim=True)
+            logits = model.model.forward_estimation(x_est, regions=regions, t_mask=time_mask, n_mask=note_mask)
+            probs = logits.sigmoid()
+            scores, presence = decode_gaussian_blurred_probs(
+                probs=probs, min_val=model.inference_config.midi_min,
+                max_val=model.inference_config.midi_max,
+                deviation=model.inference_config.midi_std * 3,
+                threshold=torch.tensor(presence_threshold, device=device))
+            presence = presence & note_mask
+            scores = scores * note_mask.float()
+    return {
+        "durations": durations[0].float().cpu(),
+        "presence": presence[0].bool().cpu(),
+        "scores": scores[0].float().cpu(),
+        "pitch_probs_257": probs[0].float().cpu(),
+    }
 
 
 def main():

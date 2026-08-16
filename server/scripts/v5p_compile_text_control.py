@@ -67,6 +67,169 @@ def anchored_seconds(frame):
     return (int(frame) + 0.25) / FRAME_RATE
 
 
+def seconds_to_frame(seconds):
+    microseconds = round(float(seconds) * 1_000_000)
+    return round(microseconds * 44100 / (2048 * 1_000_000))
+
+
+def solve_windowed_monotonic_frames(target_frames, lower_frames, upper_frames, first_frame):
+    """Use the training placement objective with a hard window per token."""
+    targets = [int(value) for value in target_frames]
+    lowers = [int(value) for value in lower_frames]
+    uppers = [int(value) for value in upper_frames]
+    first_frame = int(first_frame)
+    if not targets or len(targets) != len(lowers) or len(targets) != len(uppers):
+        raise ValueError("hard Kana placement window count mismatch")
+    if not lowers[0] <= first_frame <= uppers[0]:
+        raise ValueError("first H token is outside its Kana boundary")
+    if any(lower > upper for lower, upper in zip(lowers, uppers)):
+        raise ValueError("a Kana is too narrow for its H tokens")
+
+    targets[0] = first_frame
+
+    def feasible(max_shift):
+        previous = None
+        for index, target in enumerate(targets):
+            lower = max(lowers[index], target - max_shift)
+            upper = min(uppers[index], target + max_shift)
+            frame = first_frame if index == 0 else max(previous + 1, lower)
+            if frame < lower or frame > upper:
+                return False
+            previous = frame
+        return True
+
+    low = 0
+    high = max(
+        max(uppers) - min(lowers),
+        max(abs(target - lower) for target, lower in zip(targets, lowers)),
+        max(abs(target - upper) for target, upper in zip(targets, uppers)),
+    )
+    while low < high:
+        middle = (low + high) // 2
+        if feasible(middle):
+            high = middle
+        else:
+            low = middle + 1
+    if not feasible(low):
+        raise ValueError("no monotonic H placement exists inside the Kana boundaries")
+    max_shift = low
+
+    costs = {first_frame: 0}
+    backpointers = []
+    for index in range(1, len(targets)):
+        target = targets[index]
+        earliest = max(lowers[index], target - max_shift)
+        latest = min(uppers[index], target + max_shift)
+        next_costs = {}
+        pointers = {}
+        best_cost = math.inf
+        best_frame = None
+        previous_items = sorted(costs.items())
+        previous_index = 0
+        for frame in range(earliest, latest + 1):
+            while previous_index < len(previous_items) and previous_items[previous_index][0] < frame:
+                previous_frame, previous_cost = previous_items[previous_index]
+                if previous_cost < best_cost:
+                    best_cost = previous_cost
+                    best_frame = previous_frame
+                previous_index += 1
+            if best_frame is not None:
+                next_costs[frame] = best_cost + abs(frame - target)
+                pointers[frame] = best_frame
+        if not next_costs:
+            raise ValueError("no monotonic H placement exists inside the Kana boundaries")
+        costs = next_costs
+        backpointers.append(pointers)
+
+    final_frame = min(costs, key=lambda frame: (costs[frame], frame))
+    frames = [final_frame]
+    for pointers in reversed(backpointers):
+        final_frame = pointers[final_frame]
+        frames.append(final_frame)
+    frames.reverse()
+    shifts = [frame - target for frame, target in zip(frames, targets)]
+    return {
+        "target_frames": targets,
+        "frames": frames,
+        "signed_shifts": shifts,
+        "max_abs_shift": max(abs(shift) for shift in shifts),
+        "total_abs_shift": sum(abs(shift) for shift in shifts),
+        "collision_count": sum(left == right for left, right in zip(targets, targets[1:])),
+    }
+
+
+def constrain_h_candidates_to_kana(region, frame_count):
+    h_alignment = region.get("HAlignment") or {}
+    if h_alignment.get("boundaryMode") != "kana-hard":
+        return
+    phrases = region.get("Phrases") or []
+    candidates = h_alignment.get("phrase_candidates") or []
+    audits = h_alignment.get("phrase_audits") or []
+    if len(phrases) != len(candidates) or len(phrases) != len(audits):
+        raise ValueError("hard Kana phrase/audit count mismatch")
+
+    for phrase_index, (phrase, candidate, audit) in enumerate(zip(phrases, candidates, audits)):
+        if candidate.get("status") != "eligible":
+            sofa_error = (audit.get("hAlignment") or {}).get("error")
+            raise ValueError(
+                f"phrase {phrase_index + 1} hard Kana SOFA alignment failed: "
+                f"{sofa_error or candidate.get('fallback_reason') or 'unknown error'}"
+            )
+        kana_units = phrase.get("kanaUnits") or []
+        phone_events = (audit.get("hAlignment") or {}).get("phone_events") or []
+        lyric_tokens = [int(token) for token in phrase.get("tokens") or []]
+        if len(phone_events) != len(lyric_tokens):
+            raise ValueError(f"phrase {phrase_index + 1} hard Kana phone count mismatch")
+        if [int(event.get("token_id", -1)) for event in phone_events] != lyric_tokens:
+            raise ValueError(f"phrase {phrase_index + 1} hard Kana token sequence mismatch")
+
+        phrase_start, phrase_end = phrase_frame_range(phrase, frame_count)
+        crop_start = float(audit["cropStart"])
+        targets = []
+        lowers = []
+        uppers = []
+        for event in phone_events:
+            mora_index = int(event["mora_index"])
+            if not 0 <= mora_index < len(kana_units):
+                raise ValueError(f"phrase {phrase_index + 1} H token has no Kana boundary")
+            interval = event.get("interval") or {}
+            target = seconds_to_frame(crop_start + float(interval["start"]))
+            unit = kana_units[mora_index]
+            targets.append(target)
+            lowers.append(int(unit["startFrame"]))
+            uppers.append(int(unit["endFrameExclusive"]) - 1)
+
+        placement = solve_windowed_monotonic_frames(
+            targets,
+            lowers,
+            uppers,
+            first_frame=phrase_start,
+        )
+        if placement["max_abs_shift"] > 4:
+            raise ValueError(
+                f"phrase {phrase_index + 1} requires H shift "
+                f"{placement['max_abs_shift']} frames, exceeding the training limit"
+            )
+        sep_frame = phrase_end
+        candidate.update({
+            "relative_frames": [
+                *[frame - phrase_start for frame in placement["frames"]],
+                sep_frame - phrase_start,
+            ],
+            "relative_target_frames": [
+                *[frame - phrase_start for frame in placement["target_frames"]],
+                sep_frame - phrase_start,
+            ],
+            "frames": [*placement["frames"], sep_frame],
+            "target_frames": [*placement["target_frames"], sep_frame],
+            "signed_shifts": [*placement["signed_shifts"], 0],
+            "max_abs_shift": placement["max_abs_shift"],
+            "max_abs_phone_shift": placement["max_abs_shift"],
+            "total_abs_shift": placement["total_abs_shift"],
+            "collision_count": placement["collision_count"],
+        })
+
+
 def normalize_mora_label(label):
     text = str(label).strip()
     if not text or text.upper() in {"AP", "SP", "PAU", "SIL"}:
@@ -81,6 +244,36 @@ def compile_kana(region, frame_count, solve_monotonic_frames):
     phrases = region.get("Phrases") or []
     if len(audits) != len(phrases):
         raise ValueError("phrase/audit count mismatch")
+
+    if (region.get("HAlignment") or {}).get("boundaryMode") == "kana-hard":
+        for phrase_index, phrase in enumerate(phrases):
+            start, end = phrase_frame_range(phrase, frame_count)
+            kana_units = phrase.get("kanaUnits") or []
+            if not kana_units:
+                raise ValueError(f"phrase {phrase_index + 1} has no hard KanaUnit input")
+            for mora_index, unit in enumerate(kana_units):
+                units.append({
+                    "id": str(unit.get("id") or f"kana:{phrase['id']}:{mora_index}"),
+                    "kana": str(unit["kana"]),
+                    "romaji": jaconv.kana2alphabet(str(unit["kana"])),
+                    "startFrame": int(unit["startFrame"]),
+                    "endFrameExclusive": int(unit["endFrameExclusive"]),
+                    "origin": "segment-align",
+                    "phraseId": phrase["id"],
+                })
+            phrase_ranges.append({
+                "phraseId": phrase["id"],
+                "startFrame": start,
+                "speechEndFrameExclusive": end,
+                "maxAbsShift": 0,
+            })
+        boundaries = [{
+            "id": f"kana-seg:{index}",
+            "frame": phrase_ranges[index + 1]["startFrame"] - 1,
+            "kind": "SEG",
+            "origin": "segment-align",
+        } for index in range(len(phrase_ranges) - 1)]
+        return units, boundaries, phrase_ranges
 
     for phrase_index, (phrase, audit) in enumerate(zip(phrases, audits)):
         start, end = phrase_frame_range(phrase, frame_count)
@@ -141,7 +334,9 @@ def compile_kana(region, frame_count, solve_monotonic_frames):
     boundaries = [
         {
             "id": f"kana-seg:{index}",
-            "frame": phrase_ranges[index + 1]["startFrame"],
+            # SEG is a real one-frame Kana-track object immediately before
+            # the next phrase. Its persisted frame is also its editor frame.
+            "frame": phrase_ranges[index + 1]["startFrame"] - 1,
             "kind": "SEG",
             "origin": "segment-align",
         }
@@ -155,6 +350,7 @@ def compile_h(region, frame_count, render_h_pul_placements, inverse_vocab):
     candidates = region["HAlignment"].get("phrase_candidates") or []
     if len(phrases) != len(candidates):
         raise ValueError("phrase/candidate count mismatch")
+    constrain_h_candidates_to_kana(region, frame_count)
 
     # A partial KanaTrack can already own a terminal SEG boundary even though
     # later Kana phrases have not been materialized. The training renderer
@@ -240,6 +436,11 @@ def compile_h(region, frame_count, render_h_pul_placements, inverse_vocab):
                 "phoneIndex": phone_index,
             }
 
+            if region["HAlignment"].get("boundaryMode") == "kana-hard":
+                kana_unit = phrase["kanaUnits"][int(phone_event["mora_index"])]
+                if not int(kana_unit["startFrame"]) <= frame < int(kana_unit["endFrameExclusive"]):
+                    raise AssertionError("rendered H token escaped its hard Kana boundary")
+
     events = []
     for frame, token_id in enumerate(dense):
         token_id = int(token_id)
@@ -293,6 +494,9 @@ def main():
     )
     events, h_audit = compile_h(
         alignment["B"], args.frame_count, render_h_pul_placements, inverse_vocab
+    )
+    h_audit["boundaryMode"] = (
+        (alignment["B"].get("HAlignment") or {}).get("boundaryMode") or "free"
     )
     payload = {
         "schema": SCHEMA,

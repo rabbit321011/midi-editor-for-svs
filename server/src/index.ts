@@ -14,7 +14,7 @@ import { WebSocketServer, WebSocket } from 'ws'
 import { runSvc } from './services/svc.service.js'
 import { buildSvsArgs, runSvs, verifySvsResources } from './services/svs.service.js'
 import { runV4h, verifyV4hResources } from './services/v4h.service.js'
-import { runWhisper } from './services/whisper.service.js'
+import { runWhisper, runSofaStage, runWhisperStage } from './services/whisper.service.js'
 import {
   runSynthesisTextControl,
   verifySynthesisTextControlResources,
@@ -73,11 +73,13 @@ const wss = new WebSocketServer({ server, path: '/ws/svc' })
 const svcJobs = new Map<string, WebSocket>()
 const svsJobs = new Map<string, WebSocket>()
 const whisperJobs = new Map<string, WebSocket>()
+const whisperTranscribeJobs = new Map<string, WebSocket>()
+const sofaAlignJobs = new Map<string, WebSocket>()
 const textControlJobs = new Map<string, WebSocket>()
 const midiPJobs = new Map<string, WebSocket>()
 const v5pJobs = new Map<string, WebSocket>()
 const msstJobs = new Map<string, WebSocket>()
-const jobRegistries = [svcJobs, svsJobs, whisperJobs, textControlJobs, midiPJobs, v5pJobs, msstJobs]
+const jobRegistries = [svcJobs, svsJobs, whisperJobs, whisperTranscribeJobs, sofaAlignJobs, textControlJobs, midiPJobs, v5pJobs, msstJobs]
 
 function removeJobRegistration(jobId: string, socket?: WebSocket) {
   for (const registry of jobRegistries) {
@@ -101,6 +103,8 @@ wss.on('connection', (ws: WebSocket) => {
         svcJobs.set(msg.jobId, ws)
         svsJobs.set(msg.jobId, ws)
         whisperJobs.set(msg.jobId, ws)
+        whisperTranscribeJobs.set(msg.jobId, ws)
+        sofaAlignJobs.set(msg.jobId, ws)
         textControlJobs.set(msg.jobId, ws)
         midiPJobs.set(msg.jobId, ws)
         v5pJobs.set(msg.jobId, ws)
@@ -190,8 +194,8 @@ app.get('/api/gpu/status', async (_req, res) => {
 app.post('/api/gpu/runtimes/:id/load', async (req, res) => {
   const id = String(req.params.id || '')
   try {
-    const runtime = id === 'V5P_40K_EMA'
-      ? await loadV5PRuntime()
+    const runtime = id === 'V5P_40K_EMA' || id === 'V5Pg_20K'
+      ? await loadV5PRuntime(id as 'V5P_40K_EMA' | 'V5Pg_20K')
       : id === 'V4fg_10k' || id === 'V4Hg_10k'
         ? await loadSvsRuntime(id)
         : await loadAnalysisRuntime(id)
@@ -203,8 +207,8 @@ app.post('/api/gpu/runtimes/:id/load', async (req, res) => {
 
 app.post('/api/gpu/runtimes/:id/unload', async (req, res) => {
   const id = String(req.params.id || '')
-  const result = id === 'V5P_40K_EMA'
-    ? await unloadV5PRuntime()
+  const result = id === 'V5P_40K_EMA' || id === 'V5Pg_20K'
+    ? await unloadV5PRuntime(id as 'V5P_40K_EMA' | 'V5Pg_20K')
     : id === 'V4fg_10k' || id === 'V4Hg_10k'
       ? await unloadSvsRuntime(id)
       : await unloadAnalysisRuntime(id)
@@ -228,6 +232,7 @@ app.post('/api/gpu/policy/estimate', async (req, res) => {
   try {
     const modelId = String(req.body?.modelId || '')
     const durationSeconds = Number(req.body?.durationSeconds)
+    const guidanceMode = req.body?.guidanceMode === 'three-way' ? 'three-way' : 'unified'
     if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) throw new Error('durationSeconds 无效')
     res.json({
       ok: true,
@@ -238,7 +243,7 @@ app.post('/api/gpu/policy/estimate', async (req, res) => {
         ...readSvsRuntimeStatus(),
         ...readAnalysisRuntimeStatus(),
       ],
-      estimate: estimateGpuMemory(modelId, durationSeconds),
+      estimate: estimateGpuMemory(modelId, durationSeconds, guidanceMode),
     })
   } catch (error: any) {
     res.status(400).json({ ok: false, reason: error?.message || String(error) })
@@ -722,6 +727,88 @@ app.post('/api/whisper/run', (req, res) => {
     console.log(`[Whisper] job ${jobId} waiting for WS registration...`)
     setTimeout(() => {
       if (!tryRun()) console.error(`[Whisper] job ${jobId} WS never connected`)
+    }, 2000)
+  }
+})
+
+app.post('/api/whisper/transcribe', (req, res) => {
+  const { jobId: clientJobId, inputWav, outputName, vad, device, computeType } = req.body
+  if (!inputWav || !fs.existsSync(inputWav)) {
+    res.status(400).json({ error: 'missing or invalid inputWav' })
+    return
+  }
+
+  const jobId = clientJobId || crypto.randomUUID().slice(0, 8)
+  const safeOutputName = sanitizeName(outputName || `Whisper_${jobId}`)
+  const outputDir = path.resolve(PROJECT_ROOT, 'data', `render_${jobId}_whisper`)
+  res.json({ ok: true, jobId, status: 'started' })
+
+  function tryRun() {
+    const ws = consumeJobSocket(whisperTranscribeJobs, jobId)
+    if (!ws) return false
+    console.log(`[Whisper] transcribe job ${jobId} started, WS found`)
+    void runWhisperStage({
+      inputWav,
+      outputDir,
+      outputName: safeOutputName,
+      language: 'ja',
+      vad: vad ?? true,
+      device: device || 'cuda',
+      computeType: computeType || 'float16',
+    }, ws).then(
+      transcriptFile => ws.send(JSON.stringify({ type: 'done', transcriptFile })),
+      error => ws.send(JSON.stringify({ type: 'error', message: error?.message || String(error) })),
+    )
+    return true
+  }
+
+  if (!tryRun()) {
+    console.log(`[Whisper] transcribe job ${jobId} waiting for WS registration...`)
+    setTimeout(() => {
+      if (!tryRun()) console.error(`[Whisper] transcribe job ${jobId} WS never connected`)
+    }, 2000)
+  }
+})
+
+app.post('/api/sofa/align', (req, res) => {
+  const { jobId: clientJobId, inputWav, transcriptFile, outputName, device } = req.body
+  if (!inputWav || !fs.existsSync(inputWav)) {
+    res.status(400).json({ error: 'missing or invalid inputWav' })
+    return
+  }
+  if (!transcriptFile || !fs.existsSync(transcriptFile)) {
+    res.status(400).json({ error: 'missing or invalid transcriptFile' })
+    return
+  }
+
+  const jobId = clientJobId || crypto.randomUUID().slice(0, 8)
+  const safeOutputName = sanitizeName(outputName || `SOFA_${jobId}`)
+  const outputDir = path.resolve(PROJECT_ROOT, 'data', `render_${jobId}_sofa`)
+  res.json({ ok: true, jobId, status: 'started' })
+
+  function tryRun() {
+    const ws = consumeJobSocket(sofaAlignJobs, jobId)
+    if (!ws) return false
+    console.log(`[SOFA] align job ${jobId} started, WS found`)
+    void runSofaStage({
+      inputWav,
+      outputDir,
+      outputName: safeOutputName,
+      language: 'ja',
+      vad: true,
+      device: device || 'cuda',
+      computeType: 'float16',
+    }, ws, transcriptFile).then(
+      () => ws.send(JSON.stringify({ type: 'done' })),
+      error => ws.send(JSON.stringify({ type: 'error', message: error?.message || String(error) })),
+    )
+    return true
+  }
+
+  if (!tryRun()) {
+    console.log(`[SOFA] align job ${jobId} waiting for WS registration...`)
+    setTimeout(() => {
+      if (!tryRun()) console.error(`[SOFA] align job ${jobId} WS never connected`)
     }, 2000)
   }
 })

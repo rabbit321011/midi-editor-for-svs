@@ -205,7 +205,7 @@ function residentLabel(profile: ModelCatalogItem['vramProfile']) {
           <span class="runtime-kind">{{ profileLabel(model.vramProfile) }}</span>
           <span class="resident-badge">{{ residentLabel(model.vramProfile) }}</span>
           <n-button
-            v-if="['V5P_40K_EMA', 'V4Hg_10k', 'V4fg_10k', 'Whisper large-v3', 'SOFA Japanese', 'GAME-1.0-medium'].includes(model.id)"
+            v-if="['V5P_40K_EMA', 'V5Pg_20K', 'V4Hg_10k', 'V4fg_10k', 'Whisper large-v3', 'SOFA Japanese', 'GAME-1.0-medium', 'OpenVPI-SOME'].includes(model.id)"
             size="tiny"
             type="primary"
             ghost
@@ -246,12 +246,12 @@ function residentLabel(profile: ModelCatalogItem['vramProfile']) {
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; max-width: 1120px; }
 .page-head h1 { margin: 0 0 4px; font-size: 22px; }
 .page-head p, .section-note { margin: 0; color: var(--app-muted); font-size: 12px; }
-.head-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.head-actions { position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .head-actions :deep(.n-button) { min-width: 56px; }
 .mode-toggle { flex: 0 0 96px; display: inline-flex; border: 1px solid var(--app-border); border-radius: 4px; overflow: hidden; }
 .mode-toggle button { flex: 1; min-width: 0; height: 24px; padding: 0 6px; border: 0; background: transparent; color: var(--app-muted); font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap; }
 .mode-toggle button.active { background: var(--app-accent); color: #fff; }
-.notice { flex: 0 1 150px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--app-accent); font-size: 12px; }
+.notice { position: absolute; top: calc(100% + 6px); right: 0; z-index: 10; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--app-accent); font-size: 12px; background: var(--app-panel); border: 1px solid var(--app-border); border-radius: 4px; padding: 4px 8px; }
 .error-band { max-width: 1120px; margin-top: 18px; padding: 10px 12px; border: 1px solid #8f3f46; color: #f28b94; }
 .gpu-band { max-width: 1120px; margin-top: 20px; }
 .gpu-device { padding: 15px 0; border-top: 1px solid var(--app-border); }

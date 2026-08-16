@@ -624,6 +624,26 @@ controlEndFrameExclusive = 对应 Kana SEG；最后一句为 frameCount
 单 Kana control range，其他 H frame 和 Segment/Kana/MIDI-P revision 保持不变。普通 H 与 SEP 仍都是
 单 frame 稀疏事件。手工 H 覆盖继续使用 10.4 的确认与单次 undo 事务。
 
+### 10.3.1 按 Segment 当前 Kana 硬边界生成 H
+
+Segment 右键的“按本 Segment 当前 Kana 对齐至 H Token”不是把自由 SOFA 结果事后裁剪、平移或均匀
+映射进 Kana。它冻结当前 Guide、KanaTrack revision、HTokenTrack revision，并只提交当前 Segment 对应
+的一个 Kana SEG 分句。每个 KanaUnit 同时提交 `kana`、`startFrame` 和 `endFrameExclusive`。
+
+项目内 SOFA adapter 复用 JPN_Test2_Plus 原模型前向得到的 `ph_frame_logits` 与 `ph_edge_logits`，并在
+SOFA 原生单调动态规划解码时加入状态合法性 mask：归属某个 mora/KanaUnit 的音素状态只能出现在该
+KanaUnit 的 `[startFrame, endFrameExclusive)`。KanaUnit 之间存在空隙时，adapter 在相邻 mora 间加入可
+跳过的 `SP` 状态承接静音；没有空隙时原生跳转可以略过该 `SP`。因此普通音素不可能越过用户编辑的
+Kana 边界，空白也不会被强行归入某个 Kana。
+
+若不存在满足全部 Kana 硬边界且保持音素单调顺序的路径，任务失败且不写 H。成功路径仍进入训练侧
+Japanese tokenizer、`build_phrase_candidates()`、monotonic placement solver 与
+`render_h_pul_placements()`，保持 H/PUL/SEP 训练合同。写回前再次校验 mora 数量、规范化假名、
+`moraIndex`、phone placement 与唯一 SEP；全部通过后一次性覆盖当前 Segment 的 H 控制范围。
+
+该模式通过现有 SOFA 常驻 Runtime 执行，受显存管理的加载、释放与互斥规则约束；不会在 Text Control
+子进程中额外加载第二份 SOFA。
+
 ### 10.4 覆盖确认、撤销与来源
 
 右键菜单本身表达了用户主动覆盖意图。目标范围仅含自动数据时可以直接执行；若范围内含用户手工

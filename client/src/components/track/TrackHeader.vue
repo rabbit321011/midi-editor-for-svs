@@ -87,6 +87,7 @@ function toggleMute() {
     track.value.muted = !track.value.muted
     if (track.value.solo && track.value.muted) track.value.solo = false
   }
+  ;(window as any).__playbackRefreshTrackAudibility?.()
 }
 
 function toggleSolo() {
@@ -99,6 +100,7 @@ function toggleSolo() {
     track.value.solo = nextSolo
     if (track.value.muted && track.value.solo) track.value.muted = false
   }
+  ;(window as any).__playbackRefreshTrackAudibility?.()
 }
 
 function moveTrack(delta: -1 | 1) {

@@ -21,6 +21,11 @@ export interface SynthesisMidiPResult {
   gameCommit: string
   runtimeHashes: Record<string, string>
   compilerSHA256: string
+  extractor: 'game' | 'some'
+  sourceFrameCount: number
+  startFrame: number
+  endFrameExclusive: number
+  parameters: Record<string, number>
 }
 
 export function readSynthesisMidiPResult(message: unknown, expectedFrameCount: number): SynthesisMidiPResult | null {
@@ -49,6 +54,13 @@ export function readSynthesisMidiPResult(message: unknown, expectedFrameCount: n
     gameCommit: string(result.gameCommit, 'gameCommit'),
     runtimeHashes: Object.fromEntries(Object.entries(result.runtimeHashes).map(([key, value]) => [key, string(value, key)])),
     compilerSHA256: string(result.compilerSHA256, 'compilerSHA256'),
+    extractor: result.extractor === 'some' ? 'some' : 'game',
+    sourceFrameCount: Number.isInteger(result.sourceFrameCount) ? Number(result.sourceFrameCount) : expectedFrameCount,
+    startFrame: Number.isInteger(result.startFrame) ? Number(result.startFrame) : 0,
+    endFrameExclusive: Number.isInteger(result.endFrameExclusive) ? Number(result.endFrameExclusive) : expectedFrameCount,
+    parameters: isRecord(result.parameters)
+      ? Object.fromEntries(Object.entries(result.parameters).map(([key, value]) => [key, number(value, key)]))
+      : {},
   }
 }
 

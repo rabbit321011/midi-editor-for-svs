@@ -23,6 +23,8 @@ function message(classes: number[]) {
       rawNotes: [{ duration: 1, presence: true, score: 65, class: 130, valid: true }],
       baseSeed: 20260730, effectiveSeed: 42, language: 'ja', languageId: 2,
       gameCommit: 'commit', runtimeHashes: { game_model: 'model-hash' }, compilerSHA256: 'compiler-hash',
+      extractor: 'game', sourceFrameCount: classes.length, startFrame: 0,
+      endFrameExclusive: classes.length, parameters: {},
     },
   }
 }

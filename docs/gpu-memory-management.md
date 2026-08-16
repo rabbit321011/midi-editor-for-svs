@@ -13,15 +13,24 @@
 
 现阶段 V5-P 已支持常驻 Runtime：用户可以在显存页手动“加载模型”，DiT 与 VAE 保留在独立 worker 中；加载后重复生成不再重新读取 checkpoint。其余 SVS/GAME/Whisper/SOFA/SVC/MSST 仍是一次一进程 Runtime，任务完成后进程退出，显存随进程释放。
 
+当前 Analysis Runtime 还包括 `OpenVPI-SOME`。它与 GAME 一样支持手动加载、手动释放和推理后常驻显存回报。V5-P 合成单元的句级 MIDI-P 重提取必须经过同一套 `prepareCompositeTask()` 容量规划；SOME 不允许绕过显存系统启动一次性推理进程。
+
+V5-P 三路 CFG 也经过同一显存策略。当前实现顺序执行四个条件分支，不放大 batch；峰值暂沿用统一 CFG 的实测档案，估算结果标记 `sequential-branch-peak`，并提示预计约 2 倍耗时。待真实三路 CFG 样本标定后再建立独立 profile。
+
 ## 模型范围
 
-显存系统当前只管理三个模型：
+显存系统当前只管理四个模型：
 
 - Direct Control：`V5P_40K_EMA`
+- Direct Control：`V5Pg_20K`
 - PH/PUL：`V4Hg_10k`
 - T1：`V4fg_10k`
 
 旧 SVS 面板中的其他模型仍保留运行能力，但不进入显存管理页。checkpoint 文件大小不等于显存占用。
+
+`V5Pg_20K` 与 `V5P_40K_EMA` 使用同一 338M DiT、同一模型/VAE config，仅 checkpoint 权重与
+VAE 权重不同（285k online VAE）。理论上 resident 与任务增量一致，因此未单独标定时自动复用
+`V5P_40K_EMA` 的显存档案；加载成功后仍会写入自己的 `V5Pg_20K.resident.json`。
 
 2026-08-12 常驻显存实测：
 
@@ -85,6 +94,15 @@ python server/scripts/profile_vram.py `
 
 - `GAME-1.0-medium`：1703 / 2100 / 3813 / 6376 MiB。
 - `MSST_duality`：5988 / 5996 / 5988 / 5995 MiB，基本不随时长增长。
+- `MSST_apollo`：11771 / 11289 / 11779 / 10847 MiB；接近整卡上限，只适合空闲 GPU 时运行。
+- `MSST_aspiration`：2959 / 2959 / 2959 / 2959 MiB，基本不随时长增长。
+- `MSST_bve`：11805 / 11821 / 11835 / 11788 MiB；接近整卡上限，建议先确认其他模型已释放。
+
+2026-08-13 新增 `MSST_apollo`、`MSST_aspiration`、`MSST_bve` 的 resident profile：
+
+- `MSST_apollo`：常驻 298 MiB。
+- `MSST_aspiration`：常驻 1622 MiB。
+- `MSST_bve`：常驻 242 MiB。
 - `SVC_v3_20k_campplus`（20 步）：3892 / 3943 / 4689 / 5429 MiB。
 - `Whisper large-v3`：4746 / 4728 / 4754 / 4787 MiB，基本不随时长增长。
 - `SOFA Japanese`：1578 / 1748 / 1793 / 1932 MiB。

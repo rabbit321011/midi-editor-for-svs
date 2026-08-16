@@ -10,11 +10,11 @@ import os
 from pathlib import Path
 import sys
 import time
+import types
 
 
 JOB_SCHEMA = "aisvc.v5p-direct-job.v1"
 RESULT_SCHEMA = "aisvc.v5p-direct-result.v1"
-CHECKPOINT_SCHEMA = "v5p_training_checkpoint_v1"
 SAMPLE_RATE = 44100
 HOP_SAMPLES = 2048
 REST_CLASS_ID = 255
@@ -74,6 +74,17 @@ def require_integer(value, label, minimum=0, maximum=None):
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValueError(f"{label} must be an integer")
     if value < minimum or (maximum is not None and value > maximum):
+        raise ValueError(f"{label} is outside its contract")
+    return value
+
+
+def require_number(value, label, minimum=None, maximum=None):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{label} must be a number")
+    value = float(value)
+    if minimum is not None and value < minimum:
+        raise ValueError(f"{label} is outside its contract")
+    if maximum is not None and value > maximum:
         raise ValueError(f"{label} is outside its contract")
     return value
 
@@ -181,9 +192,8 @@ def validate_job(job, direct_control):
     render = require_record(job.get("render"), "render settings")
     steps = require_integer(render.get("steps"), "sampling steps", 1, 256)
     seed = require_integer(render.get("seed"), "sampling seed", 0, 0xFFFFFFFF)
-    cfg = render.get("cfg")
-    if isinstance(cfg, bool) or not isinstance(cfg, (int, float)) or not 0 <= cfg <= 10:
-        raise ValueError("CFG is outside its contract")
+    guidance = validate_guidance(render.get("guidance"), render.get("cfg"))
+    cfg = guidance["cfg"] if guidance["mode"] == "unified" else 0.0
     device = str(render.get("device", ""))
     if device != "cpu" and not device.startswith("cuda:"):
         raise ValueError("invalid sampling device")
@@ -200,8 +210,31 @@ def validate_job(job, direct_control):
         "targetWav": target_wav,
         "steps": steps,
         "cfg": float(cfg),
+        "guidance": guidance,
         "seed": seed,
         "device": device,
+    }
+
+
+def validate_guidance(value, legacy_cfg):
+    if value is None:
+        return {"mode": "unified", "cfg": require_number(legacy_cfg, "CFG", 0, 10)}
+    guidance = require_record(value, "guidance")
+    if guidance.get("mode") == "unified":
+        return {
+            "mode": "unified",
+            "cfg": require_number(guidance.get("cfg"), "guidance.cfg", 0, 10),
+        }
+    if guidance.get("mode") != "three-way":
+        raise ValueError("unsupported guidance mode")
+    if guidance.get("formula") != "audio-text-midi-telescoping.v1":
+        raise ValueError("unsupported 3CFG formula")
+    return {
+        "mode": "three-way",
+        "audio": require_number(guidance.get("audio"), "guidance.audio", 0, 10),
+        "text": require_number(guidance.get("text"), "guidance.text", 0, 10),
+        "midi": require_number(guidance.get("midi"), "guidance.midi", 0, 10),
+        "formula": "audio-text-midi-telescoping.v1",
     }
 
 
@@ -247,34 +280,27 @@ def pad_audio_for_frame_map(reference, target, frame_map):
 
 
 def strict_checkpoint_metadata(payload, preset, resources):
-    if payload.get("checkpoint_schema") != CHECKPOINT_SCHEMA:
-        raise ValueError("checkpoint is not a V5-P training checkpoint")
+    checkpoint_schema = str(preset.get("checkpointSchema") or "")
+    if payload.get("checkpoint_schema") != checkpoint_schema:
+        raise ValueError(
+            f"checkpoint schema mismatch: {payload.get('checkpoint_schema')} != {checkpoint_schema}"
+        )
     if int(scalar(payload.get("global_step", -1))) != int(preset["checkpointStep"]):
-        raise ValueError("V5-P checkpoint step differs from preset")
+        raise ValueError("checkpoint step differs from preset")
     if payload.get("run_state") != "complete":
-        raise ValueError("V5-P checkpoint is not complete")
-    if int(scalar(payload.get("ema_step", -1))) != int(preset["checkpointStep"]):
-        raise ValueError("V5-P EMA step differs from checkpoint step")
+        raise ValueError("checkpoint is not complete")
+    ema_step_offset = int(preset.get("emaStepOffset") or 0)
+    expected_ema_step = int(preset["checkpointStep"]) + ema_step_offset
+    if int(scalar(payload.get("ema_step", -1))) != expected_ema_step:
+        raise ValueError(
+            f"checkpoint EMA step differs from preset: "
+            f"{payload.get('ema_step')} != {expected_ema_step}"
+        )
     if not bool(scalar(payload.get("ema_initted", False))):
-        raise ValueError("V5-P EMA is not initialized")
+        raise ValueError("checkpoint EMA is not initialized")
 
     metadata = require_record(payload.get("v5p_training"), "V5-P training metadata")
-    expected_values = {
-        "schema": CHECKPOINT_SCHEMA,
-        "placement_mode": "phone_pul",
-        "phase": "joint",
-        "midi_teacher": "GAME medium K4 offline cache",
-        "midi_fuzz_disturb": False,
-        "schedule_profile": "v5p_two_cosine",
-        "warmup_steps": 2000,
-        "first_decay_end": 28000,
-        "mid_lr": 1e-5,
-        "max_steps": 40000,
-        "pool_policy": "KEEP_LONG_DEDUP_SHORT",
-        "sampling_policy": "NATURAL_RECORD",
-        "engineering_joint_probe": False,
-        "ema_device": "cpu",
-    }
+    expected_values = training_contract(checkpoint_schema)
     for key, expected in expected_values.items():
         if metadata.get(key) != expected:
             raise ValueError(f"checkpoint metadata mismatch for {key}")
@@ -314,6 +340,48 @@ def strict_checkpoint_metadata(payload, preset, resources):
     for key, expected in expected_midi.items():
         if midi_schema.get(key) != expected:
             raise ValueError(f"checkpoint MIDI-P schema mismatch for {key}")
+
+
+def training_contract(checkpoint_schema):
+    contracts = {
+        "v5p_training_checkpoint_v1": {
+            "schema": "v5p_training_checkpoint_v1",
+            "placement_mode": "phone_pul",
+            "phase": "joint",
+            "midi_teacher": "GAME medium K4 offline cache",
+            "midi_fuzz_disturb": False,
+            "schedule_profile": "v5p_two_cosine",
+            "warmup_steps": 2000,
+            "first_decay_end": 28000,
+            "mid_lr": 1e-5,
+            "max_steps": 40000,
+            "pool_policy": "KEEP_LONG_DEDUP_SHORT",
+            "sampling_policy": "NATURAL_RECORD",
+            "engineering_joint_probe": False,
+            "ema_device": "cpu",
+        },
+        "v5pg_training_checkpoint_v1": {
+            "schema": "v5pg_training_checkpoint_v1",
+            "placement_mode": "phone_pul",
+            "phase": "g_adapt",
+            "midi_teacher": "GAME medium K4 offline cache",
+            "midi_fuzz_disturb": False,
+            "schedule_profile": "v5pg20_two_cosine",
+            "warmup_steps": 1000,
+            "first_decay_end": 14000,
+            "mid_lr": 7e-6,
+            "max_steps": 20000,
+            "pool_policy": "KEEP_LONG_DEDUP_SHORT",
+            "sampling_policy": "NATURAL_RECORD",
+            "engineering_joint_probe": False,
+            "engineering_g_probe": False,
+            "ema_device": "cpu",
+        },
+    }
+    contract = contracts.get(checkpoint_schema)
+    if contract is None:
+        raise ValueError(f"unsupported checkpoint schema: {checkpoint_schema}")
+    return contract
 
 
 def build_model(checkpoint, model_config, vae_config, vae_checkpoint, singer_root,
@@ -427,6 +495,73 @@ def build_control_tensors(policy, h_transport, midi_transport, device):
     }
 
 
+class ThreeWayCFG:
+    def __init__(self, policy, guidance):
+        self.policy = policy
+        self.guidance = guidance
+        self.original_forward = policy.transformer.forward
+
+    def __enter__(self):
+        original_forward = self.original_forward
+        guidance = self.guidance
+
+        def forward_with_three_way(transformer, *args, **kwargs):
+            if not kwargs.get("cfg_infer"):
+                return original_forward(*args, **kwargs)
+            branch_kwargs = dict(kwargs)
+            branch_kwargs.pop("cfg_infer", None)
+            branch_kwargs.pop("cfg_infer_ids", None)
+            branch_kwargs.pop("guidance_scale", None)
+            predictions = []
+            for drop_audio, drop_text, drop_midi in (
+                (True, True, True),
+                (False, True, True),
+                (False, False, True),
+                (False, False, False),
+            ):
+                predictions.append(original_forward(
+                    *args,
+                    **branch_kwargs,
+                    drop_audio_cond=drop_audio,
+                    drop_text=drop_text,
+                    drop_midi=drop_midi,
+                    cfg_infer=False,
+                )[0])
+            v0, v_audio, v_audio_text, v_full = predictions
+            guided = (
+                v_full
+                + guidance["audio"] * (v_audio - v0)
+                + guidance["text"] * (v_audio_text - v_audio)
+                + guidance["midi"] * (v_full - v_audio_text)
+            )
+            # Singer.sample() performs its legacy two-branch combination after
+            # this call. Returning guided twice makes that final combination an
+            # identity while preserving the existing ODE and sampler path.
+            return __import__("torch").cat([guided, guided], dim=0), None
+
+        self.policy.transformer.forward = types.MethodType(
+            forward_with_three_way, self.policy.transformer
+        )
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.policy.transformer.forward = self.original_forward
+        self.policy.transformer.clear_cache()
+
+
+def sample_with_guidance(policy, sample_kwargs, guidance):
+    if guidance["mode"] == "unified":
+        return policy.sample(
+            **sample_kwargs,
+            cfg_strength=guidance["cfg"],
+            guidance_scale=guidance["cfg"],
+        )
+    with ThreeWayCFG(policy, guidance):
+        # Nonzero cfg_strength selects the standard CFG path; the wrapper replaces
+        # its packed two-branch forward with the four sequential training branches.
+        return policy.sample(**sample_kwargs, cfg_strength=1.0, guidance_scale=1.0)
+
+
 def synthesize(policy, vae, reference_audio, target_audio, validated):
     import torch
 
@@ -471,6 +606,7 @@ def synthesize(policy, vae, reference_audio, target_audio, validated):
         "sampling",
         steps=validated["steps"],
         cfg=validated["cfg"],
+        guidance=validated["guidance"],
         seed=validated["seed"],
         totalFrames=total_frames,
     )
@@ -478,20 +614,18 @@ def synthesize(policy, vae, reference_audio, target_audio, validated):
     if str(device).startswith("cuda:"):
         torch.cuda.manual_seed_all(validated["seed"])
     with torch.inference_mode():
-        generated, _ = policy.sample(
-            cond=reference_latent.to(device),
-            text=text,
-            duration=total_frames,
-            midi_p=midi,
-            bound_p=bound_transport,
-            steps=validated["steps"],
-            cfg_strength=validated["cfg"],
-            guidance_scale=validated["cfg"],
-            t_shift=0.5,
-            seed=validated["seed"],
-            use_epss=False,
-            enable_melody_control=True,
-        )
+        generated, _ = sample_with_guidance(policy, {
+            "cond": reference_latent.to(device),
+            "text": text,
+            "duration": total_frames,
+            "midi_p": midi,
+            "bound_p": bound_transport,
+            "steps": validated["steps"],
+            "t_shift": 0.5,
+            "seed": validated["seed"],
+            "use_epss": False,
+            "enable_melody_control": True,
+        }, validated["guidance"])
     crop = frame_map["crop"]
     start = int(crop["startFrame"])
     end = int(crop["endFrameExclusive"])
@@ -562,6 +696,11 @@ def save_result(output_dir, job, validated, audio, audit, resource_hashes, start
         "vaeSHA256": resource_hashes["vaeCheckpoint"],
         "adapterSHA256": resource_hashes["directControlAdapter"],
         "seed": validated["seed"],
+        "samplingSettings": {
+            "guidance": validated["guidance"],
+            "steps": validated["steps"],
+            "seed": validated["seed"],
+        },
     }
     result_path.write_text(
         json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"

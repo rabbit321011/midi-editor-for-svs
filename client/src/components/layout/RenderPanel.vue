@@ -11,6 +11,7 @@ import { useRenderSvcPipeline } from '@/composables/useRenderSvcPipeline'
 import { useRenderSvsPipeline } from '@/composables/useRenderSvsPipeline'
 import { useRenderWhisperPipeline } from '@/composables/useRenderWhisperPipeline'
 import { useRenderMsstPipeline } from '@/composables/useRenderMsstPipeline'
+import { MSST_MODEL_OPTIONS, getMsstModel } from '@/composables/msstModels'
 import { validateRenderSlot, type RenderInputRef, type RenderSlotId } from '@/object-workbench'
 
 const renderPanel = useRenderPanelStore()
@@ -42,18 +43,13 @@ const selectedObjectNodeId = computed(() => {
 const modelOptions = computed(() => svcConfig.presets.map(p => ({ label: p.modelName, value: p.modelName })))
 const svsModelOptions = computed(() => svsConfig.models.map(m => ({ label: m.name, value: m.name })))
 const isV4hSelected = computed(() => svsConfig.selectedModel?.engine === 'v4h_phone_pul')
-const msstModelOptions = [
-  { label: '人声 / 伴奏分离', value: 'duality' },
-  { label: '去混响 / 回声', value: 'dereverb' },
-  { label: '降噪', value: 'denoise' },
-]
+const msstModelOptions = MSST_MODEL_OPTIONS
 const msstOutputOptions = computed(() => {
-  const primary = renderPanel.msst.model === 'duality' ? '人声' : 'Dry'
-  const secondary = renderPanel.msst.model === 'duality' ? '伴奏' : 'Other'
+  const definition = getMsstModel(renderPanel.msst.model)
   return [
-    { label: `${primary} + ${secondary}`, value: 'both' },
-    { label: `仅 ${primary}`, value: 'primary' },
-    { label: `仅 ${secondary}`, value: 'secondary' },
+    { label: `${definition.primaryLabel} + ${definition.secondaryLabel}`, value: 'both' },
+    { label: `仅 ${definition.primaryLabel}`, value: 'primary' },
+    { label: `仅 ${definition.secondaryLabel}`, value: 'secondary' },
   ]
 })
 
@@ -497,7 +493,7 @@ onMounted(() => {
 }
 .slot-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
   align-items: center;
   border: 1px solid transparent;
@@ -505,6 +501,16 @@ onMounted(() => {
   padding: 4px;
 }
 .slot-row:hover { border-color: var(--app-border); }
+.slot-row :deep(.n-tag) {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+.slot-row :deep(.n-tag__content) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .slot-title {
   grid-column: 1 / -1;
   font-size: 11px;
@@ -556,11 +562,19 @@ onMounted(() => {
   font-size: 11px;
   color: var(--app-warning);
 }
+:global(.capacity-modal.n-card) {
+  width: min(440px, calc(100vw - 48px));
+  border-radius: 6px;
+  background: #171c22;
+}
+:global(.capacity-modal .n-card__content) {
+  padding: 14px;
+}
 .capacity-prompt { display: grid; gap: 10px; color: #b6c0cc; font-size: 12px; }
 .capacity-insufficient { color: #f28b94; }
-.capacity-evictions { color: #d6a86a; }
-.capacity-metrics { display: flex; gap: 12px; }
-.capacity-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.capacity-evictions { color: #d6a86a; overflow-wrap: anywhere; }
+.capacity-metrics { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.capacity-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .run-status {
   display: flex;
   flex-direction: column;

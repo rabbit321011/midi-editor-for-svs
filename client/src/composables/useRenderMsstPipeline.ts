@@ -6,8 +6,7 @@ import { useRenderPanelStore } from '@/stores/renderPanel'
 import { useTracksStore } from '@/stores/tracks'
 import { isGpuCancellation } from './gpuCancellation'
 import { ensureRenderCapacity } from './renderCapacity'
-
-type MsstOutputId = 'vocals' | 'instrumental' | 'dry' | 'other'
+import { getMsstModel, labelMsstOutput, selectedMsstOutputs, type MsstOutputId } from './msstModels'
 
 export function useRenderMsstPipeline() {
   const renderPanel = useRenderPanelStore()
@@ -38,7 +37,11 @@ export function useRenderMsstPipeline() {
       })
       renderPanel.updateMsstProgress(8, '合并 MSST 音频')
       const blob = await combineSegmentsToBlob(resolved.segmentInputs, resolved.duration, resolved.sampleRate)
-      if (!(await ensureRenderCapacity([`MSST_${task.model}`], resolved.duration))) return
+      const capacityOk = await ensureRenderCapacity([`MSST_${task.model}`], resolved.duration)
+      if (!capacityOk) {
+        if (renderPanel.msstStatus === 'running') renderPanel.setMsstCancelled('已放弃运行')
+        return
+      }
       const upload = await uploadTempWav(`render_${jobId}_msst_input`, blob, resolved.sampleRate)
       renderPanel.updateMsstProgress(15, '连接 MSST')
       ws = await openRenderWebSocket(jobId)
@@ -71,8 +74,8 @@ export function useRenderMsstPipeline() {
         try {
           const msg = JSON.parse(event.data)
           if (msg.type === 'progress') {
-            const labels: Record<string, string> = { duality: '分离人声/伴奏', dereverb: '去混响/回声', denoise: '降噪', complete: '整理输出' }
-            renderPanel.updateMsstProgress(15 + Number(msg.progress || 0) * 0.75, labels[msg.stage] || 'MSST 推理中')
+            const stageLabel = msg.stage === 'complete' ? '整理输出' : getMsstModel(task.model).stageLabel
+            renderPanel.updateMsstProgress(15 + Number(msg.progress || 0) * 0.75, stageLabel)
             return
           }
           if (msg.type === 'result') {
@@ -84,12 +87,12 @@ export function useRenderMsstPipeline() {
             return
           }
           if (msg.type !== 'done') return
-          const selected = selectedOutputs(task.model, task.outputMode).filter(id => available.has(id))
+          const selected = selectedMsstOutputs(task.model, task.outputMode).filter(id => available.has(id))
           if (selected.length === 0) throw new Error('MSST 未返回所选输出')
           const outputs = task.backfillAll ? selected : selected.slice(0, 1)
           const names: string[] = []
           for (const outputId of outputs) {
-            const outputLabel = labelOutput(task.model, outputId)
+            const outputLabel = labelMsstOutput(task.model, outputId)
             renderPanel.updateMsstProgress(92, `回填 ${outputLabel}`)
             const response = await fetch(`/api/msst/result/${jobId}/${outputId}.wav`)
             if (!response.ok) throw new Error(await readError(response) || `下载 ${outputId} 失败`)
@@ -125,20 +128,6 @@ export function useRenderMsstPipeline() {
     return `MSST_${renderPanel.msst.audio?.displayName || 'audio'}`
   }
   return { startMsst }
-}
-
-function selectedOutputs(model: string, mode: string): MsstOutputId[] {
-  const pair: MsstOutputId[] = model === 'duality' ? ['vocals', 'instrumental'] : ['dry', 'other']
-  if (mode === 'primary') return pair.slice(0, 1)
-  if (mode === 'secondary') return pair.slice(1)
-  return pair
-}
-
-function labelOutput(model: string, outputId: MsstOutputId): string {
-  if (outputId === 'vocals') return 'Vocals'
-  if (outputId === 'instrumental') return 'Instrumental'
-  const stage = model === 'dereverb' ? 'Dereverb' : 'Denoise'
-  return `${stage}_${outputId === 'dry' ? 'Dry' : 'Other'}`
 }
 
 async function uploadTempWav(groupId: string, blob: Blob, sampleRate: number) {

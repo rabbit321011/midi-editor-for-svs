@@ -13,6 +13,16 @@ def emit(event_type, **payload):
     print(json.dumps({"type": event_type, **payload}, ensure_ascii=False), flush=True)
 
 
+def emit_resident_updated(model_id):
+    try:
+        import torch
+        torch.cuda.empty_cache()
+        resident_mib = round(torch.cuda.memory_reserved() / 1024 / 1024, 1)
+        emit("resident_updated", modelId=model_id, residentMiB=resident_mib)
+    except Exception:
+        pass
+
+
 def load_module(path, name):
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
@@ -173,6 +183,7 @@ def main():
                     infer_t1(runtime, request)
                 else:
                     infer_v4h(runtime, request)
+                emit_resident_updated(str(preset["modelId"]))
                 emit("infer_done")
             elif request_type == "shutdown":
                 emit("shutdown_ok")

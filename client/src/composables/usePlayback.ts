@@ -22,6 +22,7 @@ export function usePlayback() {
   let audioCtx: AudioContext | null = null
   let scheduledSources: AudioBufferSourceNode[] = []
   let scheduledMidiNodes: OscillatorNode[] = []
+  let scheduledGainNodes = new Map<string, GainNode[]>()
   let scheduleBaseWall: number = 0
   let scheduleBaseTimeline: number = 0
   let raf: number | null = null
@@ -45,6 +46,7 @@ export function usePlayback() {
       try { node.stop() } catch {}
     }
     scheduledMidiNodes = []
+    scheduledGainNodes.clear()
   }
 
   function tick() {
@@ -140,6 +142,9 @@ export function usePlayback() {
         const g = ac.createGain()
         g.gain.value = tracks.tracks[seg.trackId]?.volume ?? 1
         src.connect(g).connect(ac.destination)
+        const gains = scheduledGainNodes.get(seg.trackId) ?? []
+        gains.push(g)
+        scheduledGainNodes.set(seg.trackId, gains)
         src.start(wStart, bufOffset, playLen)
         scheduledSources.push(src)
       } catch (e) {
@@ -253,6 +258,7 @@ export function usePlayback() {
               scheduleBaseWall + (timelineStart - scheduleBaseTimeline),
               timelineEnd - timelineStart,
               tracks.tracks[trackId]?.volume ?? 1,
+              trackId,
             )
           }
         }
@@ -261,7 +267,7 @@ export function usePlayback() {
     }
   }
 
-  function schedulePianoTone(context: AudioContext, midiClass: number, startTime: number, duration: number, volume: number) {
+  function schedulePianoTone(context: AudioContext, midiClass: number, startTime: number, duration: number, volume: number, trackId: string) {
     const frequency = 440 * 2 ** ((midiClass / 2 - 69) / 12)
     const endTime = startTime + Math.max(0.012, duration)
     const attackEnd = Math.min(endTime, startTime + 0.008)
@@ -272,6 +278,9 @@ export function usePlayback() {
     gain.gain.setValueAtTime(Math.max(0.0001, 0.16 * volume), releaseStart)
     gain.gain.exponentialRampToValueAtTime(0.0001, endTime)
     gain.connect(context.destination)
+    const gains = scheduledGainNodes.get(trackId) ?? []
+    gains.push(gain)
+    scheduledGainNodes.set(trackId, gains)
 
     for (const [multiple, level] of [[1, 1], [2, 0.24]] as const) {
       const oscillator = context.createOscillator()
@@ -286,7 +295,31 @@ export function usePlayback() {
     }
   }
 
+  function refreshTrackAudibility() {
+    if (!audioCtx) return
+    const hasSolo = tracks.trackOrder.some(trackId => {
+      const track = tracks.tracks[trackId]
+      return track && !track.ignored && track.solo
+    })
+    const now = audioCtx.currentTime
+    for (const [trackId, gains] of scheduledGainNodes) {
+      const volume = tracks.tracks[trackId]?.volume ?? 1
+      const target = isTrackAudible(trackId, hasSolo) ? volume : 0
+      for (const gain of gains) {
+        gain.gain.cancelScheduledValues(now)
+        gain.gain.setValueAtTime(target, now)
+      }
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    ;(window as any).__playbackRefreshTrackAudibility = refreshTrackAudibility
+  }
+
   onUnmounted(() => {
+    if (typeof window !== 'undefined') {
+      delete (window as any).__playbackRefreshTrackAudibility
+    }
     pause()
     if (audioCtx) { audioCtx.close(); audioCtx = null }
   })

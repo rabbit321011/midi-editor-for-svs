@@ -7,48 +7,38 @@ export async function ensureRenderCapacity(
 ): Promise<boolean> {
   const renderPanel = useRenderPanelStore()
   const gpuRuntime = useGpuRuntimeStore()
-  const prepared = await gpuRuntime.prepareCompositeTask(modelIds, durationSeconds) as any
-  if (prepared.ok) {
-    gpuRuntime.setActiveStageReleases(prepared.stageReleases ?? [])
-    return true
-  }
-  if (prepared.busy) {
-    if (modelIds[0].includes('MSST')) renderPanel.setMsstFailed(prepared.reason || '模型正在运行其他任务')
-    else renderPanel.setWhisperFailed(prepared.reason || '模型正在运行其他任务')
+  if (gpuRuntime.runtimes.some(item => item.state === 'busy')) {
+    if (modelIds[0].includes('MSST')) renderPanel.setMsstFailed('模型正在运行其他任务')
+    else renderPanel.setWhisperFailed('模型正在运行其他任务')
     return false
   }
-  if (prepared.insufficient) {
+
+  const plan = await gpuRuntime.planCompositeRoute(modelIds, durationSeconds)
+  if (!plan.ok) {
     const action = await renderPanel.requestCapacity({
-      requiredMiB: prepared.required,
-      freeMiB: prepared.freeMiB,
+      requiredMiB: plan.requiredMiB,
+      freeMiB: plan.freeMiB,
       insufficient: true,
       evictions: [],
       modelIds,
     })
     return action === 'force'
   }
+
+  if (plan.evictions.length === 0 || gpuRuntime.runtimeMode === 'auto') {
+    await gpuRuntime.applyCompositePlan(plan)
+    return true
+  }
+
   const action = await renderPanel.requestCapacity({
-    requiredMiB: prepared.required,
-    freeMiB: prepared.freeMiB,
+    requiredMiB: plan.requiredMiB,
+    freeMiB: plan.freeMiB,
     insufficient: false,
-    evictions: prepared.evictions ?? [],
+    evictions: plan.evictions,
     modelIds,
   })
   if (action === 'cancel') return false
   if (action === 'force') return true
-  if (prepared.evictions?.length) {
-    const evicted = await gpuRuntime.evictUntilFit(modelIds[0], prepared.required, prepared.evictions)
-    if (!evicted) {
-      const retry = await renderPanel.requestCapacity({
-        requiredMiB: prepared.required,
-        freeMiB: prepared.freeMiB,
-        insufficient: true,
-        evictions: [],
-        modelIds,
-      })
-      return retry === 'force'
-    }
-    gpuRuntime.setActiveStageReleases(prepared.stageReleases ?? [])
-  }
+  await gpuRuntime.applyCompositePlan(plan)
   return true
 }

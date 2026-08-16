@@ -15,7 +15,23 @@ test('direct preflight independently verifies frame map, H and MIDI transport', 
   assert.equal(first.snapshotSHA256, second.snapshotSHA256)
   assert.match(first.snapshotSHA256, /^[a-f0-9]{64}$/)
   assert.equal(first.frameMap.bOffsetFrame, 15)
-  assert.deepEqual(first.render, { steps: 32, cfg: 1, seed: 42, device: 'cuda:0' })
+  assert.deepEqual(first.render, {
+    steps: 32, cfg: 1, guidance: { mode: 'unified', cfg: 1 }, seed: 42, device: 'cuda:0',
+  })
+})
+
+test('direct preflight freezes validated three-way CFG settings', () => {
+  const request = fixtureRequest()
+  request.guidance = {
+    mode: 'three-way', audio: 1.2, text: 0.8, midi: 1.4,
+    formula: 'audio-text-midi-telescoping.v1',
+  }
+  const preflight = validateSynthesisDirectControlRequest(request)
+  assert.deepEqual(preflight.render.guidance, request.guidance)
+  assert.equal(preflight.render.cfg, 0)
+
+  request.guidance.text = 11
+  assert.throws(() => validateSynthesisDirectControlRequest(request), /guidance.text/)
 })
 
 test('direct preflight rejects client frame-map or MIDI transport tampering', () => {
@@ -69,6 +85,25 @@ test('direct job manifest freezes canonical snapshot and hash-locked resources',
   assert.equal(manifest.resources.checkpoint.sha256, resourceSHA256.checkpoint)
   assert.equal(manifest.resources.runner.sha256, resourceSHA256.runner)
   assert.equal(manifest.resources.singerRoot.path, 'E:/AIscene/YingMusic_Singer_Plus')
+})
+
+test('direct preflight and manifest support the V5Pg_20K preset', () => {
+  const request = fixtureRequest()
+  request.presetId = 'V5Pg_20K'
+  const preflight = validateSynthesisDirectControlRequest(request)
+  assert.equal(preflight.presetId, 'V5Pg_20K')
+
+  const resourceSHA256 = Object.fromEntries([
+    'checkpoint', 'modelConfig', 'vaeConfig', 'vaeCheckpoint', 'placement',
+    'directControlAdapter', 'runner', 'midi_p_v4ph.py',
+  ].map((key, index) => [key, (index + 1).toString(16).repeat(64)]))
+  const manifest = buildV5PDirectJobManifest(request, { ...preflight, resourceSHA256 })
+  assert.equal(manifest.preset.id, 'V5Pg_20K')
+  assert.equal(manifest.preset.checkpointSchema, 'v5pg_training_checkpoint_v1')
+  assert.equal(manifest.preset.checkpointStep, 20000)
+  assert.equal(manifest.preset.emaStepOffset, 40000)
+  assert.match(manifest.resources.checkpoint.path, /V5Pg_20K\/step_020000_final\.pt$/)
+  assert.match(manifest.resources.vaeCheckpoint.path, /autoencoder_285k\.ckpt$/)
 })
 
 function fixtureRequest(): any {

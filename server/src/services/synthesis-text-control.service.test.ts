@@ -37,6 +37,41 @@ test('Text Control job preserves a terminal Kana H control boundary', () => {
   assert.equal(job.targetPhrases[0].controlEndFrameExclusive, 32)
 })
 
+test('Text Control job preserves hard per-Kana frame boundaries', () => {
+  const request = fixture({
+    sourceTrack: 'kana',
+    hardKanaBoundaries: true,
+    phrases: [{
+      id: 'kana-phrase:a', kana: 'なつ', startFrame: 8, endFrameExclusive: 24,
+      controlEndFrameExclusive: 32,
+      kanaUnits: [
+        { id: 'kana:na', kana: 'な', startFrame: 8, endFrameExclusive: 15 },
+        { id: 'kana:tsu', kana: 'つ', startFrame: 17, endFrameExclusive: 24 },
+      ],
+    }],
+  })
+  const job = buildSynthesisTextControlJob(request)
+  assert.equal(job.hardKanaBoundaries, true)
+  assert.deepEqual(job.targetPhrases[0].kanaUnits, request.phrases[0].kanaUnits)
+})
+
+test('Text Control rejects invalid hard Kana boundaries', () => {
+  assert.throws(() => validateSynthesisTextControlRequest(fixture({
+    sourceTrack: 'segment', hardKanaBoundaries: true,
+  })), /只支持 KanaTrack/)
+  assert.throws(() => validateSynthesisTextControlRequest(fixture({
+    sourceTrack: 'kana', hardKanaBoundaries: true,
+    phrases: [{
+      id: 'kana-phrase:a', kana: 'なつ', startFrame: 8, endFrameExclusive: 24,
+      controlEndFrameExclusive: 32,
+      kanaUnits: [
+        { id: 'kana:na', kana: 'な', startFrame: 8, endFrameExclusive: 16 },
+        { id: 'kana:tsu', kana: 'つ', startFrame: 15, endFrameExclusive: 24 },
+      ],
+    }],
+  })), /硬边界无效/)
+})
+
 test('Text Control rejects a terminal control boundary before speech end', () => {
   assert.throws(() => validateSynthesisTextControlRequest(fixture({
     sourceTrack: 'kana',

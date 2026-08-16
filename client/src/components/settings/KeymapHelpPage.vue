@@ -3,7 +3,7 @@
     <header class="keymap-head">
       <div>
         <h1>操作与键位教学</h1>
-        <p>AI-Midi 时间线与 V5-P 合成单元的实际操作顺序。</p>
+        <p>这页只讲当前可用的真实流程，不讲旧 TextObject 链路。</p>
       </div>
       <nav class="section-nav" aria-label="教学目录">
         <a href="#v5p-workflow">V5-P 流程</a>
@@ -17,44 +17,44 @@
         <span class="section-index">01</span>
         <div>
           <h2>从音频到 V5-P Take</h2>
-          <p>按顺序完成。分析操作只写目标轨，不会自动级联到下一层。</p>
+          <p>所有生成都是显式操作。一次只覆盖一个目标轨，其他轨不动。</p>
         </div>
       </div>
 
       <div class="workflow">
         <div class="workflow-step">
           <span class="step-number">1</span>
-          <div><strong>创建 B 合成单元</strong><p>在左侧或时间线右键目标 AudioObject，选择“创建合成单元”，再双击新对象进入编辑器。</p></div>
+          <div><strong>创建合成单元</strong><p>在左侧资源栏或时间线上的 AudioObject 右键，选择“创建音轨合成单元”。生成的是可独立编辑的 SYN，不是旧 TextObject。</p></div>
         </div>
         <div class="workflow-step">
           <span class="step-number">2</span>
-          <div><strong>生成 Segment 和 MIDI-P</strong><p>右键 Guide Audio，分别执行“自动转录为 Segment”和“GAME 自动生成 MIDI-P”。两项互不影响。</p></div>
+          <div><strong>生成 Segment 和 MIDI-P</strong><p>右键 Guide Audio，分别执行“自动转录为 Segment”和“GAME 自动生成 MIDI-P”。两项互不影响，也不会自动改别的轨。</p></div>
         </div>
         <div class="workflow-step">
           <span class="step-number">3</span>
-          <div><strong>校对整句歌词</strong><p>双击 Segment，对照 Romaji 修正原文、Kana 和句级 frame；拖左右边界调整句子范围。</p></div>
+          <div><strong>校对整句歌词</strong><p>双击 Segment，修正句子文本、Kana、Romaji 和句级边界。Segment 是句单位，右键可继续重提取本句文本。</p></div>
         </div>
         <div class="workflow-step">
           <span class="step-number">4</span>
-          <div><strong>逐层生成 Kana 和 H</strong><p>右键 Segment 先“自动对齐至 Kana”；校对 Kana 后，右键 Kana 或 Segment“自动对齐至 H Token”。</p></div>
+          <div><strong>逐层生成 Kana 和 H</strong><p>先让 Segment 生成 Kana。Kana 生成后，可以继续走两种 H 路线：`按当前 Kana 边界对齐至 H Token`，或者 `映射至 H Token` 直接按当前 Kana 内容铺开。</p></div>
         </div>
         <div class="workflow-step">
           <span class="step-number">5</span>
-          <div><strong>手工调整 token frame</strong><p>H Token 只占单帧，可左右拖动或强制替换；MIDI-P 可横向改时间、纵向改音高。</p></div>
+          <div><strong>手工调整 token frame</strong><p>H Token 只占单帧；MIDI-P 也按 frame 编辑。H 右键做替换，MIDI-P 头 token 可横向改时序、纵向改音高。</p></div>
         </div>
         <div class="workflow-step">
           <span class="step-number">6</span>
-          <div><strong>准备并绑定 A 区参考</strong><p>A 必须是另一个已准备 H 的合成单元。把它从左侧拖进“A 区参考”，或点击选择按钮绑定。</p></div>
+          <div><strong>准备并绑定 A 区参考</strong><p>A 必须是另一个已准备好的合成单元。把它拖进“A 区参考”槽，或点选择按钮绑定；不能直接拿普通 AudioObject 顶上来。</p></div>
         </div>
         <div class="workflow-step">
           <span class="step-number">7</span>
-          <div><strong>生成、试听并导出 Take</strong><p>点击 A 区栏末尾的魔棒。完成后在 Takes 条选择结果、试听，并用下载按钮导出到正式音轨。</p></div>
+          <div><strong>生成、试听并导出 Take</strong><p>点击 A 区栏末尾的魔棒生成 Take。完成后在 Takes 条切换试听，满意后再导出到正式音轨。</p></div>
         </div>
       </div>
 
       <div class="preflight-band">
         <strong>魔棒是灰色的？</strong>
-        <span>检查 B Guide、B H、B MIDI-P、A 区绑定和 A H。A 不能是自身，也不能直接绑定普通 AudioObject；请先把参考音频创建为另一个合成单元。</span>
+        <span>检查 B Guide、B H、B MIDI-P、A 区绑定和 A H。A 不能是自身，也不能直接绑定普通 AudioObject；先把参考音频创建成另一个 SYN。</span>
       </div>
     </section>
 
@@ -63,7 +63,7 @@
         <span class="section-index">02</span>
         <div>
           <h2>合成单元内的鼠标操作</h2>
-          <p>右键负责生成或强制替换，双击负责文字编辑，拖动负责 frame 调整。</p>
+          <p>同一层里，编辑和生成是分开的；不要指望自动级联。</p>
         </div>
       </div>
 
@@ -71,13 +71,13 @@
         <div class="control-row header"><span>区域</span><span>操作</span><span>结果</span></div>
         <div class="control-row"><strong>Guide Audio</strong><span>右键</span><p>转录 Segment，或用 GAME 覆盖完整 MIDI-P 轨。</p></div>
         <div class="control-row"><strong>Segment</strong><span>双击 / 拖边界</span><p>编辑原文、Kana、Romaji 和句级 frame。</p></div>
-        <div class="control-row"><strong>Segment</strong><span>右键</span><p>只覆盖该 Segment frame 范围内的 Kana 或 H 目标轨。</p></div>
-        <div class="control-row"><strong>Kana</strong><span>双击 / 拖共享边界</span><p>编辑单个 Kana，并调整相邻 Kana 的离散 frame 分界。</p></div>
-        <div class="control-row"><strong>Kana</strong><span>右键</span><p>只重新生成该 Kana control range 的 H Token。</p></div>
+        <div class="control-row"><strong>Segment</strong><span>右键</span><p>只覆盖该句的目标轨范围，不改别的轨。</p></div>
+        <div class="control-row"><strong>Kana</strong><span>双击 / 拖主体</span><p>编辑单个 Kana。SEG 也是 Kana 轨上的一个单帧对象。</p></div>
+        <div class="control-row"><strong>Kana</strong><span>右键</span><p>可走“自动对齐至 H Token”或“映射至 H Token”。</p></div>
         <div class="control-row"><strong>H Token</strong><span>悬浮 / 左拖</span><p>查看中文说明；将单帧 token 移到另一个离散 frame。</p></div>
         <div class="control-row"><strong>H Token</strong><span>右键 / 双击</span><p>在任意 frame 打开 token 选择器，强制替换或清空。</p></div>
-        <div class="control-row"><strong>MIDI-P 头 token</strong><span>左拖</span><p>横向移动时间，纵向每级改变 0.5 半音；纵向拖动时，其连续 FLOW 一起跟随并播放目标钢琴音。</p></div>
-        <div class="control-row"><strong>MIDI-P / FLOW</strong><span>右键</span><p>精确输入 class，或显式写入 FLOW、REST。相邻同音高的普通 token 不会自动变成 FLOW。</p></div>
+        <div class="control-row"><strong>MIDI-P 头 token</strong><span>左拖</span><p>横向移动时间，纵向每级改变 0.5 半音；FLOW 只是在前端显示上承接前一个音高。</p></div>
+        <div class="control-row"><strong>MIDI-P / FLOW</strong><span>右键</span><p>精确输入 class，或显式写入 FLOW、REST。连续同音高 run 只有首帧是实体音高 token。</p></div>
         <div class="control-row"><strong>A 区参考</strong><span>拖入 / 选择</span><p>绑定另一个合成单元的完整 Guide 和最新 Text/H。</p></div>
         <div class="control-row"><strong>Takes</strong><span>点击 / 播放 / 下载</span><p>选择历史结果、切换 Take 试听，或复制到正式 AudioObject/TrackObject。</p></div>
       </div>
@@ -122,7 +122,7 @@
           <div class="shortcut"><div class="key-combo"><kbd>Ctrl</kbd><span>+</span><kbd>C</kbd></div><strong>复制选中的音频片段或合成单元</strong></div>
           <div class="shortcut"><div class="key-combo"><kbd>Ctrl</kbd><span>+</span><kbd>V</kbd></div><strong>粘贴到新音轨</strong></div>
           <div class="shortcut"><div class="key-combo"><kbd>Ctrl</kbd><span>+</span><kbd>B</kbd></div><strong>合并选中片段</strong></div>
-          <div class="shortcut"><div class="key-combo"><kbd>Delete</kbd></div><strong>删除选中的对象或文本句</strong></div>
+          <div class="shortcut"><div class="key-combo"><kbd>Delete</kbd></div><strong>删除选中的对象、Kana、H 或 MIDI-P</strong></div>
           <div class="shortcut"><div class="key-combo"><kbd>Enter</kbd></div><strong>用选中对象创建组</strong></div>
         </section>
 

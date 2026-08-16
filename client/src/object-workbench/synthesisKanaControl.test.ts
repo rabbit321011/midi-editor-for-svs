@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SynthesisKanaTrack } from './types'
-import { buildKanaPhraseContexts, getKanaControlRange, normalizeKanaMora } from './synthesisKanaControl'
+import { buildKanaPhraseContexts, getKanaControlRange, getKanaPhraseForSegment, normalizeKanaMora } from './synthesisKanaControl'
 
 describe('Kana -> H control context', () => {
   it('uses Kana SEG to build phrase context and assigns the tail to the last mora', () => {
@@ -26,7 +26,7 @@ describe('Kana -> H control context', () => {
   it('rejects a KanaUnit that crosses its own SEG boundary', () => {
     const track = fixtureTrack()
     track.units[1].endFrameExclusive = 11
-    expect(() => buildKanaPhraseContexts(track, 20)).toThrow('跨越 SEG boundary')
+    expect(() => buildKanaPhraseContexts(track, 20)).toThrow('与 SEG frame')
   })
 
   it('accepts a terminal SEG when later Kana phrases have not been materialized yet', () => {
@@ -46,6 +46,30 @@ describe('Kana -> H control context', () => {
     expect(normalizeKanaMora('ヴァ')).toBe('ゔぁ')
     expect(normalizeKanaMora('カー')).toBe('かー')
   })
+
+  it('finds the current Kana phrase under a Segment and requires matching SEG ownership', () => {
+    const track = fixtureTrack()
+    expect(getKanaPhraseForSegment(track, 20, {
+      segmentStartFrame: 1,
+      segmentSpeechEndFrameExclusive: 9,
+      segmentControlEndFrameExclusive: 10,
+    })).toMatchObject({ kana: 'きみ', startFrame: 2, controlEndFrameExclusive: 10 })
+    expect(() => getKanaPhraseForSegment(track, 20, {
+      segmentStartFrame: 1,
+      segmentSpeechEndFrameExclusive: 9,
+      segmentControlEndFrameExclusive: 11,
+    })).toThrow('Kana SEG')
+  })
+
+  it('rejects multiple Kana SEG phrases under one Segment', () => {
+    const track = fixtureTrack()
+    expect(() => getKanaPhraseForSegment(track, 20, {
+      segmentStartFrame: 1,
+      segmentSpeechEndFrameExclusive: 18,
+      segmentControlEndFrameExclusive: 20,
+    })).toThrow('多个 Kana 分句')
+  })
+
 })
 
 function fixtureTrack(): SynthesisKanaTrack {
@@ -57,6 +81,6 @@ function fixtureTrack(): SynthesisKanaTrack {
       { id: 'kana:c', kana: 'の', romaji: 'no', startFrame: 10, endFrameExclusive: 14, origin: 'user' },
       { id: 'kana:d', kana: 'こ', romaji: 'ko', startFrame: 14, endFrameExclusive: 17, origin: 'user' },
     ],
-    boundaries: [{ id: 'seg:a', frame: 10, kind: 'SEG', origin: 'user' }],
+    boundaries: [{ id: 'seg:a', frame: 9, kind: 'SEG', origin: 'user' }],
   }
 }

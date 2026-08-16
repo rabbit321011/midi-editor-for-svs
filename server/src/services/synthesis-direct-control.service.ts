@@ -9,26 +9,31 @@ import { isV5PRuntimeReady, runV5PResidentInfer } from './model-runtime.service.
 
 const PROJECT_ROOT = 'E:/AIscene/AISVC-midi-web'
 const DATA_ROOT = path.resolve(PROJECT_ROOT, 'data')
-import { V5P_DIRECT_PRESET, SINGER_ROOT } from './v5p-preset.js'
+import { SINGER_ROOT, getV5PDirectPreset, type V5PModelId } from './v5p-preset.js'
 
 export { V5P_DIRECT_PRESET } from './v5p-preset.js'
 
 export interface SynthesisDirectControlRequest {
   jobId: string
-  presetId: string
+  presetId: V5PModelId
   referenceWav: string
   targetWav: string
   snapshot: unknown
   steps?: number
   cfg?: number
+  guidance?: V5PGuidance
   seed?: number
   device?: string
 }
 
+export type V5PGuidance =
+  | { mode: 'unified'; cfg: number }
+  | { mode: 'three-way'; audio: number; text: number; midi: number; formula: 'audio-text-midi-telescoping.v1' }
+
 export interface SynthesisDirectControlPreflight {
   schema: 'aisvc.v5p-direct-preflight.v1'
   jobId: string
-  presetId: 'V5P_40K_EMA'
+  presetId: V5PModelId
   snapshotSHA256: string
   frameMap: Record<string, any>
   referenceWav: string
@@ -36,6 +41,7 @@ export interface SynthesisDirectControlPreflight {
   render: {
     steps: number
     cfg: number
+    guidance: V5PGuidance
     seed: number
     device: string
   }
@@ -51,11 +57,12 @@ export interface SynthesisDirectControlResult {
   sampleCount: number
   duration: number
   auditFile: string
-  presetId: 'V5P_40K_EMA'
+  presetId: V5PModelId
   checkpointSHA256: string
   vaeSHA256: string
   adapterSHA256: string
   seed: number
+  samplingSettings: { guidance: V5PGuidance; steps: number; seed: number }
 }
 
 interface DirectProcessEvent {
@@ -71,7 +78,7 @@ export function validateSynthesisDirectControlRequest(
   req: SynthesisDirectControlRequest,
 ): SynthesisDirectControlPreflight {
   if (!/^[a-zA-Z0-9_-]{4,64}$/.test(req.jobId || '')) throw new Error('V5-P jobId 无效')
-  if (req.presetId !== V5P_DIRECT_PRESET.id) throw new Error('V5-P preset 无效')
+  getV5PDirectPreset(req.presetId)
   const referenceWav = validateJobWavPath(req.referenceWav, 'A')
   const targetWav = validateJobWavPath(req.targetWav, 'B')
   const snapshot = record(req.snapshot, 'material snapshot')
@@ -114,19 +121,40 @@ export function validateSynthesisDirectControlRequest(
   }
 
   const steps = integer(req.steps ?? 32, 'steps', 1, 256)
-  const cfg = finite(req.cfg ?? 1, 'cfg', 0, 10)
+  const guidance = validateGuidance(req.guidance, req.cfg)
+  if (guidance.mode === 'three-way' && !getV5PDirectPreset(req.presetId).supportsThreeWayCfg) {
+    throw new Error(`${req.presetId} 不支持三路 CFG`)
+  }
+  const cfg = guidance.mode === 'unified' ? guidance.cfg : 0
   const seed = integer(req.seed ?? 42, 'seed', 0, 0xffffffff)
   const device = req.device == null ? 'cuda:0' : nonempty(req.device, 'device')
   if (!/^cuda:\d+$/.test(device) && device !== 'cpu') throw new Error('device 无效')
   return {
     schema: 'aisvc.v5p-direct-preflight.v1',
     jobId: req.jobId,
-    presetId: 'V5P_40K_EMA',
+    presetId: req.presetId,
     snapshotSHA256: sha256Text(canonicalJSON(snapshot)),
     frameMap: expectedFrameMap,
     referenceWav,
     targetWav,
-    render: { steps, cfg, seed, device },
+    render: { steps, cfg, guidance, seed, device },
+  }
+}
+
+function validateGuidance(value: unknown, legacyCfg?: number): V5PGuidance {
+  if (value == null) return { mode: 'unified', cfg: finite(legacyCfg ?? 1, 'cfg', 0, 10) }
+  const guidance = record(value, 'guidance')
+  if (guidance.mode === 'unified') {
+    return { mode: 'unified', cfg: finite(guidance.cfg, 'guidance.cfg', 0, 10) }
+  }
+  if (guidance.mode !== 'three-way') throw new Error('guidance mode 无效')
+  if (guidance.formula !== 'audio-text-midi-telescoping.v1') throw new Error('3CFG formula 无效')
+  return {
+    mode: 'three-way',
+    audio: finite(guidance.audio, 'guidance.audio', 0, 10),
+    text: finite(guidance.text, 'guidance.text', 0, 10),
+    midi: finite(guidance.midi, 'guidance.midi', 0, 10),
+    formula: 'audio-text-midi-telescoping.v1',
   }
 }
 
@@ -134,6 +162,7 @@ export async function verifySynthesisDirectControlResources(
   req: SynthesisDirectControlRequest,
 ): Promise<SynthesisDirectControlPreflight & { resourceSHA256: Record<string, string> }> {
   const preflight = validateSynthesisDirectControlRequest(req)
+  const preset = getV5PDirectPreset(req.presetId)
   const snapshot = req.snapshot as Record<string, any>
   const referenceGuide = snapshot.reference.guide
   const targetGuide = snapshot.target.guide
@@ -151,23 +180,23 @@ export async function verifySynthesisDirectControlResources(
   if (targetWav.sampleCount !== targetGuide.sampleCount) throw new Error('B Guide sampleCount 与 snapshot 不一致')
 
   const resources: Array<[string, string, string]> = [
-    ['checkpoint', V5P_DIRECT_PRESET.checkpoint, V5P_DIRECT_PRESET.checkpointSHA256],
-    ['modelConfig', V5P_DIRECT_PRESET.modelConfig, V5P_DIRECT_PRESET.modelConfigSHA256],
-    ['vaeConfig', V5P_DIRECT_PRESET.vaeConfig, V5P_DIRECT_PRESET.vaeConfigSHA256],
-    ['vaeCheckpoint', V5P_DIRECT_PRESET.vaeCheckpoint, V5P_DIRECT_PRESET.vaeCheckpointSHA256],
-    ['placement', V5P_DIRECT_PRESET.placement, V5P_DIRECT_PRESET.placementSHA256],
+    ['checkpoint', preset.checkpoint, preset.checkpointSHA256],
+    ['modelConfig', preset.modelConfig, preset.modelConfigSHA256],
+    ['vaeConfig', preset.vaeConfig, preset.vaeConfigSHA256],
+    ['vaeCheckpoint', preset.vaeCheckpoint, preset.vaeCheckpointSHA256],
+    ['placement', preset.placement, preset.placementSHA256],
   ]
-  for (const [name, expected] of Object.entries(V5P_DIRECT_PRESET.melodyHashes)) {
+  for (const [name, expected] of Object.entries(preset.melodyHashes)) {
     resources.push([name, `${SINGER_ROOT}/src/YingMusicSinger/melody/${name}`, expected])
   }
-  if (!fs.existsSync(V5P_DIRECT_PRESET.directControlAdapter)) {
-    throw new Error(`V5-P direct-control adapter 缺失: ${V5P_DIRECT_PRESET.directControlAdapter}`)
+  if (!fs.existsSync(preset.directControlAdapter)) {
+    throw new Error(`V5-P direct-control adapter 缺失: ${preset.directControlAdapter}`)
   }
-  if (!fs.existsSync(V5P_DIRECT_PRESET.directRunner)) {
-    throw new Error(`V5-P direct runner 缺失: ${V5P_DIRECT_PRESET.directRunner}`)
+  if (!fs.existsSync(preset.directRunner)) {
+    throw new Error(`V5-P direct runner 缺失: ${preset.directRunner}`)
   }
-  if (!fs.existsSync(V5P_DIRECT_PRESET.python)) {
-    throw new Error(`V5-P CUDA Python 缺失: ${V5P_DIRECT_PRESET.python}`)
+  if (!fs.existsSync(preset.python)) {
+    throw new Error(`V5-P CUDA Python 缺失: ${preset.python}`)
   }
   const resourceSHA256: Record<string, string> = {}
   for (const [name, filePath, expected] of resources) {
@@ -175,8 +204,8 @@ export async function verifySynthesisDirectControlResources(
     if (actual !== expected) throw new Error(`V5-P ${name} SHA256 不一致：${actual} != ${expected}`)
     resourceSHA256[name] = actual
   }
-  resourceSHA256.directControlAdapter = await sha256FileCached(V5P_DIRECT_PRESET.directControlAdapter)
-  resourceSHA256.runner = await sha256FileCached(V5P_DIRECT_PRESET.directRunner)
+  resourceSHA256.directControlAdapter = await sha256FileCached(preset.directControlAdapter)
+  resourceSHA256.runner = await sha256FileCached(preset.directRunner)
   return { ...preflight, resourceSHA256 }
 }
 
@@ -184,6 +213,7 @@ export function buildV5PDirectJobManifest(
   req: SynthesisDirectControlRequest,
   verified: SynthesisDirectControlPreflight & { resourceSHA256: Record<string, string> },
 ) {
+  const preset = getV5PDirectPreset(req.presetId)
   const snapshotCanonical = canonicalJSON(req.snapshot)
   if (sha256Text(snapshotCanonical) !== verified.snapshotSHA256) {
     throw new Error('V5-P snapshot 在 preflight 后发生变化')
@@ -197,11 +227,12 @@ export function buildV5PDirectJobManifest(
     jobId: verified.jobId,
     createdAt: new Date().toISOString(),
     preset: {
-      id: V5P_DIRECT_PRESET.id,
-      checkpointSchema: V5P_DIRECT_PRESET.checkpointSchema,
-      checkpointStep: V5P_DIRECT_PRESET.checkpointStep,
-      weightSource: V5P_DIRECT_PRESET.weightSource,
-      trainingCodeSHA256: V5P_DIRECT_PRESET.trainingCodeSHA256,
+      id: preset.id,
+      checkpointSchema: preset.checkpointSchema,
+      checkpointStep: preset.checkpointStep,
+      emaStepOffset: preset.emaStepOffset,
+      weightSource: preset.weightSource,
+      trainingCodeSHA256: preset.trainingCodeSHA256,
     },
     inputs: {
       referenceWav: verified.referenceWav,
@@ -211,13 +242,13 @@ export function buildV5PDirectJobManifest(
     snapshotCanonical,
     snapshotSHA256: verified.snapshotSHA256,
     resources: {
-      checkpoint: resource(V5P_DIRECT_PRESET.checkpoint, 'checkpoint'),
-      modelConfig: resource(V5P_DIRECT_PRESET.modelConfig, 'modelConfig'),
-      vaeConfig: resource(V5P_DIRECT_PRESET.vaeConfig, 'vaeConfig'),
-      vaeCheckpoint: resource(V5P_DIRECT_PRESET.vaeCheckpoint, 'vaeCheckpoint'),
-      placement: resource(V5P_DIRECT_PRESET.placement, 'placement'),
-      directControlAdapter: resource(V5P_DIRECT_PRESET.directControlAdapter, 'directControlAdapter'),
-      runner: resource(V5P_DIRECT_PRESET.directRunner, 'runner'),
+      checkpoint: resource(preset.checkpoint, 'checkpoint'),
+      modelConfig: resource(preset.modelConfig, 'modelConfig'),
+      vaeConfig: resource(preset.vaeConfig, 'vaeConfig'),
+      vaeCheckpoint: resource(preset.vaeCheckpoint, 'vaeCheckpoint'),
+      placement: resource(preset.placement, 'placement'),
+      directControlAdapter: resource(preset.directControlAdapter, 'directControlAdapter'),
+      runner: resource(preset.directRunner, 'runner'),
       midiPModule: resource(
         `${SINGER_ROOT}/src/YingMusicSinger/melody/midi_p_v4ph.py`,
         'midi_p_v4ph.py',
@@ -233,6 +264,7 @@ export async function runSynthesisDirectControl(
   preverified?: SynthesisDirectControlPreflight & { resourceSHA256: Record<string, string> },
 ): Promise<SynthesisDirectControlResult | null> {
   try {
+    const preset = getV5PDirectPreset(req.presetId)
     const verified = preverified ?? await verifySynthesisDirectControlResources(req)
     const outputDir = path.resolve(PROJECT_ROOT, 'data', `render_${req.jobId}_v5p`)
     if (fs.existsSync(outputDir)) throw new Error(`V5-P jobId 已存在且不可覆盖: ${req.jobId}`)
@@ -244,35 +276,46 @@ export async function runSynthesisDirectControl(
 
     send(ws, { type: 'progress', progress: 4, message: '冻结 V5-P 合成材料' })
     let resultFile = path.join(outputDir, 'result.json')
+    const modelLabel = preset.id === 'V5Pg_20K' ? 'V5-Pg 20K' : 'V5-P 40K EMA'
+    const vaeLabel = preset.id === 'V5Pg_20K' ? '285k online VAE' : '官方 20 Hz VAE'
     const onDirectEvent = (event: DirectProcessEvent) => {
       if (event.type === 'validated_job') {
         send(ws, { type: 'progress', progress: 10, message: `控制材料已锁定 · ${event.totalFrames} frames` })
       }
-      if (event.type === 'loading_checkpoint') send(ws, { type: 'progress', progress: 16, message: '加载 V5-P 40K EMA' })
-      if (event.type === 'loaded_checkpoint') send(ws, { type: 'progress', progress: 35, message: 'V5-P 40K EMA 已加载' })
-      if (event.type === 'loading_vae') send(ws, { type: 'progress', progress: 40, message: '加载官方 20 Hz VAE' })
-      if (event.type === 'loaded_vae') send(ws, { type: 'progress', progress: 53, message: '官方 VAE 已加载' })
+      if (event.type === 'loading_checkpoint') send(ws, { type: 'progress', progress: 16, message: `加载 ${modelLabel}` })
+      if (event.type === 'loaded_checkpoint') send(ws, { type: 'progress', progress: 35, message: `${modelLabel} 已加载` })
+      if (event.type === 'loading_vae') send(ws, { type: 'progress', progress: 40, message: `加载 ${vaeLabel}` })
+      if (event.type === 'loaded_vae') send(ws, { type: 'progress', progress: 53, message: `${vaeLabel} 已加载` })
       if (event.type === 'encoding_reference') send(ws, { type: 'progress', progress: 60, message: '编码 A/B Guide' })
-      if (event.type === 'sampling') send(ws, { type: 'progress', progress: 68, message: 'V5-P 采样' })
+      if (event.type === 'sampling') {
+        const label = verified.render.guidance.mode === 'three-way' ? 'V5-P 三路 CFG 采样' : 'V5-P 统一 CFG 采样'
+        send(ws, { type: 'progress', progress: 68, message: label })
+      }
       if (event.type === 'decoding') send(ws, { type: 'progress', progress: 92, message: '解码 B 区 Take' })
       if (event.type === 'complete' && event.resultFile) resultFile = event.resultFile
     }
-    if (isV5PRuntimeReady()) {
-      await runV5PResidentInfer(jobFile, jobSHA256, outputDir, onDirectEvent)
+    if (isV5PRuntimeReady(req.presetId)) {
+      await runV5PResidentInfer(req.presetId, jobFile, jobSHA256, outputDir, onDirectEvent)
     } else {
-      await runJsonProcess(V5P_DIRECT_PRESET.python, [
-        V5P_DIRECT_PRESET.directRunner,
+      await runJsonProcess(preset.python, [
+        preset.directRunner,
         '--job', jobFile,
         '--expected-job-sha256', jobSHA256,
         '--output-dir', outputDir,
-      ], onDirectEvent, { id: `v5p:${req.jobId}`, kind: 'svs', modelId: V5P_DIRECT_PRESET.id, device: verified.render.device })
+      ], onDirectEvent, { id: `v5p:${req.jobId}`, kind: 'svs', modelId: preset.id, device: verified.render.device })
     }
     const result = JSON.parse(fs.readFileSync(resultFile, 'utf-8')) as SynthesisDirectControlResult
     if (
       result.schema !== 'aisvc.v5p-direct-result.v1'
       || result.jobId !== req.jobId
+      || result.presetId !== req.presetId
       || result.snapshotSHA256 !== verified.snapshotSHA256
       || result.sampleRate !== 44100
+      || canonicalJSON(result.samplingSettings) !== canonicalJSON({
+        guidance: verified.render.guidance,
+        steps: verified.render.steps,
+        seed: verified.render.seed,
+      })
       || !fs.existsSync(result.outputWav)
     ) {
       throw new Error('V5-P runner 返回了不兼容的 Take')

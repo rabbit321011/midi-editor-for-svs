@@ -1,12 +1,15 @@
-import type { SynthesisMaterialSnapshot } from '@/object-workbench'
+import type { SynthesisMaterialSnapshot, V5PGuidance } from '@/object-workbench'
+import type { V5PModelId } from '@/object-workbench'
 import { readSynthesisV5PResult, type SynthesisV5PResult } from './synthesisV5PProtocol'
 
 export interface RunSynthesisV5POptions {
   referenceBlob: Blob
   targetBlob: Blob
   snapshot: SynthesisMaterialSnapshot
+  presetId?: V5PModelId
   steps?: number
   cfg?: number
+  guidance?: V5PGuidance
   seed?: number
   onProgress?: (progress: number, message: string) => void
 }
@@ -20,14 +23,16 @@ export async function runSynthesisV5P(
     uploadTempWav(`render_${jobId}_v5p_a`, options.referenceBlob),
     uploadTempWav(`render_${jobId}_v5p_b`, options.targetBlob),
   ])
+  const presetId = options.presetId ?? 'V5P_40K_EMA'
   const request = {
     jobId,
-    presetId: 'V5P_40K_EMA',
+    presetId,
     referenceWav: referenceUpload.path,
     targetWav: targetUpload.path,
     snapshot: options.snapshot,
     steps: options.steps ?? 32,
     cfg: options.cfg ?? 1,
+    guidance: options.guidance ?? { mode: 'unified', cfg: options.cfg ?? 1 },
     seed: options.seed ?? 42,
     device: 'cuda:0',
   }
@@ -41,7 +46,7 @@ export async function runSynthesisV5P(
 
   const ws = await openRenderWebSocket(jobId)
   try {
-    const done = waitForV5PDone(ws, jobId, options.onProgress)
+    const done = waitForV5PDone(ws, jobId, presetId, options.onProgress)
     const response = await fetch('/api/synthesis/v5p/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -60,6 +65,7 @@ export async function runSynthesisV5P(
 function waitForV5PDone(
   ws: WebSocket,
   jobId: string,
+  presetId: V5PModelId,
   onProgress?: RunSynthesisV5POptions['onProgress'],
 ): Promise<SynthesisV5PResult> {
   return new Promise((resolve, reject) => {
@@ -73,7 +79,7 @@ function waitForV5PDone(
           return
         }
         if (message.type === 'v5p-result') {
-          result = readSynthesisV5PResult(message, jobId)
+          result = readSynthesisV5PResult(message, jobId, presetId)
           if (!result) finishReject(new Error('V5-P 返回了不兼容的 Take'))
           return
         }

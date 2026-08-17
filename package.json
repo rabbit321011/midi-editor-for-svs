@@ -1,6 +1,7 @@
 {
   "name": "aisvc-midi-web",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "dev": "concurrently \"pnpm --filter client dev\" \"pnpm --filter server dev\"",
     "dev:client": "pnpm --filter client dev",

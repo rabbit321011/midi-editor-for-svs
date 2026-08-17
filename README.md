@@ -134,6 +134,14 @@ V5-P 接入的详细合同、frame 对齐、A/B 组合和 Take 生命周期见�
 - [`docs/v5p-token-editor-design.md`](docs/v5p-token-editor-design.md)
 - [`docs/v5p-token-editor-v2-inventory.md`](docs/v5p-token-editor-v2-inventory.md)
 
+## 许可证
+
+MIDI Editor for SVS 编辑器原创源码采用 [MIT License](LICENSE)。
+
+MIT **只覆盖编辑器本身的原创源码及文档**，不覆盖模型权重、checkpoint、VAE、数据集、训练数据、生成媒体、用户工程资产、示例音频或第三方模型与程序。自研模型资产在没有随附独立许可证时保留所有权利；第三方内容遵守其各自原始许可证。
+
+完整的授权边界见 [LICENSE_SCOPE.md](LICENSE_SCOPE.md)。同一发行包中包含某项资产，不代表该资产自动适用 MIT。
+
 ## Git 忽略内容
 
 以下内容属于本地环境或运行时产物，不应提交：

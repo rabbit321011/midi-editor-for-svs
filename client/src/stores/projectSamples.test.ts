@@ -1,15 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import demoProject from '../../../projects/DEMO1/project.json'
-import summerGoingEndProject from '../../../projects/summerGoingEnd/project.json'
+import synthesisProject from '../../../projects/想让你听见的是/project.json'
 import type { Project } from '@/types'
 import { TOP_LEVEL_IDS } from '@/object-workbench'
 import { useObjectTreeStore } from './objectTree'
 import { useProjectStore } from './project'
 
 const samples = [
-  ['DEMO1', demoProject],
-  ['summerGoingEnd', summerGoingEndProject],
+  ['想让你听见的是', synthesisProject],
 ] as const
 
 describe('checked-in project samples objectTree migration smoke test', () => {

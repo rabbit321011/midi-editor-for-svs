@@ -648,14 +648,13 @@ AudioObject/TrackObject 管线，默认使用 SynthesisUnit 的 `defaultTimeline
 自动验证：
 
 ```text
-client: 142 tests passed（排除既有缺失 fixture 套件）
+client: 项目迁移测试改用现存真实工程 `想让你听见的是`
 server: 27 tests passed + TypeScript build passed
 Python: 13 compiler/direct-control/runner tests passed + py_compile passed
 ```
 
-完整前端仍只有一个既有失败套件：`projectSamples.test.ts` 在测试收集阶段静态导入用户已删除的
-`projects/DEMO1` 与 `projects/summerGoingEnd`；其余 38 个 test files、142 个 tests 全部通过。
-`vue-tsc` 也只报告这两个缺失 fixture。
+`projectSamples.test.ts` 不再静态导入已经删除的 `DEMO1` 与 `summerGoingEnd`，改为使用现存真实工程
+`projects/想让你听见的是/project.json` 验证 objectTree 迁移与序列化。
 
 ### 11.3 文档与 Git
 

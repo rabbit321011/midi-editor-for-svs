@@ -96,12 +96,7 @@ GAME 1.0 官方有三个规模：
 
 - `projects/V5P Editor Dev/project.json` 和 `projects/明证/project.json` 不应提交。
 - `exports/` 不上传。
-- 客户端 `vue-tsc -b` 仍会因为缺少以下 fixture 失败：
-
-```text
-projects/DEMO1/project.json
-projects/summerGoingEnd/project.json
-```
+- 客户端项目迁移测试已改用现存真实工程 `projects/想让你听见的是/project.json`，不再依赖已删除的 DEMO fixture。
 
 - `pnpm --filter client exec vite build` 目前通过。
 - `pnpm --filter server build` 目前通过。

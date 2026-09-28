@@ -902,6 +902,17 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
     return { ok: true }
   }
 
+  function renameSynthesisTake(unitId: NodeId, takeId: string, name: string): { ok: boolean; reason?: string } {
+    const unit = index.value.nodes[unitId]
+    if (!unit || unit.kind !== 'synthesisUnit') return { ok: false, reason: '合成单元不存在' }
+    const take = unit.synthesisUnit.takes.find(item => item.id === takeId)
+    if (!take) return { ok: false, reason: 'Take 不存在' }
+    const trimmedName = name.trim()
+    if (!trimmedName) return { ok: false, reason: 'Take 名称不能为空' }
+    take.name = trimmedName
+    return { ok: true }
+  }
+
   function setSynthesisUnitPreset(unitId: NodeId, presetId: V5PModelId): { ok: boolean; reason?: string } {
     const unit = index.value.nodes[unitId]
     if (!unit || unit.kind !== 'synthesisUnit') return { ok: false, reason: '合成单元不存在' }
@@ -2536,6 +2547,7 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
     failSynthesisTake,
     cancelSynthesisTake,
     setActiveSynthesisTake,
+    renameSynthesisTake,
     setSynthesisUnitPreset,
     setSynthesisUnitSamplingSettings,
     dropAudioObjectToTimeline,

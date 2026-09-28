@@ -45,6 +45,9 @@ const analysis = useSynthesisUnitAnalysis()
 const waveformCanvas = ref<HTMLCanvasElement | null>(null)
 const audioElement = ref<HTMLAudioElement | null>(null)
 const takeAudioElement = ref<HTMLAudioElement | null>(null)
+const takeListRef = ref<HTMLElement | null>(null)
+const editingTakeId = ref<string | null>(null)
+const takeNameDraft = ref('')
 const referenceAudioElement = ref<HTMLAudioElement | null>(null)
 const guideUrl = ref('')
 const referenceGuideUrl = ref('')
@@ -1284,6 +1287,42 @@ function selectTake(takeId: string) {
     return
   }
   auditionSource.value = 'take'
+}
+
+async function beginTakeRename(take: SynthesisTake) {
+  editingTakeId.value = take.id
+  takeNameDraft.value = take.name
+  await nextTick()
+  takeListRef.value?.querySelector<HTMLInputElement>('.take-name-input')?.select()
+}
+
+function cancelTakeRename() {
+  editingTakeId.value = null
+}
+
+function commitTakeRename() {
+  const takeId = editingTakeId.value
+  if (!takeId) return
+  editingTakeId.value = null
+  const name = takeNameDraft.value.trim()
+  const take = synthesis.value?.takes.find(item => item.id === takeId)
+  if (!take || name === take.name) return
+  if (!name) {
+    flashStatus('Take 名称不能为空')
+    return
+  }
+  const before = objectTree.snapshotTree()
+  const result = objectTree.renameSynthesisTake(props.objectId, takeId, name)
+  if (!result.ok) {
+    flashStatus(result.reason ?? 'Take 重命名失败')
+    return
+  }
+  history.push({
+    description: `重命名 Take · ${name}`,
+    patches: [],
+    inversePatches: [],
+    objectTree: { kind: 'snapshot', before, after: objectTree.snapshotTree() },
+  })
 }
 
 async function exportActiveTake() {
@@ -3131,20 +3170,33 @@ onBeforeUnmount(() => {
         <span>Takes</span>
         <small>{{ synthesis.takes.length }}</small>
       </div>
-      <div class="take-list">
-        <button
-          v-for="take in synthesis.takes"
-          :key="take.id"
-          type="button"
-          class="take-item"
-          :class="{ active: take.id === synthesis.activeTakeId, failed: take.status === 'failed' }"
-          :disabled="take.status !== 'ready'"
-          :title="take.error || `${take.name} · target r${take.targetUnitRevision} · reference r${take.referenceUnitRevision} · ${takeSamplingLabel(take)}`"
-          @click="selectTake(take.id)"
-        >
-          <strong>{{ take.name }}</strong>
-          <span>{{ take.status === 'ready' ? formatTime(take.duration ?? 0) : take.status }}</span>
-        </button>
+      <div ref="takeListRef" class="take-list">
+        <template v-for="take in synthesis.takes" :key="take.id">
+          <input
+            v-if="editingTakeId === take.id"
+            v-model="takeNameDraft"
+            class="take-name-input"
+            type="text"
+            aria-label="Take 名称"
+            @keydown.enter.prevent="commitTakeRename"
+            @keydown.esc.prevent="cancelTakeRename"
+            @blur="commitTakeRename"
+          >
+          <button
+            v-else
+            type="button"
+            class="take-item"
+            :class="{ active: take.id === synthesis.activeTakeId, failed: take.status === 'failed' }"
+            :aria-disabled="take.status !== 'ready'"
+            :title="take.error || `${take.name} · target r${take.targetUnitRevision} · reference r${take.referenceUnitRevision} · ${takeSamplingLabel(take)}`"
+            @click="take.status === 'ready' && selectTake(take.id)"
+            @dblclick.stop="beginTakeRename(take)"
+            @keydown.f2.prevent="beginTakeRename(take)"
+          >
+            <strong>{{ take.name }}</strong>
+            <span>{{ take.status === 'ready' ? formatTime(take.duration ?? 0) : take.status }}</span>
+          </button>
+        </template>
       </div>
       <NButton
         quaternary
@@ -3928,7 +3980,13 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 4px;
   overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--app-border) transparent;
 }
+.take-list::-webkit-scrollbar { height: 5px; }
+.take-list::-webkit-scrollbar-track { background: transparent; }
+.take-list::-webkit-scrollbar-thumb { border-radius: 3px; background: var(--app-border); }
+.take-list::-webkit-scrollbar-thumb:hover { background: var(--app-muted); }
 .take-item {
   flex: 0 0 108px;
   height: 28px;
@@ -3947,7 +4005,22 @@ onBeforeUnmount(() => {
 .take-item span { color: var(--app-muted); font: 9px ui-monospace, SFMono-Regular, Consolas, monospace; }
 .take-item.active { border-color: var(--app-accent); background: var(--app-selected); color: var(--app-text); }
 .take-item.failed { border-color: #805467; color: #d9a7b8; }
-.take-item:disabled { cursor: default; opacity: 0.75; }
+.take-item[aria-disabled="true"] { cursor: text; opacity: 0.75; }
+.take-name-input {
+  flex: 0 0 108px;
+  box-sizing: border-box;
+  width: 108px;
+  height: 28px;
+  min-width: 0;
+  padding: 0 7px;
+  border: 1px solid var(--app-accent);
+  border-radius: 3px;
+  outline: none;
+  background: var(--synth-panel);
+  color: var(--app-text);
+  font: inherit;
+  font-size: 10px;
+}
 
 .editor-workspace {
   flex: 1;

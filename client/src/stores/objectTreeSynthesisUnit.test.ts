@@ -266,6 +266,11 @@ describe('SynthesisUnit object-tree integration', () => {
     expect(take.snapshotSHA256).toBe('e'.repeat(64))
     expect(take.outputAssetId && objectTree.tree.assets[take.outputAssetId]?.sha256).toBe('d'.repeat(64))
     expect(take.outputAssetId && tracks.sourceBlobs.get(objectTree.tree.assets[take.outputAssetId].blobKey ?? '')).toBe(blob)
+    expect(objectTree.renameSynthesisTake('node:synthesisUnit:b', 'take:test', '  Chorus take  ')).toEqual({ ok: true })
+    expect(take.name).toBe('Chorus take')
+    expect(take.outputAssetId && objectTree.tree.assets[take.outputAssetId]?.sha256).toBe('d'.repeat(64))
+    expect(objectTree.renameSynthesisTake('node:synthesisUnit:b', 'take:test', '  ')).toEqual({ ok: false, reason: 'Take 名称不能为空' })
+    expect(take.name).toBe('Chorus take')
     expect(await objectTree.completeSynthesisTake('node:synthesisUnit:b', 'take:test', blob, {
       outputSHA256: 'f'.repeat(64), snapshotSHA256: 'e'.repeat(64), sampleRate: 44100,
       sampleCount: 2048, duration: 2048 / 44100, checkpointSHA256: 'a'.repeat(64),

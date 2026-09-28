@@ -31,3 +31,9 @@ report.md   checkpoint 收束后生成的现实报告
 ```text
 docs/updates/baseline/report.md
 ```
+
+## 新增设计
+
+- [ver0.9 SYN 歌词辅助校对设计](ver0.9/design.md)：尚未实现。记录参考歌词服从 Segment 边界、基于实际时间与已确认上下文的宽松匹配，以及不挤占时间线的临时校对交互。
+
+此目录曾长期未追加 checkpoint；ver0.9 是本次设计记录编号，不表示 ver0.8 至今的所有代码变化已补写，也不替代现有专题文档。实现收束后再新增 ver0.9/report.md 记录实际结果。

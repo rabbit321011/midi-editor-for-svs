@@ -28,5 +28,6 @@ public/f0_data.json
 
 # 系统文件
 *.log
+.codex-logs/
 .DS_Store
 Thumbs.db

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { NButton, NDropdown, NIcon, NInput, NInputNumber, NModal, NPopover, NRadioButton, NRadioGroup, NSelect, NSlider } from 'naive-ui'
-import { Add, ColorWandOutline, DownloadOutline, EllipsisHorizontal, LinkOutline, MicOutline, MusicalNotesOutline, OpenOutline, OptionsOutline, Pause, Play, Remove, Stop, UnlinkOutline } from '@vicons/ionicons5'
+import { Add, AlertCircleOutline, CheckmarkCircleOutline, ColorWandOutline, DownloadOutline, EllipsisHorizontal, LinkOutline, MicOutline, MusicalNotesOutline, OpenOutline, OptionsOutline, Pause, Play, Remove, Stop, TimeOutline, UnlinkOutline } from '@vicons/ionicons5'
 import { useObjectTreeStore } from '@/stores/objectTree'
 import { useGpuRuntimeStore, type ModelRuntimeStatus } from '@/stores/gpuRuntime'
 import { useTracksStore } from '@/stores/tracks'
@@ -9,6 +9,8 @@ import { useHistoryStore } from '@/stores/history'
 import { useEditorWorkspaceStore } from '@/stores/editorWorkspace'
 import { useUiSettingsStore } from '@/stores/uiSettings'
 import HTokenPicker from './HTokenPicker.vue'
+import LyricProofreader from './LyricProofreader.vue'
+import { lyricStatus } from '@/object-workbench/lyricProofreading'
 import { V5P_H_TOKEN_BY_ID, type V5PHTokenCatalogEntry } from '@/generated/v5pHTokenCatalog'
 import { useSynthesisUnitAnalysis } from '@/composables/useSynthesisUnitAnalysis'
 import type { SegmentTextControlTarget } from '@/composables/useSynthesisUnitAnalysis'
@@ -56,6 +58,7 @@ const waveform = ref<Float32Array | null>(null)
 const pxPerFrame = ref(14)
 const playheadFrame = ref(0)
 const playing = ref(false)
+const lyricAuditionEnd = ref<number | null>(null)
 const referencePlaying = ref(false)
 const referenceDropActive = ref(false)
 const auditionSource = ref<'guide' | 'midi-p' | 'take'>('guide')
@@ -822,6 +825,7 @@ async function togglePlayback() {
 }
 
 function stopPrimaryPlayback() {
+  lyricAuditionEnd.value = null
   midiPlaybackGeneration++
   midiPlaybackStarting = false
   for (const audio of [audioElement.value, takeAudioElement.value]) {
@@ -978,6 +982,12 @@ function stopScheduledMidiNodes() {
 function tickPlayback() {
   const audio = auditionSource.value === 'take' ? takeAudioElement.value : audioElement.value
   if (!audio || !playing.value) return
+  if (lyricAuditionEnd.value !== null && audio.currentTime >= lyricAuditionEnd.value) {
+    audio.pause()
+    playing.value = false
+    lyricAuditionEnd.value = null
+    return
+  }
   if (audio.currentTime >= modelDuration.value || audio.ended) {
     stopPlayback()
     return
@@ -1906,6 +1916,7 @@ function midiPitchName(midiClass: number) {
 
 function handleEditorKeydown(event: KeyboardEvent) {
   const targetElement = event.target instanceof HTMLElement ? event.target : null
+  if (targetElement?.closest('[data-lyric-proofreader]')) return
   const isEditorTabTarget = Boolean(targetElement?.closest('.editor-tab'))
   const ctrl = event.ctrlKey || event.metaKey
   if (ctrl && event.key.toLocaleLowerCase() === 's') {
@@ -2032,6 +2043,42 @@ function openEmptySegmentMenu(event: MouseEvent) {
 
 function selectSegment(segmentId: string) {
   editorSelection.value = { type: 'segment', id: segmentId }
+}
+
+function lyricSegmentStatus(segment: SynthesisSegmentObject) {
+  if (!unit.value) return ''
+  const session = objectTree.tree.lyricProofreading?.sessions[props.objectId]
+  if (!session) return ''
+  const reference = objectTree.tree.lyricProofreading?.references.find(item => item.id === session.referenceId)
+  return lyricStatus(unit.value, segment, session, reference)
+}
+
+function lyricAnchor() {
+  return timelineScrollRef.value?.querySelector('.segment-object.selected')?.getBoundingClientRect()
+}
+
+async function selectLyricSegment(segmentId: string) {
+  selectSegment(segmentId)
+  await nextTick()
+  const element = timelineScrollRef.value?.querySelector('.segment-object.selected')
+  element?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+}
+
+async function auditionLyricRange(startFrame: number, endFrame: number) {
+  stopPlayback()
+  auditionSource.value = 'guide'
+  await nextTick()
+  const audio = audioElement.value
+  if (!audio || !guideUrl.value) { flashStatus('Guide 音频尚未就绪'); return }
+  audio.currentTime = frameToAudioTime(startFrame)
+  playheadFrame.value = startFrame
+  lyricAuditionEnd.value = frameToAudioTime(endFrame)
+  try {
+    syncAudioPlaybackRate()
+    await audio.play()
+    playing.value = true
+    tickPlayback()
+  } catch { lyricAuditionEnd.value = null; flashStatus('Guide 试听失败') }
 }
 
 function selectKana(kanaUnitId: string) {
@@ -3021,6 +3068,12 @@ onBeforeUnmount(() => {
         <span>{{ playbackRate.toFixed(1) }}x</span>
       </div>
       <div class="toolbar-spacer" />
+      <LyricProofreader
+        :unit-id="objectId" :selected-id="selectedSegmentId" :busy="analysisBusy"
+        :playing="playing" :anchor="lyricAnchor"
+        @select="selectLyricSegment" @audition="auditionLyricRange" @stop="stopPlayback"
+        @align="(id, target) => chooseSegmentMenuFor(id, target)"
+      />
     </header>
 
     <div v-if="takePreparation.running || takeGeneration.running || analysisJob.running || capacityPreparing" class="analysis-progress-top">
@@ -3271,6 +3324,7 @@ onBeforeUnmount(() => {
                 width: `${frameToDisplayX(segmentEnd(segment.id, segment.speechEndFrameExclusive) - segmentStart(segment.id, segment.startFrame))}px`,
               }"
               :class="{ selected: selectedSegmentId === segment.id }"
+              :data-lyric-status="lyricSegmentStatus(segment) || undefined"
               @click.stop="selectSegment(segment.id)"
               @dblclick.stop="openSegmentEditor(segment.id)"
               @contextmenu="openSegmentMenu($event, segment.id)"
@@ -3282,7 +3336,12 @@ onBeforeUnmount(() => {
                 @pointerdown="beginSegmentBoundaryDrag($event, segment.id, 'start')"
               />
               <strong>{{ segment.kana || segment.text }}</strong>
-              <span>{{ segment.romaji }}</span>
+              <NIcon v-if="lyricSegmentStatus(segment) && lyricSegmentStatus(segment) !== '未检查'" class="lyric-status" :title="lyricSegmentStatus(segment)" :aria-label="lyricSegmentStatus(segment)">
+                <CheckmarkCircleOutline v-if="lyricSegmentStatus(segment) === '已应用'" />
+                <AlertCircleOutline v-else-if="['需复核', '发音控制待更新'].includes(lyricSegmentStatus(segment))" />
+                <TimeOutline v-else />
+              </NIcon>
+              <span v-if="uiSettings.settings.showRomaji">{{ segment.romaji }}</span>
               <button
                 type="button"
                 class="segment-actions"
@@ -3321,7 +3380,7 @@ onBeforeUnmount(() => {
               @dblclick.stop="openKanaEditor(kana.id)"
               @contextmenu="openKanaMenu($event, kana.id)"
             >
-              <strong>{{ kana.kana }}</strong><span>{{ kana.romaji }}</span>
+              <strong>{{ kana.kana }}</strong><span v-if="uiSettings.settings.showRomaji">{{ kana.romaji }}</span>
               <button
                 type="button"
                 class="boundary-handle start kana-boundary"
@@ -3478,7 +3537,7 @@ onBeforeUnmount(() => {
         <header class="inspector-header"><strong>Segment</strong><span>{{ selectedSegment.origin }}</span></header>
         <dl class="inspector-properties">
           <dt>Kana</dt><dd>{{ selectedSegment.kana || '-' }}</dd>
-          <dt>Romaji</dt><dd>{{ selectedSegment.romaji || '-' }}</dd>
+          <template v-if="uiSettings.settings.showRomaji"><dt>Romaji</dt><dd>{{ selectedSegment.romaji || '-' }}</dd></template>
           <dt>原文</dt><dd>{{ selectedSegment.text || '-' }}</dd>
           <dt>发声范围</dt><dd>{{ selectedSegment.startFrame }}..{{ selectedSegment.speechEndFrameExclusive - 1 }}</dd>
           <dt>H 控制范围</dt><dd>{{ selectedSegment.startFrame }}..{{ segmentOwnedEnd(selectedSegment.id) - 1 }}</dd>
@@ -3495,7 +3554,7 @@ onBeforeUnmount(() => {
         <header class="inspector-header"><strong>Kana</strong><span>{{ selectedKana.origin }}</span></header>
         <dl class="inspector-properties">
           <dt>Kana</dt><dd>{{ selectedKana.kana }}</dd>
-          <dt>Romaji</dt><dd>{{ selectedKana.romaji || '-' }}</dd>
+          <template v-if="uiSettings.settings.showRomaji"><dt>Romaji</dt><dd>{{ selectedKana.romaji || '-' }}</dd></template>
           <dt>Frame 范围</dt><dd>{{ selectedKana.startFrame }}..{{ selectedKana.endFrameExclusive - 1 }}</dd>
           <dt>时长</dt><dd>{{ formatTime(frameToAudioTime(selectedKana.endFrameExclusive - selectedKana.startFrame)) }}</dd>
           <dt>直接映射 H</dt>
@@ -3637,7 +3696,7 @@ onBeforeUnmount(() => {
       <div class="segment-form">
         <label><span>原文</span><NInput v-model:value="segmentEditor.text" type="textarea" :autosize="{ minRows: 2, maxRows: 4 }" /></label>
         <label><span>Kana</span><NInput :value="segmentEditor.kana" @update:value="updateSegmentEditorKana" /></label>
-        <label><span>Romaji</span><NInput :value="segmentEditor.romaji" @update:value="updateSegmentEditorRomaji" /></label>
+        <label v-if="uiSettings.settings.showRomaji"><span>Romaji</span><NInput :value="segmentEditor.romaji" @update:value="updateSegmentEditorRomaji" /></label>
         <div class="frame-fields">
           <label><span>Start frame</span><NInputNumber v-model:value="segmentEditor.startFrame" :min="0" :max="frameCount - 1" /></label>
           <label><span>End frame</span><NInputNumber v-model:value="segmentEditor.speechEndFrameExclusive" :min="segmentEditor.startFrame + 1" :max="frameCount" /></label>
@@ -3716,7 +3775,7 @@ onBeforeUnmount(() => {
     <NModal v-model:show="kanaEditor.show" preset="card" title="编辑 Kana" class="kana-editor-modal">
       <div class="segment-form">
         <label><span>Kana / Mora</span><NInput :value="kanaEditor.kana" @update:value="updateKanaEditorKana" /></label>
-        <label><span>Romaji</span><NInput :value="kanaEditor.romaji" @update:value="updateKanaEditorRomaji" /></label>
+        <label v-if="uiSettings.settings.showRomaji"><span>Romaji</span><NInput :value="kanaEditor.romaji" @update:value="updateKanaEditorRomaji" /></label>
         <div class="modal-actions">
           <NButton @click="kanaEditor.show = false">取消</NButton>
           <NButton type="primary" @click="saveKanaEditor">保存 Kana</NButton>
@@ -4175,6 +4234,11 @@ onBeforeUnmount(() => {
 .segment-object span { display: block; overflow: hidden; text-overflow: ellipsis; }
 .segment-object strong { font-size: 11px; }
 .segment-object span { color: #9ab0bf; font-size: 9px; }
+.segment-object .lyric-status { position: absolute; bottom: 3px; right: 8px; font-size: 12px; color: #a0dfc3; }
+.segment-object[data-lyric-status] > span { padding-right: 14px; }
+.segment-object[data-lyric-status="需复核"],
+.segment-object[data-lyric-status="发音控制待更新"] { border-bottom-color: #d6a94d; }
+.segment-object[data-lyric-status="已应用"] { border-bottom-color: #62bca0; }
 .segment-actions {
   position: absolute;
   top: 3px;

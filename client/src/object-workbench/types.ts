@@ -354,6 +354,7 @@ export interface ProjectObjectTree {
   schemaVersion: 'object-workbench.v1'
   root: FolderNode
   assets: Record<string, AudioAsset>
+  lyricProofreading?: import('./lyricProofreading').LyricProofreadingData
 }
 
 export interface RuntimeTreeIndex {

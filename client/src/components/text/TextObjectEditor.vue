@@ -3,6 +3,7 @@ import { computed, nextTick, ref } from 'vue'
 import { useObjectTreeStore } from '@/stores/objectTree'
 import { useHistoryStore } from '@/stores/history'
 import { usePlaybackStore } from '@/stores/playback'
+import { useUiSettingsStore } from '@/stores/uiSettings'
 import type { TextSegment } from '@/object-workbench'
 import { kanaToRomaji, romajiToKana } from '@/utils/kanaRomaji'
 
@@ -11,6 +12,7 @@ const props = defineProps<{ objectId: string }>()
 const objectTree = useObjectTreeStore()
 const history = useHistoryStore()
 const playback = usePlaybackStore()
+const uiSettings = useUiSettingsStore()
 const selectedId = ref<string | null>(null)
 const editorRoot = ref<HTMLElement | null>(null)
 const kanaEditor = ref<HTMLTextAreaElement | null>(null)
@@ -167,9 +169,9 @@ function flash(message: string) {
         <h2>{{ textObject.name }}</h2>
         <button type="button" class="small-btn icon-btn" title="新增句子" @click="addSegment"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7.25 2h1.5v5.25H14v1.5H8.75V14h-1.5V8.75H2v-1.5h5.25V2Z" /></svg></button>
       </div>
-      <div class="segment-table">
+      <div class="segment-table" :class="{ 'without-romaji': !uiSettings.settings.showRomaji }">
         <div class="segment-row segment-head">
-          <span>#</span><span>Start</span><span>End</span><span>Kana</span><span>Romaji</span><span></span>
+          <span>#</span><span>Start</span><span>End</span><span>Kana</span><span v-if="uiSettings.settings.showRomaji">Romaji</span><span></span>
         </div>
         <button
           v-for="(segment, index) in segments"
@@ -185,7 +187,7 @@ function flash(message: string) {
           <span>{{ formatTime(segment.start) }}</span>
           <span>{{ formatTime(segment.end) }}</span>
           <span class="clip">{{ segment.kana || '-' }}</span>
-          <span class="clip">{{ segment.romaji || '-' }}</span>
+          <span v-if="uiSettings.settings.showRomaji" class="clip">{{ segment.romaji || '-' }}</span>
           <span class="row-actions">
             <button type="button" class="delete-segment-btn" title="删除句子" @click.stop="deleteSegment(segment)">
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 2h3l.5 1H13v1H3V3h3l.5-1ZM4 5h8l-.5 9h-7L4 5Z" /></svg>
@@ -208,7 +210,7 @@ function flash(message: string) {
       </div>
       <div v-if="segmentIssue(selectedSegment, segments.indexOf(selectedSegment))" class="segment-warning">{{ segmentIssue(selectedSegment, segments.indexOf(selectedSegment)) }}</div>
       <label>Kana<textarea ref="kanaEditor" :value="selectedSegment.kana" @input="patchSegment(selectedSegment, { kana: ($event.target as HTMLTextAreaElement).value })" /></label>
-      <label>Romaji<textarea :value="selectedSegment.romaji" @input="patchSegment(selectedSegment, { romaji: ($event.target as HTMLTextAreaElement).value })" /></label>
+      <label v-if="uiSettings.settings.showRomaji">Romaji<textarea :value="selectedSegment.romaji" @input="patchSegment(selectedSegment, { romaji: ($event.target as HTMLTextAreaElement).value })" /></label>
     </div>
     <div class="editor-notice">{{ notice }}</div>
   </section>
@@ -267,6 +269,7 @@ h2 { margin: 0; font-size: 15px; font-weight: 600; }
   font-size: 12px;
 }
 .segment-head { color: var(--app-muted); border-bottom: 1px solid var(--app-border); border-radius: 0; }
+.without-romaji .segment-row { grid-template-columns: 36px 64px 64px minmax(120px, 1fr) 28px; }
 button.segment-row { cursor: pointer; padding: 0; }
 button.segment-row:hover, button.segment-row.selected { background: var(--app-hover); }
 button.segment-row.invalid { box-shadow: inset 2px 0 #d29922; }

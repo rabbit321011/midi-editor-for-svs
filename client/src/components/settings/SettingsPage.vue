@@ -105,6 +105,23 @@ function readFileAsDataUrl(file: File): Promise<string> {
     </section>
 
     <section class="settings-section">
+      <h2>歌词显示</h2>
+      <div class="settings-grid">
+        <label>显示罗马音</label>
+        <n-switch
+          :value="uiSettings.settings.showRomaji" aria-label="显示罗马音"
+          :loading="uiSettings.serverPreferenceState === 'saving'"
+          :disabled="['loading', 'saving'].includes(uiSettings.serverPreferenceState)"
+          @update:value="uiSettings.setShowRomaji"
+        />
+      </div>
+      <div v-if="uiSettings.serverPreferenceError" class="settings-error" role="alert">
+        {{ uiSettings.serverPreferenceError }}
+        <n-button size="tiny" @click="uiSettings.loadServerPreferences">重新读取</n-button>
+      </div>
+    </section>
+
+    <section class="settings-section">
       <h2>默认推理参数</h2>
       <div class="settings-grid">
         <label>SVC 默认模型</label>
@@ -125,7 +142,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
     </section>
 
     <footer class="settings-foot">
-      <n-button size="small" @click="uiSettings.reset">恢复默认</n-button>
+      <n-button size="small" :disabled="['loading', 'saving'].includes(uiSettings.serverPreferenceState)" @click="uiSettings.reset">恢复默认</n-button>
     </footer>
   </div>
 </template>
@@ -178,4 +195,5 @@ function readFileAsDataUrl(file: File): Promise<string> {
   padding-top: 16px;
   border-top: 1px solid var(--app-border);
 }
+.settings-error { margin-top: 10px; color: var(--app-danger); font-size: 12px; }
 </style>

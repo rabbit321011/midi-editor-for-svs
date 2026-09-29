@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useUiSettingsStore } from './uiSettings'
 
 describe('ui settings store', () => {
+  afterEach(() => vi.unstubAllGlobals())
   beforeEach(() => {
     setActivePinia(createPinia())
     const storage = new Map<string, string>()
@@ -67,5 +68,29 @@ describe('ui settings store', () => {
 
     expect(settings.settings.theme).toBe('light')
     spy.mockRestore()
+  })
+
+  it('loads romaji from the backend and excludes it from local preferences', async () => {
+    localStorage.setItem('aisvc-ui-settings.v0.32', JSON.stringify({ showRomaji: true }))
+    const settings = useUiSettingsStore()
+    expect(settings.settings.showRomaji).toBe(false)
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ showRomaji: true }) })
+    vi.stubGlobal('fetch', fetchMock)
+    await settings.loadServerPreferences()
+    expect(settings.settings.showRomaji).toBe(true)
+    expect(settings.serverPreferenceState).toBe('ready')
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ showRomaji: false }) })
+    expect(await settings.setShowRomaji(false)).toBe(true)
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: 'PUT', body: '{"showRomaji":false}' })
+    await Promise.resolve()
+    expect(JSON.parse(localStorage.getItem('aisvc-ui-settings.v0.32') || '{}').showRomaji).toBeUndefined()
+  })
+
+  it('keeps the last saved preference when the backend rejects a change', async () => {
+    const settings = useUiSettingsStore()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: '保存失败' }) }))
+    expect(await settings.setShowRomaji(true)).toBe(false)
+    expect(settings.settings.showRomaji).toBe(false)
+    expect(settings.serverPreferenceError).toBe('保存失败')
   })
 })

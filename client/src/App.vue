@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, watchEffect } from 'vue'
+import { computed, onMounted, watchEffect } from 'vue'
 import { darkTheme, NConfigProvider, NGlobalStyle, type GlobalThemeOverrides } from 'naive-ui'
 import { useUiSettingsStore } from '@/stores/uiSettings'
 
 const uiSettings = useUiSettingsStore()
+onMounted(() => { void uiSettings.loadServerPreferences() })
 const naiveTheme = computed(() => uiSettings.settings.theme === 'night' ? darkTheme : null)
 const naiveThemeOverrides = computed<GlobalThemeOverrides>(() => {
   const palette = uiSettings.palette

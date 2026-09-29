@@ -15,6 +15,8 @@ import { runSvc } from './services/svc.service.js'
 import { buildSvsArgs, runSvs, verifySvsResources } from './services/svs.service.js'
 import { runV4h, verifyV4hResources } from './services/v4h.service.js'
 import { runWhisper, runSofaStage, runWhisperStage } from './services/whisper.service.js'
+import { lyricReading } from './services/lyric-reading.service.js'
+import { UiPreferencesRepository } from './services/ui-preferences.service.js'
 import {
   runSynthesisTextControl,
   verifySynthesisTextControlResources,
@@ -64,6 +66,28 @@ import {
 const app = express()
 app.use(cors())
 app.use(express.json({ limit: '500mb' }))
+const uiPreferences = new UiPreferencesRepository()
+app.get('/api/ui-preferences', (_req, res) => {
+  try { res.json(uiPreferences.read()) }
+  catch { res.status(500).json({ error: '无法读取显示设置' }) }
+})
+app.put('/api/ui-preferences', (req, res) => {
+  if (typeof req.body?.showRomaji !== 'boolean') {
+    res.status(400).json({ error: 'showRomaji 必须为布尔值' })
+    return
+  }
+  try { res.json(uiPreferences.write(req.body)) }
+  catch { res.status(500).json({ error: '无法保存显示设置' }) }
+})
+app.post('/api/lyrics/reading', async (req, res) => {
+  const text = req.body?.text
+  if (typeof text !== 'string' || !text.trim() || text.length > 30000) {
+    res.status(400).json({ error: '歌词须为 1 至 30000 字符的文本' })
+    return
+  }
+  try { res.json(await lyricReading(text)) }
+  catch (error: any) { res.status(503).json({ error: error?.message || '读音转换暂不可用' }) }
+})
 app.use('/api/global-resources/:id/blobs', express.raw({ type: 'application/octet-stream', limit: '500mb' }))
 
 const server = http.createServer(app)

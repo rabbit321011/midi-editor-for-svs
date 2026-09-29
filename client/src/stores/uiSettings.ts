@@ -1,4 +1,4 @@
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 
 export type WorkbenchTheme = 'night' | 'light' | 'cream'
@@ -24,6 +24,7 @@ export interface WorkbenchPalette {
 const STORAGE_KEY = 'aisvc-ui-settings.v0.32'
 export interface UiSettingsState {
   theme: WorkbenchTheme
+  showRomaji: boolean
   autoSaveIntervalMinutes: number
   svcDefaultModel: string
   svcDefaultSteps: number
@@ -46,6 +47,7 @@ export interface UiSettingsState {
 
 const defaults: UiSettingsState = {
   theme: 'night',
+  showRomaji: false,
   autoSaveIntervalMinutes: 5,
   svcDefaultModel: '',
   svcDefaultSteps: 100,
@@ -68,6 +70,51 @@ const defaults: UiSettingsState = {
 
 export const useUiSettingsStore = defineStore('uiSettings', () => {
   const settings = reactive<UiSettingsState>(loadSettings())
+  const serverPreferenceState = ref<'loading' | 'ready' | 'saving' | 'error'>('loading')
+  const serverPreferenceError = ref('')
+  let preferenceRequest = 0
+
+  async function loadServerPreferences() {
+    const request = ++preferenceRequest
+    serverPreferenceState.value = 'loading'
+    serverPreferenceError.value = ''
+    try {
+      const response = await fetch('/api/ui-preferences', { cache: 'no-store' })
+      const value = await response.json()
+      if (!response.ok || typeof value.showRomaji !== 'boolean') throw new Error(value.error || '显示设置读取失败')
+      if (request !== preferenceRequest) return
+      settings.showRomaji = value.showRomaji
+      serverPreferenceState.value = 'ready'
+    } catch (error: any) {
+      if (request !== preferenceRequest) return
+      serverPreferenceState.value = 'error'
+      serverPreferenceError.value = error.message || '显示设置读取失败'
+    }
+  }
+
+  async function setShowRomaji(value: boolean) {
+    if (serverPreferenceState.value === 'saving') return false
+    const request = ++preferenceRequest
+    serverPreferenceState.value = 'saving'
+    serverPreferenceError.value = ''
+    try {
+      const response = await fetch('/api/ui-preferences', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ showRomaji: value }),
+      })
+      const result = await response.json()
+      if (!response.ok || typeof result.showRomaji !== 'boolean') throw new Error(result.error || '显示设置保存失败')
+      if (request !== preferenceRequest) return false
+      settings.showRomaji = result.showRomaji
+      serverPreferenceState.value = 'ready'
+      return true
+    } catch (error: any) {
+      if (request === preferenceRequest) {
+        serverPreferenceState.value = 'error'
+        serverPreferenceError.value = error.message || '显示设置保存失败'
+      }
+      return false
+    }
+  }
 
   const rootClass = computed(() => `theme-${settings.theme}`)
   const palette = computed(() => workbenchPalette(settings.theme))
@@ -110,6 +157,7 @@ export const useUiSettingsStore = defineStore('uiSettings', () => {
   watch(settings, () => persistSettings(settings), { deep: true })
 
   function update<K extends keyof UiSettingsState>(key: K, value: UiSettingsState[K]) {
+    if (key === 'showRomaji') { void setShowRomaji(value === true); return true }
     ;(settings[key] as UiSettingsState[K]) = value
     normalize()
     return true
@@ -137,7 +185,10 @@ export const useUiSettingsStore = defineStore('uiSettings', () => {
   }
 
   function reset() {
+    const previousRomaji = settings.showRomaji
     Object.assign(settings, defaults)
+    settings.showRomaji = previousRomaji
+    void setShowRomaji(false)
   }
 
   function normalize() {
@@ -162,6 +213,10 @@ export const useUiSettingsStore = defineStore('uiSettings', () => {
     setBackgroundImageDataUrl,
     clearBackgroundImage,
     reset,
+    loadServerPreferences,
+    setShowRomaji,
+    serverPreferenceState,
+    serverPreferenceError,
   }
 })
 
@@ -204,7 +259,7 @@ function loadSettings(): UiSettingsState {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return { ...defaults }
     const parsed = JSON.parse(raw) as Partial<UiSettingsState>
-    return { ...defaults, ...parsed }
+    return { ...defaults, ...parsed, showRomaji: false }
   } catch {
     return { ...defaults }
   }
@@ -213,7 +268,8 @@ function loadSettings(): UiSettingsState {
 function persistSettings(settings: UiSettingsState) {
   if (typeof localStorage === 'undefined') return
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+    const { showRomaji: _serverPreference, ...localSettings } = settings
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(localSettings))
   } catch {
     // Ignore storage quota errors; the in-memory settings still apply.
   }

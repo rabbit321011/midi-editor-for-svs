@@ -440,9 +440,9 @@ function drawTextTrack(ctx: CanvasRenderingContext2D, theme: ReturnType<typeof c
       ctx.rect(sx + pad, barTop + 5, Math.max(0, sw - pad * 2), barHeight - 10)
       ctx.clip()
       ctx.font = '13px system-ui, sans-serif'
-      drawReadableText(ctx, displayRomaji(segment), sx + pad, barTop + 22, textColors.muted, textColors.outline)
+      if (uiSettings.settings.showRomaji) drawReadableText(ctx, displayRomaji(segment), sx + pad, barTop + 22, textColors.muted, textColors.outline)
       ctx.font = '15px system-ui, sans-serif'
-      drawReadableText(ctx, segment.kana, sx + pad, barTop + 45, textColors.primary, textColors.outline)
+      drawReadableText(ctx, segment.kana, sx + pad, barTop + (uiSettings.settings.showRomaji ? 45 : 32), textColors.primary, textColors.outline)
       ctx.restore()
 
       const previous = segments[index - 1]
@@ -1663,6 +1663,7 @@ function handleTextKeyboard(e: KeyboardEvent) {
 watch(() => [
   project.pxPerSec,
   uiSettings.settings.theme,
+  uiSettings.settings.showRomaji,
   uiSettings.settings.centerOpacity,
   uiSettings.settings.backgroundImageEnabled,
   uiSettings.settings.backgroundImageUrl,
@@ -1746,7 +1747,7 @@ onUnmounted(() => {
     >
       <button type="button" class="inline-delete" title="删除当前句子" @click="deleteSelectedTextSegment">删除句子</button>
       <label><span>Kana</span><input ref="inlineKanaInput" :value="inlineKana" @input="handleInlineInput('kana', $event)" @compositionstart="composingField = 'kana'" @compositionend="finishComposition('kana', $event)" /></label>
-      <label><span>Romaji</span><input :value="inlineRomaji" @input="handleInlineInput('romaji', $event)" @compositionstart="composingField = 'romaji'" @compositionend="finishComposition('romaji', $event)" /></label>
+      <label v-if="uiSettings.settings.showRomaji"><span>Romaji</span><input :value="inlineRomaji" @input="handleInlineInput('romaji', $event)" @compositionstart="composingField = 'romaji'" @compositionend="finishComposition('romaji', $event)" /></label>
     </div>
     <canvas
       ref="playheadRef"

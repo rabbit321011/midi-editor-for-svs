@@ -155,36 +155,43 @@ export const useUiSettingsStore = defineStore('uiSettings', () => {
         : settings.backgroundImageEnabled && settings.backgroundImageUrl
           ? `url("${settings.backgroundImageUrl}")`
         : 'none',
-      // Synthesis editor specific colors
+      // Synthesis editor specific colors - 每个组件保持独特颜色以便区分
       '--synth-surface': colors.surface,
       '--synth-panel': colors.panel,
       '--synth-floating': colors.elevated,
       '--synth-grid-line': theme === 'night' ? '#1e293b' : theme === 'cream' ? '#d7c58f' : '#d7dde4',
       '--synth-grid-major': theme === 'night' ? '#334155' : theme === 'cream' ? '#b8a872' : '#b0b8c0',
-      '--synth-segment-bg': theme === 'night' ? '#1a3a4a' : theme === 'cream' ? '#e5d7af' : '#e0f0ff',
-      '--synth-segment-border': theme === 'night' ? '#4b83a6' : theme === 'cream' ? '#8a7a4d' : '#5ba3d0',
-      '--synth-segment-text': colors.text,
+      // Segment - 蓝色系（文本段落）
+      '--synth-segment-bg': theme === 'night' ? '#1d3545' : theme === 'cream' ? '#e5dccf' : '#e0f0ff',
+      '--synth-segment-border': theme === 'night' ? '#4b83a6' : theme === 'cream' ? '#8a7a5d' : '#5ba3d0',
+      '--synth-segment-text': theme === 'night' ? '#eef6fb' : theme === 'cream' ? '#3d3d2d' : '#0d3d5d',
       '--synth-segment-muted': theme === 'night' ? '#9ab0bf' : theme === 'cream' ? '#8a7a5d' : '#6b7d8e',
       '--synth-segment-status': theme === 'night' ? '#a0dfc3' : theme === 'cream' ? '#6b9d7e' : '#4a9d7e',
-      '--synth-kana-bg': theme === 'night' ? '#322746' : theme === 'cream' ? '#d4c8e5' : '#f0e6ff',
+      // Kana - 紫色系（假名控制）
+      '--synth-kana-bg': theme === 'night' ? '#322746' : theme === 'cream' ? '#e8dff0' : '#f0e6ff',
       '--synth-kana-border': theme === 'night' ? '#8f72b8' : theme === 'cream' ? '#7d5a9d' : '#9a6fab',
-      '--synth-kana-text': colors.text,
+      '--synth-kana-text': theme === 'night' ? '#f3ebfb' : theme === 'cream' ? '#3d2d4d' : '#4d2d6d',
       '--synth-kana-muted': theme === 'night' ? '#b8a9cc' : theme === 'cream' ? '#8a7a9d' : '#7d6a9d',
       '--synth-kana-boundary': theme === 'night' ? '#c3a2eb' : theme === 'cream' ? '#9d7dcb' : '#b88ee5',
-      '--synth-kana-seg-bg': theme === 'night' ? '#51401f' : theme === 'cream' ? '#f4e4b8' : '#fff4d0',
+      // Kana segment - 黄色系（假名分段）
+      '--synth-kana-seg-bg': theme === 'night' ? '#51401f' : theme === 'cream' ? '#f4ead8' : '#fff8e0',
       '--synth-kana-seg-border': theme === 'night' ? '#d2a85b' : theme === 'cream' ? '#b8925d' : '#c9a84d',
       '--synth-kana-seg-text': theme === 'night' ? '#f4d88e' : theme === 'cream' ? '#6d5a2d' : '#7d6a3d',
-      '--synth-h-bg': theme === 'night' ? '#482634' : theme === 'cream' ? '#f4d8e0' : '#ffe5f0',
+      // H-token - 粉色系（音素令牌）
+      '--synth-h-bg': theme === 'night' ? '#482634' : theme === 'cream' ? '#f4e0e8' : '#ffe5f0',
       '--synth-h-border': theme === 'night' ? '#d0778f' : theme === 'cream' ? '#b8607d' : '#d5708f',
       '--synth-h-text': theme === 'night' ? '#ffd3de' : theme === 'cream' ? '#8a2d45' : '#a03d55',
-      '--synth-h-special-bg': theme === 'night' ? '#45391f' : theme === 'cream' ? '#f4e4b8' : '#fff4d0',
+      // H-token special - 黄色系（特殊音素）
+      '--synth-h-special-bg': theme === 'night' ? '#45391f' : theme === 'cream' ? '#f4ead8' : '#fff8e0',
       '--synth-h-special-border': theme === 'night' ? '#d2a85b' : theme === 'cream' ? '#b8925d' : '#c9a84d',
       '--synth-h-special-text': theme === 'night' ? '#f4d48c' : theme === 'cream' ? '#6d5a2d' : '#7d6a3d',
+      // MIDI - 各种音符类型用不同颜色
       '--synth-midi-note': theme === 'night' ? '#4a91ad' : theme === 'cream' ? '#6b8a9d' : '#5ba3d0',
       '--synth-midi-flow': theme === 'night' ? '#9a6fab' : theme === 'cream' ? '#9d7dcb' : '#b88ee5',
       '--synth-midi-rest': theme === 'night' ? '#4c5662' : theme === 'cream' ? '#b8a89d' : '#9da8b8',
       '--synth-midi-pad': theme === 'night' ? '#8e5665' : theme === 'cream' ? '#c8909d' : '#d57d8f',
-      '--synth-selected': colors.warning,
+      // 通用
+      '--synth-selected': theme === 'night' ? '#f0c45c' : theme === 'cream' ? '#d4b85c' : '#e0b84d',
       '--synth-boundary': theme === 'night' ? '#79b3d5' : theme === 'cream' ? '#6b95b8' : '#5ba3d0',
       '--synth-actions-bg': theme === 'night' ? 'rgba(14, 26, 35, 0.72)' : theme === 'cream' ? 'rgba(220, 210, 180, 0.85)' : 'rgba(235, 240, 245, 0.85)',
       '--synth-actions-hover': theme === 'night' ? '#31556b' : theme === 'cream' ? '#b8a88d' : '#c0d0e0',

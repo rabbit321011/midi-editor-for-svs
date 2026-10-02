@@ -89,5 +89,5 @@ defineExpose({ reveal })
 .reference-line { margin-bottom: 7px; }
 .reference-source { display: block; min-height: 24px; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 .reference-romaji { display: block; line-height: 1.5; font-size: 11px; color: var(--app-muted); white-space: pre-wrap; overflow-wrap: anywhere; user-select: none; }
-mark { color: inherit; background: #318b7055; border-bottom: 1px solid #62bca0; }
+mark { color: inherit; background: color-mix(in srgb, var(--app-success) 30%, transparent); border-bottom: 1px solid var(--app-success); }
 </style>

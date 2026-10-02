@@ -446,25 +446,25 @@ onBeforeUnmount(() => { window.removeEventListener('resize', reposition); window
 .lyric-heading strong, .lyric-heading small { display: block; overflow-wrap: anywhere; }
 .lyric-heading small { color: var(--app-muted); margin-top: 3px; }
 .lyric-body { overflow: auto; min-height: 0; padding: 10px 12px; scrollbar-width: thin; }
-.lyric-backdrop { position: fixed; inset: 0; background: #0005; z-index: 2099; }
+.lyric-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.3); z-index: 2099; }
 .lyric-form { display: grid; gap: 10px; min-width: 0; }
 .lyric-form label, .lyric-section > label { display: grid; gap: 5px; }
 .lyric-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: space-between; }
 .lyric-link { border: 0; background: transparent; padding: 3px 0; color: var(--app-accent, #6fcbba); cursor: pointer; font: inherit; text-align: left; }
 .lyric-muted, .lyric-original, small { color: var(--app-muted, #aaa); }
-.lyric-warning { color: #d6a94d; }
+.lyric-warning { color: var(--app-warning); }
 .lyric-context { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 90px; overflow: auto; line-height: 1.6; }
-mark { color: inherit; background: #318b7055; border-bottom: 1px solid #62bca0; }
+mark { color: inherit; background: color-mix(in srgb, var(--app-success) 30%, transparent); border-bottom: 1px solid var(--app-success); }
 .lyric-candidates { display: grid; gap: 0; max-height: 180px; overflow: auto; margin: 8px 0; scrollbar-width: thin; }
 .lyric-candidate { padding: 7px 3px; border: 0; border-bottom: 1px solid var(--app-border); background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; overflow-wrap: anywhere; }
-.lyric-candidate:hover { background: #8882; }
+.lyric-candidate:hover { background: color-mix(in srgb, var(--app-text) 8%, transparent); }
 .lyric-candidate span, .lyric-candidate small { display: block; }
 .lyric-candidate small { margin-top: 3px; }
 .candidate-romaji { color: var(--app-muted); font-size: 11px; line-height: 1.5; margin: 4px 0; }
 .reference-field { display: grid; gap: 5px; }
 .lyric-section { border-top: 1px solid var(--app-border); padding-top: 12px; margin-top: 12px; display: grid; gap: 8px; }
 .lyric-neighbor { display: flex; align-items: center; gap: 10px; padding: 4px; }
-.lyric-neighbor.current { background: #8882; }
+.lyric-neighbor.current { background: color-mix(in srgb, var(--app-text) 8%, transparent); }
 .lyric-neighbor span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .lyric-checkbox { display: flex; align-items: center; gap: 4px; margin-right: auto; white-space: nowrap; }
 .lyric-review { max-height: 55vh; overflow: auto; scrollbar-width: thin; }

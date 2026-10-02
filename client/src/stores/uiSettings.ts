@@ -123,6 +123,7 @@ export const useUiSettingsStore = defineStore('uiSettings', () => {
   const palette = computed(() => workbenchPalette(settings.theme))
   const cssVars = computed(() => {
     const colors = palette.value
+    const theme = settings.theme
     return {
       '--app-surface': colors.surface,
       '--app-panel': colors.panel,
@@ -154,6 +155,44 @@ export const useUiSettingsStore = defineStore('uiSettings', () => {
         : settings.backgroundImageEnabled && settings.backgroundImageUrl
           ? `url("${settings.backgroundImageUrl}")`
         : 'none',
+      // Synthesis editor specific colors
+      '--synth-surface': colors.surface,
+      '--synth-panel': colors.panel,
+      '--synth-floating': colors.elevated,
+      '--synth-grid-line': theme === 'night' ? '#1e293b' : theme === 'cream' ? '#d7c58f' : '#d7dde4',
+      '--synth-grid-major': theme === 'night' ? '#334155' : theme === 'cream' ? '#b8a872' : '#b0b8c0',
+      '--synth-segment-bg': theme === 'night' ? '#1a3a4a' : theme === 'cream' ? '#e5d7af' : '#e0f0ff',
+      '--synth-segment-border': theme === 'night' ? '#4b83a6' : theme === 'cream' ? '#8a7a4d' : '#5ba3d0',
+      '--synth-segment-text': colors.text,
+      '--synth-segment-muted': theme === 'night' ? '#9ab0bf' : theme === 'cream' ? '#8a7a5d' : '#6b7d8e',
+      '--synth-segment-status': theme === 'night' ? '#a0dfc3' : theme === 'cream' ? '#6b9d7e' : '#4a9d7e',
+      '--synth-kana-bg': theme === 'night' ? '#322746' : theme === 'cream' ? '#d4c8e5' : '#f0e6ff',
+      '--synth-kana-border': theme === 'night' ? '#8f72b8' : theme === 'cream' ? '#7d5a9d' : '#9a6fab',
+      '--synth-kana-text': colors.text,
+      '--synth-kana-muted': theme === 'night' ? '#b8a9cc' : theme === 'cream' ? '#8a7a9d' : '#7d6a9d',
+      '--synth-kana-boundary': theme === 'night' ? '#c3a2eb' : theme === 'cream' ? '#9d7dcb' : '#b88ee5',
+      '--synth-kana-seg-bg': theme === 'night' ? '#51401f' : theme === 'cream' ? '#f4e4b8' : '#fff4d0',
+      '--synth-kana-seg-border': theme === 'night' ? '#d2a85b' : theme === 'cream' ? '#b8925d' : '#c9a84d',
+      '--synth-kana-seg-text': theme === 'night' ? '#f4d88e' : theme === 'cream' ? '#6d5a2d' : '#7d6a3d',
+      '--synth-h-bg': theme === 'night' ? '#482634' : theme === 'cream' ? '#f4d8e0' : '#ffe5f0',
+      '--synth-h-border': theme === 'night' ? '#d0778f' : theme === 'cream' ? '#b8607d' : '#d5708f',
+      '--synth-h-text': theme === 'night' ? '#ffd3de' : theme === 'cream' ? '#8a2d45' : '#a03d55',
+      '--synth-h-special-bg': theme === 'night' ? '#45391f' : theme === 'cream' ? '#f4e4b8' : '#fff4d0',
+      '--synth-h-special-border': theme === 'night' ? '#d2a85b' : theme === 'cream' ? '#b8925d' : '#c9a84d',
+      '--synth-h-special-text': theme === 'night' ? '#f4d48c' : theme === 'cream' ? '#6d5a2d' : '#7d6a3d',
+      '--synth-midi-note': theme === 'night' ? '#4a91ad' : theme === 'cream' ? '#6b8a9d' : '#5ba3d0',
+      '--synth-midi-flow': theme === 'night' ? '#9a6fab' : theme === 'cream' ? '#9d7dcb' : '#b88ee5',
+      '--synth-midi-rest': theme === 'night' ? '#4c5662' : theme === 'cream' ? '#b8a89d' : '#9da8b8',
+      '--synth-midi-pad': theme === 'night' ? '#8e5665' : theme === 'cream' ? '#c8909d' : '#d57d8f',
+      '--synth-selected': colors.warning,
+      '--synth-boundary': theme === 'night' ? '#79b3d5' : theme === 'cream' ? '#6b95b8' : '#5ba3d0',
+      '--synth-actions-bg': theme === 'night' ? 'rgba(14, 26, 35, 0.72)' : theme === 'cream' ? 'rgba(220, 210, 180, 0.85)' : 'rgba(235, 240, 245, 0.85)',
+      '--synth-actions-hover': theme === 'night' ? '#31556b' : theme === 'cream' ? '#b8a88d' : '#c0d0e0',
+      '--synth-take-failed-border': theme === 'night' ? '#805467' : theme === 'cream' ? '#b8809d' : '#c5708f',
+      '--synth-take-failed-text': theme === 'night' ? '#d9a7b8' : theme === 'cream' ? '#8a5d6d' : '#9a5d7d',
+      '--synth-token-readout': theme === 'night' ? '#c7b7dc' : theme === 'cream' ? '#8a7a9d' : '#7d6a9d',
+      '--synth-reference-invalid': theme === 'night' ? '#d28b68' : theme === 'cream' ? '#c8805d' : '#d5906d',
+      '--synth-progress-midi': theme === 'night' ? 'linear-gradient(90deg, #79c0ff, #f0c45c)' : theme === 'cream' ? 'linear-gradient(90deg, #6b95d5, #d4b85c)' : 'linear-gradient(90deg, #5ba3ff, #e0b84d)',
     }
   })
 

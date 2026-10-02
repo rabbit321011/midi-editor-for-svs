@@ -124,6 +124,7 @@ export const useUiSettingsStore = defineStore('uiSettings', () => {
   const cssVars = computed(() => {
     const colors = palette.value
     const theme = settings.theme
+    const hasBackgroundImage = settings.backgroundImageEnabled && (settings.backgroundImageDataUrl || settings.backgroundImageUrl)
     return {
       '--app-surface': colors.surface,
       '--app-panel': colors.panel,
@@ -145,15 +146,15 @@ export const useUiSettingsStore = defineStore('uiSettings', () => {
       '--center-opacity': String(clamp01(settings.centerOpacity)),
       '--topbar-opacity-percent': opacityPercent(settings.topbarOpacity),
       '--side-opacity-percent': opacityPercent(settings.sideOpacity),
-      '--center-opacity-percent': opacityPercent(settings.centerOpacity),
+      '--center-opacity-percent': hasBackgroundImage ? opacityPercent(settings.centerOpacity) : '100%',
       '--floating-opacity-percent': floatingOpacityPercent(),
       '--track-canvas-bg-alpha': String(clamp01(settings.centerOpacity)),
       '--sidebar-backdrop-filter': settings.sidebarGlassEnabled ? 'blur(14px) saturate(1.15)' : 'none',
-      '--center-backdrop-filter': settings.centerGlassEnabled ? 'blur(14px) saturate(1.15)' : 'none',
-      '--workbench-bg-image': settings.backgroundImageEnabled && settings.backgroundImageDataUrl
-        ? `url("${settings.backgroundImageDataUrl}")`
-        : settings.backgroundImageEnabled && settings.backgroundImageUrl
-          ? `url("${settings.backgroundImageUrl}")`
+      '--center-backdrop-filter': hasBackgroundImage && settings.centerGlassEnabled ? 'blur(14px) saturate(1.15)' : 'none',
+      '--workbench-bg-image': hasBackgroundImage
+        ? settings.backgroundImageDataUrl
+          ? `url("${settings.backgroundImageDataUrl}")`
+          : `url("${settings.backgroundImageUrl}")`
         : 'none',
       // Synthesis editor specific colors - 每个组件保持独特颜色以便区分
       '--synth-surface': colors.surface,

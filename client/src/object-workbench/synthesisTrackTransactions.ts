@@ -362,6 +362,55 @@ export function replaceMidiPFrame(unit: SynthesisUnitObjectNode, request: Replac
   touchUnit(unit, request.now)
 }
 
+export function transposeMidiPNotes(unit: SynthesisUnitObjectNode, frames: number[], octaves: number) {
+  const track = unit.synthesisUnit.midiPTokenTrack
+  const frameCount = unit.synthesisUnit.frameContract.frameCount
+  if (track.status !== 'ready' || track.classes.length !== frameCount) {
+    throw new Error('MIDI-P track is not a ready dense layer')
+  }
+  if (!Number.isInteger(octaves) || octaves === 0 || frames.length === 0) {
+    throw new Error('请选择 MIDI-P 音符并指定整数八度')
+  }
+  const flows = new Set(track.flowFrames ?? [])
+  const heads = new Set<number>()
+  for (const frame of frames) {
+    if (!Number.isInteger(frame) || frame < 0 || frame >= frameCount) {
+      throw new Error('MIDI-P frame is outside the frame contract')
+    }
+    if (track.classes[frame] >= 255) throw new Error('REST/PAD 不能升降八度')
+    let head = frame
+    while (head > 0 && flows.has(head)) head--
+    heads.add(head)
+  }
+  const changes: Array<{ start: number; end: number; pitch: number }> = []
+  for (const head of [...heads].sort((a, b) => a - b)) {
+    const pitch = track.classes[head] + octaves * 24
+    if (!Number.isInteger(pitch) || pitch < 0 || pitch > 254) {
+      throw new Error('升降八度超出 MIDI-P 音域，所选音符均未修改')
+    }
+    let end = head + 1
+    while (end < frameCount && flows.has(end)) end++
+    changes.push({ start: head, end, pitch })
+  }
+  // Validate the entire selection before changing any note. FLOW boundaries
+  // remain untouched, including adjacent notes with identical pitches.
+  const manualFrames = new Set(track.manualFrames ?? [])
+  for (const change of changes) {
+    for (let frame = change.start; frame < change.end; frame++) {
+      track.classes[frame] = change.pitch
+      manualFrames.add(frame)
+    }
+  }
+  track.manualFrames = [...manualFrames].sort((a, b) => a - b)
+  const revision = nextRevision(unit, 'midi-p', {
+    operation: `transpose MIDI-P ${octaves > 0 ? '+' : ''}${octaves} octave`, sourceRefs: [],
+  }, changes[0].start, changes[changes.length - 1].end)
+  track.revision = revision.revision
+  track.origin = 'user'
+  track.revisions.push(revision)
+  touchUnit(unit)
+}
+
 export function moveMidiPFrame(unit: SynthesisUnitObjectNode, request: MoveMidiPFrameRequest) {
   const track = unit.synthesisUnit.midiPTokenTrack
   const frameCount = unit.synthesisUnit.frameContract.frameCount

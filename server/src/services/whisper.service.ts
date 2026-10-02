@@ -45,30 +45,29 @@ interface RunnerMessage {
 }
 
 export async function runWhisper(req: WhisperRequest, ws: WebSocket): Promise<void> {
-  let runtime: SofaRuntime
   try {
-    runtime = resolveSofaRuntime()
+    resolveSofaRuntime()
     if (req.language !== 'ja') throw new Error('Whisper -> SOFA transcription only supports Japanese (ja)')
+
+    const whisperPython = process.env.AISVC_WHISPER_PYTHON?.trim() || DEFAULT_WHISPER_PYTHON
+    if (!fs.existsSync(whisperPython)) {
+      throw new Error(`Whisper Python not found: ${whisperPython}`)
+    }
+
+    const transcriptFile = await runWhisperStage(req, ws)
+    if (!transcriptFile || !fs.existsSync(transcriptFile)) {
+      throw new Error('Whisper did not produce a phrase transcript for SOFA')
+    }
+    for (const runtimeId of req.releaseAfterWhisper ?? []) {
+      await unloadAnalysisRuntime(runtimeId)
+    }
+    await runSofaStage(req, ws, transcriptFile)
   } catch (error: any) {
+    // This pipeline is launched from a non-awaiting HTTP handler. A failed
+    // analysis must end its job, not become an unhandled server rejection.
+    console.error(`[Whisper -> SOFA] ${path.basename(req.outputDir)} failed:`, error)
     send(ws, { type: 'error', message: error?.message || String(error) })
-    return
   }
-
-  const whisperPython = process.env.AISVC_WHISPER_PYTHON?.trim() || DEFAULT_WHISPER_PYTHON
-  if (!fs.existsSync(whisperPython)) {
-    send(ws, { type: 'error', message: `Whisper Python not found: ${whisperPython}` })
-    return
-  }
-
-  const transcriptFile = await runWhisperStage(req, ws)
-  if (!transcriptFile || !fs.existsSync(transcriptFile)) {
-    send(ws, { type: 'error', message: 'Whisper did not produce a phrase transcript for SOFA' })
-    return
-  }
-  for (const runtimeId of req.releaseAfterWhisper ?? []) {
-    await unloadAnalysisRuntime(runtimeId)
-  }
-  await runSofaStage(req, ws, transcriptFile)
 }
 
 export async function runWhisperStage(req: WhisperRequest, ws: WebSocket): Promise<string> {
@@ -111,17 +110,25 @@ export async function runWhisperStage(req: WhisperRequest, ws: WebSocket): Promi
   registerGpuProcess(child, { id: `whisper:${path.basename(req.outputDir)}`, kind: 'analysis', modelId: 'Whisper large-v3', device: req.device || 'cuda' })
   let transcriptFile = ''
   let runnerErrored = false
+  let runnerError = ''
+  let stderrTail = ''
 
   consumeJsonLines(child, message => {
     if (message.type === 'transcript' && typeof message.transcriptFile === 'string') {
       transcriptFile = message.transcriptFile
       return
     }
-    if (message.type === 'error') runnerErrored = true
+    if (message.type === 'error') {
+      runnerErrored = true
+      runnerError = String(message.message || 'Whisper failed')
+    }
     if (message.type === 'stage_done' || message.type === 'transcript') return
     forwardStageMessage(ws, message, 'whisper')
   })
   forwardStderr(child, ws, 'Whisper')
+  child.stderr.on('data', (data: Buffer) => {
+    stderrTail = (stderrTail + data.toString()).slice(-6000)
+  })
   return await new Promise<string>((resolve, reject) => {
     child.on('error', error => {
       send(ws, { type: 'error', message: `Whisper failed to start: ${error.message}` })
@@ -134,8 +141,9 @@ export async function runWhisperStage(req: WhisperRequest, ws: WebSocket): Promi
         return
       }
       if (code !== 0 || runnerErrored) {
-        if (!runnerErrored) send(ws, { type: 'error', message: `Whisper exited with code ${code}` })
-        reject(new Error(runnerErrored ? 'Whisper failed' : `Whisper exited with code ${code}`))
+        const reason = runnerError || `Whisper exited with code ${code}${stderrTail.trim() ? `: ${stderrTail.trim()}` : ''}`
+        if (!runnerErrored) send(ws, { type: 'error', message: reason })
+        reject(new Error(reason))
         return
       }
       resolve(transcriptFile)

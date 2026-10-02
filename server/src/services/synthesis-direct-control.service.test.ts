@@ -34,6 +34,19 @@ test('direct preflight freezes validated three-way CFG settings', () => {
   assert.throws(() => validateSynthesisDirectControlRequest(request), /guidance.text/)
 })
 
+test('direct preflight accepts the documented -1 to 10 CFG range', () => {
+  const request = fixtureRequest()
+  request.guidance = {
+    mode: 'three-way', audio: -1, text: 0, midi: 10,
+    formula: 'audio-text-midi-telescoping.v1',
+  }
+  const preflight = validateSynthesisDirectControlRequest(request)
+  assert.deepEqual(preflight.render.guidance, request.guidance)
+
+  request.guidance.text = -1.1
+  assert.throws(() => validateSynthesisDirectControlRequest(request), /guidance.text/)
+})
+
 test('direct preflight rejects client frame-map or MIDI transport tampering', () => {
   const badMap = fixtureRequest()
   badMap.snapshot.frameMap.bOffsetFrame += 1
@@ -104,6 +117,41 @@ test('direct preflight and manifest support the V5Pg_20K preset', () => {
   assert.equal(manifest.preset.emaStepOffset, 40000)
   assert.match(manifest.resources.checkpoint.path, /V5Pg_20K\/step_020000_final\.pt$/)
   assert.match(manifest.resources.vaeCheckpoint.path, /autoencoder_285k\.ckpt$/)
+})
+
+test('direct preflight and manifest support the V5PgO_8K preset', () => {
+  const request = fixtureRequest()
+  request.presetId = 'V5PgO_8K'
+  const preflight = validateSynthesisDirectControlRequest(request)
+  assert.equal(preflight.presetId, 'V5PgO_8K')
+
+  const resourceSHA256 = Object.fromEntries([
+    'checkpoint', 'modelConfig', 'vaeConfig', 'vaeCheckpoint', 'placement',
+    'directControlAdapter', 'runner', 'midi_p_v4ph.py',
+  ].map((key, index) => [key, (index + 1).toString(16).repeat(64)]))
+  const manifest = buildV5PDirectJobManifest(request, { ...preflight, resourceSHA256 })
+  assert.equal(manifest.preset.id, 'V5PgO_8K')
+  assert.equal(manifest.preset.checkpointSchema, 'v5pgo_training_checkpoint_v1')
+  assert.equal(manifest.preset.checkpointStep, 8000)
+  assert.equal(manifest.preset.emaStepOffset, 0)
+  assert.match(manifest.resources.checkpoint.path, /V5PgO\/step_008000_final\.pt$/)
+  assert.match(manifest.resources.vaeCheckpoint.path, /autoencoder_285k\.ckpt$/)
+})
+
+test('V5PgOV freezes the EMA decoder as a separate hash-locked resource', () => {
+  const request = fixtureRequest()
+  request.presetId = 'V5PgOV_300K_EMA'
+  const preflight = validateSynthesisDirectControlRequest(request)
+  const resourceSHA256 = Object.fromEntries([
+    'checkpoint', 'modelConfig', 'vaeConfig', 'vaeCheckpoint', 'vaeDecoderCheckpoint',
+    'placement', 'directControlAdapter', 'runner', 'midi_p_v4ph.py',
+  ].map((key, index) => [key, (index + 1).toString(16).repeat(64)]))
+  const manifest = buildV5PDirectJobManifest(request, { ...preflight, resourceSHA256 })
+
+  assert.equal(manifest.preset.checkpointSchema, 'v5pgo_training_checkpoint_v1')
+  assert.equal(manifest.resources.checkpoint.sha256, resourceSHA256.checkpoint)
+  assert.equal(manifest.resources.vaeDecoderCheckpoint?.sha256, resourceSHA256.vaeDecoderCheckpoint)
+  assert.match(manifest.resources.vaeDecoderCheckpoint?.path ?? '', /V5PgOV_300K_EMA_decoder\.pt$/)
 })
 
 function fixtureRequest(): any {

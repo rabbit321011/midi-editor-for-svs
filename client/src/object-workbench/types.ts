@@ -261,6 +261,7 @@ export interface SynthesisTake {
   presetId: string
   checkpointSHA256: string
   vaeSHA256: string
+  decoderSHA256?: string
   adapterSHA256: string
   seed: number
   samplingSettings?: V5PSamplingSettings

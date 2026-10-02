@@ -1,5 +1,6 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
+import { isMidiInstrument, type MidiInstrument } from '@/utils/midiInstrument'
 
 export type WorkbenchTheme = 'night' | 'light' | 'cream'
 
@@ -25,6 +26,7 @@ const STORAGE_KEY = 'aisvc-ui-settings.v0.32'
 export interface UiSettingsState {
   theme: WorkbenchTheme
   showRomaji: boolean
+  midiInstrument: MidiInstrument
   autoSaveIntervalMinutes: number
   svcDefaultModel: string
   svcDefaultSteps: number
@@ -48,6 +50,7 @@ export interface UiSettingsState {
 const defaults: UiSettingsState = {
   theme: 'night',
   showRomaji: false,
+  midiInstrument: 'soft',
   autoSaveIntervalMinutes: 5,
   svcDefaultModel: '',
   svcDefaultSteps: 100,
@@ -192,6 +195,7 @@ export const useUiSettingsStore = defineStore('uiSettings', () => {
   }
 
   function normalize() {
+    if (!isMidiInstrument(settings.midiInstrument)) settings.midiInstrument = defaults.midiInstrument
     settings.autoSaveIntervalMinutes = clampNumber(settings.autoSaveIntervalMinutes, 1, 120)
     settings.svcDefaultSteps = clampNumber(settings.svcDefaultSteps, 1, 200)
     settings.svcDefaultCfg = clampNumber(settings.svcDefaultCfg, 0, 10)
@@ -259,7 +263,8 @@ function loadSettings(): UiSettingsState {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return { ...defaults }
     const parsed = JSON.parse(raw) as Partial<UiSettingsState>
-    return { ...defaults, ...parsed, showRomaji: false }
+    return { ...defaults, ...parsed, showRomaji: false,
+      midiInstrument: isMidiInstrument(parsed.midiInstrument) ? parsed.midiInstrument : defaults.midiInstrument }
   } catch {
     return { ...defaults }
   }

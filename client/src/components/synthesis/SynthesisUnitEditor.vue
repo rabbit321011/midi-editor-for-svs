@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
-import { NButton, NDropdown, NIcon, NInput, NInputNumber, NModal, NPopover, NRadioButton, NRadioGroup, NSelect, NSlider } from 'naive-ui'
+import { NButton, NDropdown, NIcon, NInput, NInputNumber, NModal, NPopover, NRadioButton, NRadioGroup, NSelect, NSlider, NSwitch } from 'naive-ui'
 import { Add, AlertCircleOutline, CheckmarkCircleOutline, ColorWandOutline, DownloadOutline, EllipsisHorizontal, LinkOutline, MicOutline, MusicalNotesOutline, OpenOutline, OptionsOutline, Pause, Play, Remove, Stop, TimeOutline, UnlinkOutline } from '@vicons/ionicons5'
 import { useObjectTreeStore } from '@/stores/objectTree'
 import { useGpuRuntimeStore, type ModelRuntimeStatus } from '@/stores/gpuRuntime'
@@ -34,6 +34,7 @@ import { runSynthesisMidiP } from '@/composables/synthesisMidiPClient'
 import type { SynthesisMidiPResult } from '@/composables/synthesisMidiPProtocol'
 import { kanaToRomaji, romajiToKana } from '@/utils/kanaRomaji'
 import { kanaToHTokens } from '@/utils/kanaToHTokens'
+import { prepareMidiInstrument, scheduleMidiTone, type MidiVoice } from '@/utils/midiInstrument'
 
 const props = defineProps<{ objectId: string }>()
 const objectTree = useObjectTreeStore()
@@ -48,6 +49,7 @@ const waveformCanvas = ref<HTMLCanvasElement | null>(null)
 const audioElement = ref<HTMLAudioElement | null>(null)
 const takeAudioElement = ref<HTMLAudioElement | null>(null)
 const takeListRef = ref<HTMLElement | null>(null)
+const midiSpaceRef = ref<HTMLElement | null>(null)
 const editingTakeId = ref<string | null>(null)
 const takeNameDraft = ref('')
 const referenceAudioElement = ref<HTMLAudioElement | null>(null)
@@ -67,7 +69,8 @@ const takePreparation = ref({ running: false, progress: 0, message: '' })
 const takeGeneration = ref({ running: false, progress: 0, message: '' })
 const samplingMenuOpen = ref(false)
 const unifiedCfgDraft = ref(1)
-const threeWayDraft = ref({ audio: 1, text: 1, midi: 1 })
+const threeWayDraft = ref({ audio: 0.4, text: 0.6, midi: 0.5 })
+const enabledCfgValues = new Map<string, number>()
 const forceCapacity = ref(false)
 const capacityRetry = ref<'v5p' | 'transcribe' | 'segment-transcribe' | 'sofa' | 'game' | 'midi-local'>('v5p')
 const capacityDialog = ref<{
@@ -130,7 +133,7 @@ type EditorSelection =
   | { type: 'segment', id: string }
   | { type: 'kana', id: string }
   | { type: 'h', frame: number }
-  | { type: 'midi-p', frame: number }
+  | { type: 'midi-p', frame: number, frames?: number[] }
   | null
 const editorSelection = ref<EditorSelection>({ type: 'guide' })
 const selectedSegmentId = computed(() => editorSelection.value?.type === 'segment' ? editorSelection.value.id : '')
@@ -219,7 +222,8 @@ let noticeTimer = 0
 let midiAudioContext: AudioContext | null = null
 let midiPlaybackStartTime = 0
 let midiPlaybackStartFrame = 0
-let scheduledMidiNodes: OscillatorNode[] = []
+let scheduledMidiNodes: MidiVoice[] = []
+let midiPreviewGeneration = 0
 let guideLoadGeneration = 0
 let midiPlaybackGeneration = 0
 let midiPlaybackStarting = false
@@ -276,6 +280,7 @@ const unifiedCfg = computed<number>({
     ? samplingSettings.value.guidance.cfg
     : unifiedCfgDraft.value,
   set: value => {
+    if (!Number.isFinite(value) || value < -1 || value > 10) return
     unifiedCfgDraft.value = value
     if (samplingSettings.value.guidance.mode === 'unified') {
       updateSamplingSettings({ ...samplingSettings.value, guidance: { mode: 'unified', cfg: value } })
@@ -285,6 +290,14 @@ const unifiedCfg = computed<number>({
 const audioCfg = channelCfg('audio')
 const textCfg = channelCfg('text')
 const midiCfg = channelCfg('midi')
+function toggleChannelCfg(channel: 'audio' | 'text' | 'midi', enabled: boolean) {
+  const current = samplingSettings.value.guidance
+  if (current.mode !== 'three-way') return
+  const key = `${props.objectId}:${channel}`
+  if (!enabled && current[channel] !== 0) enabledCfgValues.set(key, current[channel])
+  const defaults = { audio: 0.4, text: 0.6, midi: 0.5 }
+  channelCfg(channel).value = enabled ? (enabledCfgValues.get(key) ?? defaults[channel]) : 0
+}
 const samplingSteps = computed<number>({
   get: () => samplingSettings.value.steps,
   set: steps => updateSamplingSettings({ ...samplingSettings.value, steps }),
@@ -306,6 +319,7 @@ function channelCfg(channel: 'audio' | 'text' | 'midi') {
       ? samplingSettings.value.guidance[channel]
       : threeWayDraft.value[channel],
     set: value => {
+      if (!Number.isFinite(value) || value < -1 || value > 10) return
       threeWayDraft.value = { ...threeWayDraft.value, [channel]: value }
       const current = samplingSettings.value
       if (current.guidance.mode === 'three-way') {
@@ -531,6 +545,11 @@ const selectedHEntry = computed(() => selectedHEvent.value
   ? V5P_H_TOKEN_BY_ID.get(selectedHEvent.value.tokenId) ?? null
   : null)
 const selectedMidiFrame = computed(() => editorSelection.value?.type === 'midi-p' ? editorSelection.value.frame : null)
+const selectedMidiHeads = computed(() => {
+  const selection = editorSelection.value
+  return new Set(selection?.type === 'midi-p'
+    ? (selection.frames ?? [selection.frame]).map(midiFlowHeadFrame) : [])
+})
 const selectedMidiClass = computed(() => selectedMidiFrame.value == null ? null
   : synthesis.value?.midiPTokenTrack.classes[selectedMidiFrame.value] ?? null)
 const selectedMidiIsFlow = computed(() => selectedMidiFrame.value != null && isMidiFlowFrame(selectedMidiFrame.value))
@@ -583,6 +602,15 @@ watch(auditionSource, () => {
 watch(playbackRate, () => {
   syncAudioPlaybackRate()
   if (auditionSource.value === 'midi-p' && playing.value) restartMidiPlayback()
+})
+watch(() => uiSettings.settings.midiInstrument, () => {
+  midiPreviewGeneration++
+  if (playing.value && auditionSource.value === 'midi-p') restartMidiPlayback()
+  else {
+    midiPlaybackGeneration++
+    midiPlaybackStarting = false
+    stopScheduledMidiNodes()
+  }
 })
 watch(() => midiLocal.value.show, (show, wasShowing) => {
   if (show || !wasShowing) return
@@ -872,6 +900,8 @@ async function toggleMidiPPlayback() {
       playing.value = false
       return
     }
+    await prepareMidiInstrument(context, uiSettings.settings.midiInstrument)
+    if (generation !== midiPlaybackGeneration) return
     const classes = midiPlaybackClasses.value
     const flowFrames = midiPlaybackFlowFrameSet.value
     const range = midiPlaybackRange.value
@@ -901,6 +931,12 @@ async function toggleMidiPPlayback() {
     }
     playing.value = true
     tickMidiPlayback()
+  } catch (error: any) {
+    if (generation === midiPlaybackGeneration) {
+      stopScheduledMidiNodes()
+      playing.value = false
+      flashStatus(error?.message || 'MIDI 试听失败')
+    }
   } finally {
     if (generation === midiPlaybackGeneration) midiPlaybackStarting = false
   }
@@ -938,41 +974,30 @@ function tickMidiPlayback() {
 }
 
 async function ensureMidiAudioContext() {
-  midiAudioContext ??= new AudioContext()
+  if (!midiAudioContext || midiAudioContext.state === 'closed') midiAudioContext = new AudioContext()
   if (midiAudioContext.state === 'suspended') await midiAudioContext.resume()
   return midiAudioContext
 }
 
 function previewMidiClass(midiClass: number) {
   if (midiClass >= 255 || midiClass < 0) return
-  void ensureMidiAudioContext().then(context => {
+  const generation = ++midiPreviewGeneration
+  void ensureMidiAudioContext().then(async context => {
+    await prepareMidiInstrument(context, uiSettings.settings.midiInstrument)
+    if (generation !== midiPreviewGeneration || context !== midiAudioContext || context.state === 'closed') return
     schedulePianoTone(midiClass, context.currentTime, 0.28, false)
-  })
+  }).catch(error => { if (generation === midiPreviewGeneration) flashStatus(error?.message || 'MIDI 试听失败') })
 }
 
-function schedulePianoTone(midiClass: number, startTime: number, duration: number, tracked: boolean) {
+function schedulePianoTone(midiClass: number, startTime: number, duration: number, _tracked: boolean) {
   const context = midiAudioContext
   if (!context || midiClass >= 255) return
-  const frequency = 440 * 2 ** ((midiClass / 2 - 69) / 12)
-  const gain = context.createGain()
-  gain.gain.setValueAtTime(0.0001, startTime)
-  gain.gain.exponentialRampToValueAtTime(0.16, startTime + 0.008)
-  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + Math.max(0.08, duration + 0.08))
-  gain.connect(context.destination)
-  for (const [multiple, level] of [[1, 1], [2, 0.24]] as const) {
-    const oscillator = context.createOscillator()
-    const harmonicGain = context.createGain()
-    oscillator.type = 'sine'
-    oscillator.frequency.setValueAtTime(frequency * multiple, startTime)
-    harmonicGain.gain.value = level
-    oscillator.connect(harmonicGain).connect(gain)
-    oscillator.start(startTime)
-    oscillator.stop(startTime + Math.max(0.1, duration + 0.1))
-    if (tracked) scheduledMidiNodes.push(oscillator)
-  }
+  scheduledMidiNodes = scheduledMidiNodes.filter(voice => !voice.ended)
+  scheduledMidiNodes.push(scheduleMidiTone(context, uiSettings.settings.midiInstrument, midiClass, startTime, duration))
 }
 
 function stopScheduledMidiNodes() {
+  midiPreviewGeneration++
   for (const node of scheduledMidiNodes) {
     try { node.stop() } catch {}
   }
@@ -1132,6 +1157,7 @@ async function generateTakeCore() {
     presetId: modelId,
     checkpointSHA256: modelMeta.checkpointSHA256,
     vaeSHA256: modelMeta.vaeSHA256,
+    decoderSHA256: modelMeta.decoderSHA256,
     adapterSHA256: modelMeta.adapterSHA256,
     seed: frozenSampling.seed,
     samplingSettings: frozenSampling,
@@ -1634,16 +1660,23 @@ function openMidiEditor(event: MouseEvent, frame?: number) {
   openMidiEditorAtFrame(targetFrame)
 }
 
-function selectMidiFrame(frame: number) {
-  editorSelection.value = { type: 'midi-p', frame }
+function selectMidiFrame(frame: number, additive = false) {
+  const head = midiFlowHeadFrame(frame)
+  const frames = additive ? new Set(selectedMidiHeads.value) : new Set<number>()
+  if (additive && frames.has(head)) frames.delete(head)
+  else frames.add(head)
+  editorSelection.value = frames.size
+    ? { type: 'midi-p', frame: frames.has(head) ? frame : [...frames][frames.size - 1], frames: [...frames] }
+    : null
+  midiSpaceRef.value?.focus({ preventScroll: true })
   playheadFrame.value = frame
   const time = frameToAudioTime(frame)
   if (audioElement.value) audioElement.value.currentTime = time
   if (takeAudioElement.value) takeAudioElement.value.currentTime = time
 }
 
-function clickMidiFrame(frame: number, midiClass: number) {
-  selectMidiFrame(frame)
+function clickMidiFrame(event: MouseEvent, frame: number, midiClass: number) {
+  selectMidiFrame(frame, event.ctrlKey || event.metaKey)
   const resolvedClass = midiClassAt(frame, midiClass)
   if (isMidiFlowFrame(frame)) {
     const headFrame = midiFlowHeadFrame(frame)
@@ -1757,6 +1790,7 @@ function saveMidiEditor() {
 
 function beginMidiClassDrag(event: PointerEvent, frame: number, sourceClass: number) {
   if (event.button !== 0 || sourceClass >= 255) return
+  if (event.ctrlKey || event.metaKey) return
   if (isMidiFlowFrame(frame)) {
     flashStatus(`frame ${frame} 是 FLOW；请拖动 frame ${midiFlowHeadFrame(frame)} 的头 token`)
     return
@@ -1914,6 +1948,27 @@ function midiPitchName(midiClass: number) {
   return `${names[((note % 12) + 12) % 12]}${Math.floor(note / 12) - 1}${cents}`
 }
 
+function transposeSelectedMidi(octaves: number) {
+  if (!unit.value || selectedMidiHeads.value.size === 0) return
+  const before = objectTree.snapshotTree()
+  const result = objectTree.transposeSynthesisMidiPNotes(unit.value.id, [...selectedMidiHeads.value], octaves)
+  if (!result.ok) {
+    flashStatus(result.reason ?? 'MIDI-P 升降八度失败')
+    return
+  }
+  const description = octaves > 0 ? 'MIDI-P 升高八度' : 'MIDI-P 降低八度'
+  history.push({
+    description, patches: [], inversePatches: [],
+    objectTree: { kind: 'snapshot', before, after: objectTree.snapshotTree() },
+  })
+  if (playing.value && auditionSource.value === 'midi-p') restartMidiPlayback()
+  else {
+    const head = [...selectedMidiHeads.value][0]
+    previewMidiClass(unit.value.synthesisUnit.midiPTokenTrack.classes[head])
+  }
+  flashStatus(`${description} · ${selectedMidiHeads.value.size} 个音符`)
+}
+
 function handleEditorKeydown(event: KeyboardEvent) {
   const targetElement = event.target instanceof HTMLElement ? event.target : null
   if (targetElement?.closest('[data-lyric-proofreader]')) return
@@ -1939,6 +1994,13 @@ function handleEditorKeydown(event: KeyboardEvent) {
     return
   }
   if (isEditableTarget(event.target) && !isEditorTabTarget) return
+  if (ctrl && !event.altKey && !event.shiftKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')
+    && midiSpaceRef.value?.contains(targetElement) && selectedMidiHeads.value.size > 0) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    if (!event.repeat && !midiDrag.value) transposeSelectedMidi(event.key === 'ArrowUp' ? 1 : -1)
+    return
+  }
   if (ctrl && event.key.toLocaleLowerCase() === 'z') {
     event.preventDefault()
     event.stopImmediatePropagation()
@@ -2950,9 +3012,6 @@ function updateKanaBoundaryDrag(event: PointerEvent) {
 function finishKanaBoundaryDrag() {
   const drag = kanaDrag.value
   clearKanaDragListeners()
-  clearMidiDragListeners()
-  stopScheduledMidiNodes()
-  if (midiAudioContext) void midiAudioContext.close()
   if (!drag || !unit.value || drag.previewFrame === drag.originalFrame) return
   const before = objectTree.snapshotTree()
   const result = objectTree.moveSynthesisKanaBoundary(unit.value.id, drag.unitId, drag.edge, drag.previewFrame)
@@ -3028,6 +3087,10 @@ function hideHTokenTooltip() {
 
 onBeforeUnmount(() => {
   unbindEditorKeyboard()
+  clearMidiDragListeners()
+  const context = midiAudioContext
+  midiAudioContext = null
+  if (context && context.state !== 'closed') void context.close().catch(() => {})
   clearHTokenDragListeners()
   clearSegmentDragListeners()
   clearKanaDragListeners()
@@ -3153,12 +3216,12 @@ onBeforeUnmount(() => {
             </NRadioGroup>
           </label>
           <div v-if="guidanceMode === 'unified'" class="sampling-fields">
-            <label><span>统一 CFG</span><small>同时加强 A 区音色、Text/H 和 MIDI-P。当前兼容模式。</small><NInputNumber v-model:value="unifiedCfg" :min="0" :max="10" :step="0.1" /></label>
+            <label><span>统一 CFG</span><small>同时加强 A 区音色、Text/H 和 MIDI-P。当前兼容模式。</small><NInputNumber v-model:value="unifiedCfg" :min="-1" :max="10" :step="0.1" /></label>
           </div>
           <div v-else class="sampling-fields three-way-fields">
-            <label><span>A 区音色 CFG</span><small>加强对参考音频音色、唱法和声学特征的遵循。</small><NInputNumber v-model:value="audioCfg" :min="0" :max="10" :step="0.1" /></label>
-            <label><span>Text / H CFG</span><small>加强对 H token、歌词和发音时序的遵循。</small><NInputNumber v-model:value="textCfg" :min="0" :max="10" :step="0.1" /></label>
-            <label><span>MIDI-P CFG</span><small>加强对音高和音符边界的遵循。</small><NInputNumber v-model:value="midiCfg" :min="0" :max="10" :step="0.1" /></label>
+            <label><span>A 区音色 CFG</span><NSwitch :value="audioCfg !== 0" aria-label="A 区 CFG 强化" @update:value="toggleChannelCfg('audio', $event)" /><NInputNumber v-model:value="audioCfg" :min="-1" :max="10" :step="0.1" /></label>
+            <label><span>Text / H CFG</span><NSwitch :value="textCfg !== 0" aria-label="Text CFG 强化" @update:value="toggleChannelCfg('text', $event)" /><NInputNumber v-model:value="textCfg" :min="-1" :max="10" :step="0.1" /></label>
+            <label><span>MIDI-P CFG</span><NSwitch :value="midiCfg !== 0" aria-label="MIDI CFG 强化" @update:value="toggleChannelCfg('midi', $event)" /><NInputNumber v-model:value="midiCfg" :min="-1" :max="10" :step="0.1" /></label>
             <p>三路均为同一数值时，与该数值的统一 CFG 等价。三路模式顺序执行四个条件分支，预计约为统一 CFG 的 2 倍耗时。</p>
           </div>
           <div class="sampling-fields sampling-common">
@@ -3461,7 +3524,9 @@ onBeforeUnmount(() => {
             </NButton>
           </div>
           <div
+            ref="midiSpaceRef"
             class="track-space midi-space"
+            tabindex="0"
             :style="{ width: `${timelineWidth}px` }"
             @click="selectMidiFrameFromPointer"
             @contextmenu="openMidiEditor"
@@ -3486,11 +3551,11 @@ onBeforeUnmount(() => {
                   flow: isMidiFlowFrame(frame),
                   manual: synthesis.midiPTokenTrack.manualFrames?.includes(frame),
                   dragging: midiDrag && (midiDrag.sourceFrame === frame || midiDrag.targetFrame === frame),
-                  selected: selectedMidiFrame === frame,
+                  selected: selectedMidiHeads.has(midiFlowHeadFrame(frame)),
                 }"
                 :style="midiCellStyle(frame, midiClass)"
                 :title="midiCellTitle(frame, midiClass)"
-                @click.stop="clickMidiFrame(frame, midiClass)"
+                @click.stop="clickMidiFrame($event, frame, midiClass)"
                 @pointerdown="beginMidiClassDrag($event, frame, midiClass)"
                 @contextmenu="openMidiEditor($event, frame)"
               />

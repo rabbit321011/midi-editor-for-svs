@@ -363,6 +363,12 @@ async function buildV5PResources(
       path: preset.vaeCheckpoint,
       sha256: preset.vaeCheckpointSHA256,
     },
+    ...(preset.vaeDecoderCheckpoint ? {
+      vaeDecoderCheckpoint: {
+        path: preset.vaeDecoderCheckpoint,
+        sha256: preset.vaeDecoderCheckpointSHA256,
+      },
+    } : {}),
     placement: {
       path: preset.placement,
       sha256: preset.placementSHA256,

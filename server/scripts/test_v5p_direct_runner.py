@@ -20,6 +20,38 @@ direct = load_module("v5p_direct_control", ROOT / "server/scripts/v5p_direct_con
 
 
 class V5PDirectRunnerTest(unittest.TestCase):
+    def test_decoder_override_is_restricted_to_v5pgov(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as directory:
+            file = Path(directory) / "decoder.pt"
+            file.write_bytes(b"decoder")
+            resources = {
+                "vaeDecoderCheckpoint": {
+                    "path": str(file),
+                    "sha256": hashlib.sha256(b"decoder").hexdigest(),
+                },
+            }
+            self.assertEqual(
+                runner.require_decoder_resource(resources, "V5PgOV_300K_EMA"), file
+            )
+            with self.assertRaisesRegex(ValueError, "only supported"):
+                runner.require_decoder_resource(resources, "V5PgO_8K")
+            with self.assertRaisesRegex(ValueError, "must be an object"):
+                runner.require_decoder_resource({}, "V5PgOV_300K_EMA")
+
+    def test_decoder_export_rejects_wrong_base_vae(self):
+        payload = {
+            "provenance": {
+                "schema": "v5pgov_300k_ema_decoder_v1",
+                "step": 300000,
+                "base_vae_sha256": "wrong",
+            },
+            "state_dict": {},
+        }
+        with self.assertRaisesRegex(ValueError, "provenance mismatch"):
+            runner.validate_v_decoder_export(payload, "a" * 64)
+
     def test_three_way_cfg_telescopes_to_legacy_cfg_when_scales_match(self):
         import torch
 
@@ -54,6 +86,17 @@ class V5PDirectRunnerTest(unittest.TestCase):
             )
         expected = 8.0 + 1.5 * (8.0 - 1.0)
         self.assertEqual(packed.tolist(), [[expected], [expected]])
+
+    def test_negative_unified_cfg_keeps_cfg_branch_and_applies_negative_scale(self):
+        class Policy:
+            def sample(self, **kwargs):
+                self.kwargs = kwargs
+                return kwargs["cfg_strength"], kwargs["guidance_scale"]
+
+        output = runner.sample_with_guidance(
+            Policy(), {"sample": True}, {"mode": "unified", "cfg": -1},
+        )
+        self.assertEqual(output, (1.0, -1))
 
     def test_validate_job_recomputes_frame_map_and_training_terminal_seps(self):
         job = build_job()
@@ -155,6 +198,33 @@ class V5PDirectRunnerTest(unittest.TestCase):
             },
         }
         runner.strict_checkpoint_metadata(payload, preset, resources)
+
+    def test_v5pgo_training_contract_matches_frozen_run(self):
+        self.assertEqual(
+            runner.training_contract("v5pgo_training_checkpoint_v1"),
+            {
+                "schema": "v5pgo_training_checkpoint_v1",
+                "placement_mode": "phone_pul",
+                "phase": "g_adapt",
+                "midi_teacher": "GAME medium K4 offline cache",
+                "midi_fuzz_disturb": False,
+                "schedule_profile": "v5pgo_two_cosine",
+                "warmup_steps": 1000,
+                "hold_steps": 2000,
+                "first_decay_end": 6000,
+                "mid_lr": 3e-6,
+                "max_steps": 8000,
+                "world_size": 1,
+                "grad_accum": 16,
+                "cka_weight": 0.0,
+                "flow_b_weight": 3.0,
+                "pool_policy": "KEEP_LONG_DEDUP_SHORT",
+                "sampling_policy": "NATURAL_RECORD",
+                "engineering_joint_probe": False,
+                "engineering_g_probe": False,
+                "ema_device": "cpu",
+            },
+        )
 
     def test_strict_checkpoint_metadata_still_accepts_v5p_contract(self):
         preset = {

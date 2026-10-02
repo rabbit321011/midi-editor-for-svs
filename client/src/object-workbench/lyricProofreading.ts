@@ -4,6 +4,9 @@ import { updateSegmentObject } from './synthesisTrackTransactions'
 import { kanaToRomaji } from '@/utils/kanaRomaji'
 
 export interface ReadingToken { start: number; end: number; kana: string }
+export function sungReadingTokens(reference: LyricReference): ReadingToken[] {
+  return reference.tokens.filter(token => /[\p{L}\p{N}\p{M}]/u.test(reference.text.slice(token.start, token.end)))
+}
 export interface LyricReference { id: string; name: string; text: string; version: number; tokens: ReadingToken[] }
 export interface LyricRange { start: number; end: number }
 export interface LyricDraft {
@@ -140,12 +143,53 @@ function substringMatches(query: string, indexed: IndexedText): Array<{ start: n
 }
 
 export function readingForRange(reference: LyricReference, range: LyricRange): string {
-  return reference.tokens.filter(token => token.start < range.end && token.end > range.start).map(token => {
+  return sungReadingTokens(reference).filter(token => token.start < range.end && token.end > range.start).map(token => {
     const surface = reference.text.slice(token.start, token.end)
     const start = Math.max(range.start, token.start) - token.start
     const end = Math.min(range.end, token.end) - token.start
     return normalize(surface) === normalize(token.kana) ? surface.slice(start, end) : token.kana
   }).join('')
+}
+
+export function referenceLyricLines(reference: LyricReference) {
+  let offset = 0
+  return reference.text.split('\n').map(raw => {
+    const text = raw.replace(/\r$/, '')
+    const range = { start: offset, end: offset + text.length }
+    offset += raw.length + 1
+    const kana = readingForRange(reference, range).trim()
+    return { ...range, text, romaji: kana ? kanaToRomaji(kana).replace(/\s+/g, ' ').trim() : '' }
+  })
+}
+
+export function referenceRomajiParts(reference: LyricReference, line: LyricRange, highlight?: LyricRange): Array<{ text: string; highlighted: boolean }> {
+  const parts: Array<{ text: string; highlighted: boolean }> = []
+  for (const token of reference.tokens) {
+    if (token.end <= line.start || token.start >= line.end) continue
+    const text = kanaToRomaji(readingForRange({ ...reference, tokens: [token] }, line)).replace(/\s+/g, ' ').trim()
+    if (!text) continue
+    // Kanji and their readings are not one-to-one: highlight the corresponding reading token.
+    const highlighted = !!highlight && Math.max(token.start, line.start, highlight.start) < Math.min(token.end, line.end, highlight.end)
+    const previous = parts[parts.length - 1]
+    if (previous?.highlighted === highlighted) previous.text += ` ${text}`
+    else parts.push({ text: `${parts.length ? ' ' : ''}${text}`, highlighted })
+  }
+  return parts
+}
+
+export function distinctLyricCandidates(ranked: LyricCandidate[]): LyricCandidate[] {
+  const unique: LyricCandidate[] = []
+  for (const candidate of [...ranked].sort((a, b) => b.score - a.score)) {
+    const duplicate = unique.some(item => {
+      const overlap = Math.max(0, Math.min(item.end, candidate.end) - Math.max(item.start, candidate.start))
+      const shorter = Math.min(item.end - item.start, candidate.end - candidate.start)
+      const nearbyBoundary = Math.min(Math.abs(item.start - candidate.start), Math.abs(item.end - candidate.end)) <= Math.max(2, shorter * 0.25)
+      return overlap > 0 && overlap / shorter >= 0.8 && nearbyBoundary
+    })
+    if (!duplicate) unique.push(candidate)
+    if (unique.length >= 8) break
+  }
+  return unique
 }
 
 export function findLyricCandidates(tree: ProjectObjectTree, unit: SynthesisUnitObjectNode, segment: SynthesisSegmentObject, reference: LyricReference, session: LyricSession, query?: string): { candidates: LyricCandidate[]; conflict: boolean } {
@@ -164,7 +208,7 @@ export function findLyricCandidates(tree: ProjectObjectTree, unit: SynthesisUnit
   const upper = conflict ? reference.text.length : Math.min(reference.text.length, (after?.start ?? reference.text.length) + slack)
   const all = [
     ...substringMatches(query ?? segment.text, indexText(reference.text)).map(match => ({ ...match, kana: readingForRange(reference, match) })),
-    ...(!query && reference.tokens.length ? substringMatches(segment.kana, indexText(reference.text, reference.tokens)).map(match => ({ ...match, kana: match.reading })) : []),
+    ...(!query && reference.tokens.length ? substringMatches(segment.kana, indexText(reference.text, sungReadingTokens(reference))).map(match => ({ ...match, kana: match.reading })) : []),
   ]
   const instance = getUnitInstances(tree, unit.id).find(item => item.id === session.instanceId)
   const actual = absoluteSegmentRange(unit, segment, instance)
@@ -199,13 +243,7 @@ export function findLyricCandidates(tree: ProjectObjectTree, unit: SynthesisUnit
       score: match.score + (local && (before || after) && !query ? 0.18 : 0) + (time ? 0.12 : 0) + context * 0.07 + proximity,
       reason: time ? '实际时间相近' : local && (before || after) ? '已确认邻段附近' : context > 0.8 ? '前后文相近' : '全文文字 / 读音候选' }
   }).sort((a, b) => b.score - a.score)
-  const unique: LyricCandidate[] = []
-  for (const candidate of ranked) {
-    if (unique.some(item => Math.abs(item.start - candidate.start) < 2 && Math.abs(item.end - candidate.end) < 2)) continue
-    unique.push(candidate)
-    if (unique.length >= 8) break
-  }
-  return { candidates: unique, conflict }
+  return { candidates: distinctLyricCandidates(ranked), conflict }
 }
 
 export function applyLyricDrafts(tree: ProjectObjectTree, unitId: string, segmentIds?: string[]): number {

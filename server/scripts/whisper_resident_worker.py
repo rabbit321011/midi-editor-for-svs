@@ -35,13 +35,7 @@ def transcribe(runner, model, request):
     output_dir.mkdir(parents=True, exist_ok=True)
     emit("log", message="Transcribing audio...")
     emit("progress", progress=20)
-    segments, info = model.transcribe(
-        input_path,
-        language="ja",
-        beam_size=1,
-        vad_filter=vad,
-    )
-    raw_segments = list(segments)
+    raw_segments, info = runner.transcribe_segments(model, input_path, vad)
     detected_language = getattr(info, "language", "ja") or "ja"
     if detected_language != "ja":
         raise ValueError(f"Japanese transcription required, detected: {detected_language}")

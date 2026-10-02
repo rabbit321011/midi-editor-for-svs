@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { createEmptyProjectObjectTree, createEmptySynthesisUnit, TOP_LEVEL_IDS } from './index'
 import type { SynthesisSegmentObject, TrackObjectNode } from './types'
-import { absoluteSegmentRange, applyLyricDrafts, confirmedLyricRanges, confirmLyricPosition, draftIsCurrent, findLyricCandidates, lyricStatus, segmentFingerprint, type LyricDraft, type LyricReference, type LyricSession } from './lyricProofreading'
+import { absoluteSegmentRange, applyLyricDrafts, confirmedLyricRanges, confirmLyricPosition, distinctLyricCandidates, draftIsCurrent, findLyricCandidates, lyricStatus, referenceLyricLines, referenceRomajiParts, segmentFingerprint, type LyricDraft, type LyricReference, type LyricSession } from './lyricProofreading'
 import { useObjectTreeStore } from '@/stores/objectTree'
 import { useHistoryStore } from '@/stores/history'
 
@@ -26,6 +26,44 @@ function fixture(text = '君の声が聞こえる\n遠い空の向こうから')
 }
 
 describe('lyric proofreading', () => {
+  it('ignores cached placeholder readings for spaces without deleting the real word kigou', () => {
+    const reference: LyricReference = { id: 'ref', name: 'reference', version: 1, text: '朝　記号', tokens: [
+      { start: 0, end: 1, kana: 'あさ' }, { start: 1, end: 2, kana: 'きごう' }, { start: 2, end: 4, kana: 'きごう' },
+    ] }
+    expect(referenceLyricLines(reference)[0].romaji).toBe('a sa ki go u')
+  })
+  it('highlights only corresponding reading tokens across lyric lines', () => {
+    const reference: LyricReference = { id: 'ref', name: 'reference', version: 1, text: '鏡の中\n朝だね', tokens: [
+      { start: 0, end: 1, kana: 'かがみ' }, { start: 1, end: 2, kana: 'の' }, { start: 2, end: 3, kana: 'なか' },
+      { start: 4, end: 5, kana: 'あさ' }, { start: 5, end: 7, kana: 'だね' },
+    ] }
+    const highlight = { start: 2, end: 5 }
+    expect(referenceRomajiParts(reference, { start: 0, end: 3 }, highlight)).toEqual([
+      { text: 'ka ga mi no', highlighted: false }, { text: ' na ka', highlighted: true },
+    ])
+    expect(referenceRomajiParts(reference, { start: 4, end: 7 }, highlight)).toEqual([
+      { text: 'a sa', highlighted: true }, { text: ' da ne', highlighted: false },
+    ])
+    expect(referenceRomajiParts(reference, { start: 0, end: 3 })).toEqual([{ text: 'ka ga mi no na ka', highlighted: false }])
+  })
+
+  it('collapses length variants at one location without hiding a repeated chorus elsewhere', () => {
+    const candidates = [28, 30, 32, 36, 80].map((end, index) => ({ start: 12, end, score: 1 - index * 0.03, text: '候选', kana: '', reason: 'context' }))
+    candidates.push({ start: 384, end: 400, score: 0.8, text: '重复副歌', kana: '', reason: 'text' })
+    expect(distinctLyricCandidates(candidates).map(item => [item.start, item.end])).toEqual([[12, 28], [384, 400]])
+  })
+
+  it('renders per-line romaji while retaining original CRLF and UTF-16 source offsets', () => {
+    const reference: LyricReference = { id: 'ref', name: 'reference', version: 1, text: '🌸君\r\n声\n', tokens: [
+      { start: 2, end: 3, kana: 'きみ' }, { start: 5, end: 6, kana: 'こえ' },
+    ] }
+    expect(referenceLyricLines(reference)).toEqual([
+      { start: 0, end: 3, text: '🌸君', romaji: 'ki mi' },
+      { start: 5, end: 6, text: '声', romaji: 'ko e' },
+      { start: 7, end: 7, text: '', romaji: '' },
+    ])
+  })
+
   it('matches across reference line breaks without changing Segment boundaries', () => {
     const f = fixture()
     const before = JSON.stringify(f.segment)

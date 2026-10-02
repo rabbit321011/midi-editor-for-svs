@@ -2,6 +2,7 @@ import pathlib
 import sys
 import types
 import unittest
+from unittest.mock import Mock, patch
 
 
 SCRIPTS_DIR = pathlib.Path(__file__).resolve().parents[1]
@@ -76,6 +77,52 @@ class SofaRunnerTests(unittest.TestCase):
 
 
 class WhisperRunnerTests(unittest.TestCase):
+    def test_all_audio_filtered_by_vad_retries_once_without_changing_decoder_options(self):
+        expected = [types.SimpleNamespace(text="君の声")]
+        model = Mock()
+        model.transcribe.side_effect = [
+            (iter([]), types.SimpleNamespace(duration=14.2, duration_after_vad=0)),
+            (iter(expected), types.SimpleNamespace(language="ja")),
+        ]
+        with patch.object(whisper_runner, "emit") as emit:
+            segments, _ = whisper_runner.transcribe_segments(model, "guide.wav", True)
+        self.assertEqual(segments, expected)
+        self.assertEqual(model.transcribe.call_count, 2)
+        self.assertEqual(model.transcribe.call_args_list[0].kwargs, {
+            "language": "ja", "beam_size": 1, "vad_filter": True,
+        })
+        self.assertEqual(model.transcribe.call_args_list[1].kwargs, {
+            "language": "ja", "beam_size": 1, "vad_filter": False,
+        })
+        emit.assert_called_once()
+
+    def test_vad_retry_is_not_used_for_success_disabled_vad_or_non_vad_empty_result(self):
+        for vad, texts, retained in [(True, ["歌"], 2), (False, [], 0), (True, [], 2)]:
+            with self.subTest(vad=vad, texts=texts, retained=retained):
+                model = Mock()
+                model.transcribe.return_value = (
+                    iter(types.SimpleNamespace(text=text) for text in texts),
+                    types.SimpleNamespace(duration=14.2, duration_after_vad=retained),
+                )
+                whisper_runner.transcribe_segments(model, "guide.wav", vad)
+                model.transcribe.assert_called_once()
+
+    def test_vad_retry_stops_on_empty_result_and_does_not_retry_runtime_errors(self):
+        model = Mock()
+        model.transcribe.side_effect = [
+            (iter([]), types.SimpleNamespace(duration=14.2, duration_after_vad=0)),
+            (iter([types.SimpleNamespace(text=" \n")]), types.SimpleNamespace(language="ja")),
+        ]
+        with patch.object(whisper_runner, "emit"):
+            with self.assertRaisesRegex(ValueError, "still returned no lyrics"):
+                whisper_runner.transcribe_segments(model, "guide.wav", True)
+        self.assertEqual(model.transcribe.call_count, 2)
+        model = Mock()
+        model.transcribe.side_effect = RuntimeError("out of memory")
+        with self.assertRaisesRegex(RuntimeError, "out of memory"):
+            whisper_runner.transcribe_segments(model, "guide.wav", True)
+        model.transcribe.assert_called_once()
+
     def test_transcript_keeps_phrase_order_but_drops_whisper_timestamps(self):
         raw_segments = [
             types.SimpleNamespace(text=" 君 の 声 ", start=8.0, end=9.0),

@@ -42,6 +42,7 @@ import {
   unloadAllModelRuntimes,
   unloadV5PRuntime,
 } from './services/model-runtime.service.js'
+import { isV5PModelId } from './services/v5p-preset.js'
 import {
   currentFreeMiB,
   estimateGpuMemory,
@@ -218,8 +219,8 @@ app.get('/api/gpu/status', async (_req, res) => {
 app.post('/api/gpu/runtimes/:id/load', async (req, res) => {
   const id = String(req.params.id || '')
   try {
-    const runtime = id === 'V5P_40K_EMA' || id === 'V5Pg_20K'
-      ? await loadV5PRuntime(id as 'V5P_40K_EMA' | 'V5Pg_20K')
+    const runtime = isV5PModelId(id)
+      ? await loadV5PRuntime(id)
       : id === 'V4fg_10k' || id === 'V4Hg_10k'
         ? await loadSvsRuntime(id)
         : await loadAnalysisRuntime(id)
@@ -231,8 +232,8 @@ app.post('/api/gpu/runtimes/:id/load', async (req, res) => {
 
 app.post('/api/gpu/runtimes/:id/unload', async (req, res) => {
   const id = String(req.params.id || '')
-  const result = id === 'V5P_40K_EMA' || id === 'V5Pg_20K'
-    ? await unloadV5PRuntime(id as 'V5P_40K_EMA' | 'V5Pg_20K')
+  const result = isV5PModelId(id)
+    ? await unloadV5PRuntime(id)
     : id === 'V4fg_10k' || id === 'V4Hg_10k'
       ? await unloadSvsRuntime(id)
       : await unloadAnalysisRuntime(id)

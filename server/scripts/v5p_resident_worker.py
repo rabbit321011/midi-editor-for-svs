@@ -37,6 +37,7 @@ def emit_resident_updated(model_id):
 
 def load_runtime(runner, preset):
     resources = runner.require_record(preset["resources"], "V5-P runtime resources")
+    preset_identity = runner.require_record(preset.get("preset"), "V5-P preset identity")
     direct_adapter = runner.require_resource(resources, "directControlAdapter")
     direct_control = runner.load_direct_control(direct_adapter)
     resource_paths = {
@@ -48,11 +49,13 @@ def load_runtime(runner, preset):
         "midiPModule": runner.require_resource(resources, "midiPModule"),
         "runner": runner.require_resource(resources, "runner"),
     }
+    resource_paths["vaeDecoderCheckpoint"] = runner.require_decoder_resource(
+        resources, str(preset_identity.get("id") or "")
+    )
     singer_root = runner.require_resource(resources, "singerRoot", directory=True)
     if str(singer_root) not in sys.path:
         sys.path.insert(0, str(singer_root))
     os.chdir(singer_root)
-    preset_identity = runner.require_record(preset.get("preset"), "V5-P preset identity")
     policy, vae = runner.build_model(
         checkpoint=resource_paths["checkpoint"],
         model_config=resource_paths["modelConfig"],
@@ -62,6 +65,7 @@ def load_runtime(runner, preset):
         preset=preset_identity,
         resources=resources,
         device=str(preset.get("device") or "cuda:0"),
+        vae_decoder_checkpoint=resource_paths["vaeDecoderCheckpoint"],
     )
     resource_hashes = {
         name: item["sha256"]

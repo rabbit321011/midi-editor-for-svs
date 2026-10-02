@@ -60,6 +60,7 @@ export interface SynthesisDirectControlResult {
   presetId: V5PModelId
   checkpointSHA256: string
   vaeSHA256: string
+  decoderSHA256?: string
   adapterSHA256: string
   seed: number
   samplingSettings: { guidance: V5PGuidance; steps: number; seed: number }
@@ -142,18 +143,18 @@ export function validateSynthesisDirectControlRequest(
 }
 
 function validateGuidance(value: unknown, legacyCfg?: number): V5PGuidance {
-  if (value == null) return { mode: 'unified', cfg: finite(legacyCfg ?? 1, 'cfg', 0, 10) }
+  if (value == null) return { mode: 'unified', cfg: finite(legacyCfg ?? 1, 'cfg', -1, 10) }
   const guidance = record(value, 'guidance')
   if (guidance.mode === 'unified') {
-    return { mode: 'unified', cfg: finite(guidance.cfg, 'guidance.cfg', 0, 10) }
+    return { mode: 'unified', cfg: finite(guidance.cfg, 'guidance.cfg', -1, 10) }
   }
   if (guidance.mode !== 'three-way') throw new Error('guidance mode 无效')
   if (guidance.formula !== 'audio-text-midi-telescoping.v1') throw new Error('3CFG formula 无效')
   return {
     mode: 'three-way',
-    audio: finite(guidance.audio, 'guidance.audio', 0, 10),
-    text: finite(guidance.text, 'guidance.text', 0, 10),
-    midi: finite(guidance.midi, 'guidance.midi', 0, 10),
+    audio: finite(guidance.audio, 'guidance.audio', -1, 10),
+    text: finite(guidance.text, 'guidance.text', -1, 10),
+    midi: finite(guidance.midi, 'guidance.midi', -1, 10),
     formula: 'audio-text-midi-telescoping.v1',
   }
 }
@@ -186,6 +187,9 @@ export async function verifySynthesisDirectControlResources(
     ['vaeCheckpoint', preset.vaeCheckpoint, preset.vaeCheckpointSHA256],
     ['placement', preset.placement, preset.placementSHA256],
   ]
+  if (preset.vaeDecoderCheckpoint && preset.vaeDecoderCheckpointSHA256) {
+    resources.push(['vaeDecoderCheckpoint', preset.vaeDecoderCheckpoint, preset.vaeDecoderCheckpointSHA256])
+  }
   for (const [name, expected] of Object.entries(preset.melodyHashes)) {
     resources.push([name, `${SINGER_ROOT}/src/YingMusicSinger/melody/${name}`, expected])
   }
@@ -246,6 +250,9 @@ export function buildV5PDirectJobManifest(
       modelConfig: resource(preset.modelConfig, 'modelConfig'),
       vaeConfig: resource(preset.vaeConfig, 'vaeConfig'),
       vaeCheckpoint: resource(preset.vaeCheckpoint, 'vaeCheckpoint'),
+      ...(preset.vaeDecoderCheckpoint ? {
+        vaeDecoderCheckpoint: resource(preset.vaeDecoderCheckpoint, 'vaeDecoderCheckpoint'),
+      } : {}),
       placement: resource(preset.placement, 'placement'),
       directControlAdapter: resource(preset.directControlAdapter, 'directControlAdapter'),
       runner: resource(preset.directRunner, 'runner'),
@@ -276,8 +283,8 @@ export async function runSynthesisDirectControl(
 
     send(ws, { type: 'progress', progress: 4, message: '冻结 V5-P 合成材料' })
     let resultFile = path.join(outputDir, 'result.json')
-    const modelLabel = preset.id === 'V5Pg_20K' ? 'V5-Pg 20K' : 'V5-P 40K EMA'
-    const vaeLabel = preset.id === 'V5Pg_20K' ? '285k online VAE' : '官方 20 Hz VAE'
+    const modelLabel = preset.label
+    const vaeLabel = preset.vaeLabel
     const onDirectEvent = (event: DirectProcessEvent) => {
       if (event.type === 'validated_job') {
         send(ws, { type: 'progress', progress: 10, message: `控制材料已锁定 · ${event.totalFrames} frames` })
@@ -311,6 +318,7 @@ export async function runSynthesisDirectControl(
       || result.presetId !== req.presetId
       || result.snapshotSHA256 !== verified.snapshotSHA256
       || result.sampleRate !== 44100
+      || result.decoderSHA256 !== preset.vaeDecoderCheckpointSHA256
       || canonicalJSON(result.samplingSettings) !== canonicalJSON({
         guidance: verified.render.guidance,
         steps: verified.render.steps,

@@ -12,6 +12,7 @@ import {
 const inputWav = path.resolve(process.argv[2] || '')
 const jobId = process.argv[3] || 'v5p-long-smoke-1step'
 const steps = Number(process.argv[4] || 1)
+const presetId = String(process.argv[5] || 'V5P_40K_EMA') as SynthesisDirectControlRequest['presetId']
 
 if (!inputWav || !fs.existsSync(inputWav)) {
   throw new Error(`input WAV not found: ${inputWav}`)
@@ -72,7 +73,7 @@ const snapshot = {
 }
 const request: SynthesisDirectControlRequest = {
   jobId,
-  presetId: 'V5P_40K_EMA',
+  presetId,
   referenceWav: inputWav,
   targetWav: inputWav,
   snapshot,

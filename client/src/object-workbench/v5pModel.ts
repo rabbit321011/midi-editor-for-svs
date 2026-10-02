@@ -1,11 +1,14 @@
-export type V5PModelId = 'V5P_40K_EMA' | 'V5Pg_20K'
+export const V5P_MODEL_IDS = ['V5P_40K_EMA', 'V5Pg_20K', 'V5PgO_8K', 'V5PgOV_300K_EMA'] as const
 
-export const V5P_DEFAULT_MODEL: V5PModelId = 'V5P_40K_EMA'
+export type V5PModelId = typeof V5P_MODEL_IDS[number]
+
+export const V5P_DEFAULT_MODEL: V5PModelId = 'V5PgO_8K'
 
 export const V5P_MODEL_META: Record<V5PModelId, {
   label: string
   checkpointSHA256: string
   vaeSHA256: string
+  decoderSHA256?: string
   adapterSHA256: string
   supportsThreeWayCfg: boolean
 }> = {
@@ -23,8 +26,23 @@ export const V5P_MODEL_META: Record<V5PModelId, {
     adapterSHA256: 'a61f6c9987b718555375b92ac4395384085d3f03c016d8cbb961f19f8ea7db38',
     supportsThreeWayCfg: true,
   },
+  V5PgO_8K: {
+    label: 'V5-PgO 8K',
+    checkpointSHA256: '6882e0be20ca32a0e2dff9619efa47612ed4ca33f0d4cbc78d1de3da8023d6cc',
+    vaeSHA256: 'f18aeecacc04173cd2ea73bbdf8edae9e976d18e4ca050c38e2723281c5cba85',
+    adapterSHA256: 'a61f6c9987b718555375b92ac4395384085d3f03c016d8cbb961f19f8ea7db38',
+    supportsThreeWayCfg: true,
+  },
+  V5PgOV_300K_EMA: {
+    label: 'V5-PgOV 300K EMA',
+    checkpointSHA256: '6882e0be20ca32a0e2dff9619efa47612ed4ca33f0d4cbc78d1de3da8023d6cc',
+    vaeSHA256: 'f18aeecacc04173cd2ea73bbdf8edae9e976d18e4ca050c38e2723281c5cba85',
+    decoderSHA256: 'a1755fbde268039163809e884fd8d15849dae9c415fef4714c87a838abe842cb',
+    adapterSHA256: 'a61f6c9987b718555375b92ac4395384085d3f03c016d8cbb961f19f8ea7db38',
+    supportsThreeWayCfg: true,
+  },
 }
 
 export function isV5PModelId(value: string): value is V5PModelId {
-  return value === 'V5P_40K_EMA' || value === 'V5Pg_20K'
+  return V5P_MODEL_IDS.includes(value as V5PModelId)
 }

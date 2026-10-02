@@ -9,6 +9,8 @@ test('model catalog only exposes the managed SVS families', () => {
     'V4Hg_10k',
     'V5P_40K_EMA',
     'V5Pg_20K',
+    'V5PgO_8K',
+    'V5PgOV_300K_EMA',
     'OpenVPI-SOME',
   ]) assert.equal(ids.has(id), true, id)
   for (const id of [
@@ -28,4 +30,9 @@ test('catalog keeps PH/PUL and direct-control engines distinct', () => {
   assert.equal(catalog.get('V4fg_10k')?.engine, 't1')
   assert.equal(catalog.get('V5P_40K_EMA')?.engine, 'v5p_direct')
   assert.equal(catalog.get('V5Pg_20K')?.engine, 'v5p_direct')
+  assert.equal(catalog.get('V5PgO_8K')?.engine, 'v5p_direct')
+  assert.equal(catalog.get('V5PgO_8K')?.runtimeState, 'configured')
+  assert.equal(catalog.get('V5PgOV_300K_EMA')?.engine, 'v5p_direct')
+  assert.equal(catalog.get('V5PgOV_300K_EMA')?.runtimeState, 'configured')
+  assert.equal(Array.isArray(catalog.get('V5PgO_8K')?.vramProfile?.samples), true)
 })

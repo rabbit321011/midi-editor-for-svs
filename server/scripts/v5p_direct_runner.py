@@ -115,6 +115,37 @@ def require_resource(resources, name, directory=False):
     return path
 
 
+def require_decoder_resource(resources, preset_id):
+    if preset_id == "V5PgOV_300K_EMA":
+        return require_resource(resources, "vaeDecoderCheckpoint")
+    if "vaeDecoderCheckpoint" in resources:
+        raise ValueError("decoder override is only supported by V5PgOV_300K_EMA")
+    return None
+
+
+def validate_v_decoder_export(payload, base_vae_sha256):
+    export = require_record(payload, "V5PgOV EMA decoder export")
+    provenance = require_record(export.get("provenance"), "V5PgOV provenance")
+    expected = {
+        "schema": "v5pgov_300k_ema_decoder_v1",
+        "step": 300000,
+        "source_checkpoint_sha256": "ed74125ad2c396b3f0f5d06f07ab725698785843d379db242873a5f987b8a7e6",
+        "base_vae_sha256": base_vae_sha256,
+        "weight_prefix_in_source": "autoencoder_ema.ema_model.decoder.",
+        "key_count": 182,
+        "parameter_count": 78122626,
+    }
+    for key, value in expected.items():
+        if provenance.get(key) != value:
+            raise ValueError(f"V5PgOV decoder provenance mismatch: {key}")
+    state = require_record(export.get("state_dict"), "V5PgOV decoder state")
+    if len(state) != 182 or any(not key.startswith("decoder.") for key in state):
+        raise ValueError("V5PgOV decoder key set is invalid")
+    if sum(tensor.numel() for tensor in state.values()) != 78122626:
+        raise ValueError("V5PgOV decoder parameter count is invalid")
+    return {key.removeprefix("decoder."): value for key, value in state.items()}
+
+
 def terminal_placement_mode(text):
     dense = text["denseHTokens"]
     try:
@@ -218,12 +249,12 @@ def validate_job(job, direct_control):
 
 def validate_guidance(value, legacy_cfg):
     if value is None:
-        return {"mode": "unified", "cfg": require_number(legacy_cfg, "CFG", 0, 10)}
+        return {"mode": "unified", "cfg": require_number(legacy_cfg, "CFG", -1, 10)}
     guidance = require_record(value, "guidance")
     if guidance.get("mode") == "unified":
         return {
             "mode": "unified",
-            "cfg": require_number(guidance.get("cfg"), "guidance.cfg", 0, 10),
+            "cfg": require_number(guidance.get("cfg"), "guidance.cfg", -1, 10),
         }
     if guidance.get("mode") != "three-way":
         raise ValueError("unsupported guidance mode")
@@ -231,9 +262,9 @@ def validate_guidance(value, legacy_cfg):
         raise ValueError("unsupported 3CFG formula")
     return {
         "mode": "three-way",
-        "audio": require_number(guidance.get("audio"), "guidance.audio", 0, 10),
-        "text": require_number(guidance.get("text"), "guidance.text", 0, 10),
-        "midi": require_number(guidance.get("midi"), "guidance.midi", 0, 10),
+        "audio": require_number(guidance.get("audio"), "guidance.audio", -1, 10),
+        "text": require_number(guidance.get("text"), "guidance.text", -1, 10),
+        "midi": require_number(guidance.get("midi"), "guidance.midi", -1, 10),
         "formula": "audio-text-midi-telescoping.v1",
     }
 
@@ -377,6 +408,28 @@ def training_contract(checkpoint_schema):
             "engineering_g_probe": False,
             "ema_device": "cpu",
         },
+        "v5pgo_training_checkpoint_v1": {
+            "schema": "v5pgo_training_checkpoint_v1",
+            "placement_mode": "phone_pul",
+            "phase": "g_adapt",
+            "midi_teacher": "GAME medium K4 offline cache",
+            "midi_fuzz_disturb": False,
+            "schedule_profile": "v5pgo_two_cosine",
+            "warmup_steps": 1000,
+            "hold_steps": 2000,
+            "first_decay_end": 6000,
+            "mid_lr": 3e-6,
+            "max_steps": 8000,
+            "world_size": 1,
+            "grad_accum": 16,
+            "cka_weight": 0.0,
+            "flow_b_weight": 3.0,
+            "pool_policy": "KEEP_LONG_DEDUP_SHORT",
+            "sampling_policy": "NATURAL_RECORD",
+            "engineering_joint_probe": False,
+            "engineering_g_probe": False,
+            "ema_device": "cpu",
+        },
     }
     contract = contracts.get(checkpoint_schema)
     if contract is None:
@@ -385,7 +438,7 @@ def training_contract(checkpoint_schema):
 
 
 def build_model(checkpoint, model_config, vae_config, vae_checkpoint, singer_root,
-                preset, resources, device):
+                preset, resources, device, vae_decoder_checkpoint=None):
     import torch
 
     if not hasattr(torch, "load_orig"):
@@ -448,7 +501,19 @@ def build_model(checkpoint, model_config, vae_config, vae_checkpoint, singer_roo
     vae = StableAudioInfer(
         model_config_path=str(vae_config),
         model_ckpt_path=str(vae_checkpoint),
-    ).to(device).eval()
+    )
+    if vae_decoder_checkpoint is not None:
+        emit("loading_decoder", path=str(vae_decoder_checkpoint))
+        decoder_export = torch.load(
+            vae_decoder_checkpoint, map_location="cpu", weights_only=False, mmap=True
+        )
+        decoder_state = validate_v_decoder_export(
+            decoder_export, resources["vaeCheckpoint"]["sha256"]
+        )
+        vae.model.decoder.load_state_dict(decoder_state, strict=True)
+        del decoder_export, decoder_state
+        emit("loaded_decoder", device=device)
+    vae = vae.to(device).eval()
     emit("loaded_vae", device=device)
     return policy, vae
 
@@ -553,7 +618,9 @@ def sample_with_guidance(policy, sample_kwargs, guidance):
     if guidance["mode"] == "unified":
         return policy.sample(
             **sample_kwargs,
-            cfg_strength=guidance["cfg"],
+            # cfg_strength selects the branch; guidance_scale is the actual
+            # coefficient. Negative strengths otherwise skip CFG altogether.
+            cfg_strength=1.0 if guidance["cfg"] < 0 else guidance["cfg"],
             guidance_scale=guidance["cfg"],
         )
     with ThreeWayCFG(policy, guidance):
@@ -694,6 +761,8 @@ def save_result(output_dir, job, validated, audio, audit, resource_hashes, start
         "presetId": job["preset"]["id"],
         "checkpointSHA256": resource_hashes["checkpoint"],
         "vaeSHA256": resource_hashes["vaeCheckpoint"],
+        **({"decoderSHA256": resource_hashes["vaeDecoderCheckpoint"]}
+           if "vaeDecoderCheckpoint" in resource_hashes else {}),
         "adapterSHA256": resource_hashes["directControlAdapter"],
         "seed": validated["seed"],
         "samplingSettings": {
@@ -740,6 +809,10 @@ def main():
         "midiPModule": require_resource(resources, "midiPModule"),
         "runner": require_resource(resources, "runner"),
     }
+    preset = require_record(job.get("preset"), "V5-P preset")
+    resource_paths["vaeDecoderCheckpoint"] = require_decoder_resource(
+        resources, str(preset.get("id") or "")
+    )
     singer_root = require_resource(resources, "singerRoot", directory=True)
     resource_hashes = {
         name: resource["sha256"]
@@ -769,7 +842,6 @@ def main():
 
     if device.startswith("cuda:") and not torch.cuda.is_available():
         raise ValueError("CUDA was requested but this Python runtime has no CUDA support")
-    preset = require_record(job.get("preset"), "V5-P preset")
     policy, vae = build_model(
         checkpoint=resource_paths["checkpoint"],
         model_config=resource_paths["modelConfig"],
@@ -779,6 +851,7 @@ def main():
         preset=preset,
         resources=resources,
         device=device,
+        vae_decoder_checkpoint=resource_paths["vaeDecoderCheckpoint"],
     )
     audio, audit = synthesize(
         policy, vae, reference_audio, target_audio, validated

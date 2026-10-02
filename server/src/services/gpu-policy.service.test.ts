@@ -10,6 +10,23 @@ test('duration estimate uses the next larger calibrated sample and falls back to
   assert.equal(beyond.sampleSeconds, 60)
 })
 
+test('V5PgO reuses the compatible V5-P peak profile', () => {
+  const baseline = estimateGpuMemory('V5P_40K_EMA', 35)
+  const pgo = estimateGpuMemory('V5PgO_8K', 35)
+  assert.equal(pgo.modelId, 'V5PgO_8K')
+  assert.equal(pgo.sampleSeconds, baseline.sampleSeconds)
+  assert.equal(pgo.peakDeltaMiB, baseline.peakDeltaMiB)
+  assert.equal(Number.isFinite(pgo.residentMiB), true)
+})
+
+test('V5PgOV uses the compatible V5-P peak profile', () => {
+  const baseline = estimateGpuMemory('V5P_40K_EMA', 35)
+  const pgov = estimateGpuMemory('V5PgOV_300K_EMA', 35)
+  assert.equal(pgov.modelId, 'V5PgOV_300K_EMA')
+  assert.equal(pgov.sampleSeconds, baseline.sampleSeconds)
+  assert.equal(pgov.peakDeltaMiB, baseline.peakDeltaMiB)
+})
+
 test('three-way CFG keeps sequential peak estimate and reports its time factor', () => {
   const unified = estimateGpuMemory('V5P_40K_EMA', 35, 'unified')
   const threeWay = estimateGpuMemory('V5P_40K_EMA', 35, 'three-way')

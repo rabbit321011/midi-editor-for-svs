@@ -1,22 +1,34 @@
 import { describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import synthesisProject from '../../../projects/想让你听见的是/project.json'
 import type { Project } from '@/types'
-import { TOP_LEVEL_IDS } from '@/object-workbench'
+import { TOP_LEVEL_IDS, createEmptyProjectObjectTree } from '@/object-workbench'
 import { useObjectTreeStore } from './objectTree'
 import { useProjectStore } from './project'
 
-const samples = [
-  ['想让你听见的是', synthesisProject],
-] as const
+const sample: Project = {
+  id: 'fixture-project',
+  name: 'Fixture',
+  version: '1.0.0',
+  objectTree: createEmptyProjectObjectTree(),
+  tracks: {},
+  trackOrder: [],
+  segments: {},
+  compGroups: {},
+  compGroupOrder: [],
+  timelineOffset: 0,
+  pxPerSec: 60,
+  f0Settings: { fmin: 65.4, fmax: 2093, algorithm: 'pyin', hopMs: 16 },
+  createdAt: '2026-01-01T00:00:00.000Z',
+  modifiedAt: '2026-01-01T00:00:00.000Z',
+}
 
-describe('checked-in project samples objectTree migration smoke test', () => {
-  it.each(samples)('loads %s and serializes objectTree', (_name, sample) => {
+describe('self-contained project objectTree smoke test', () => {
+  it('loads and serializes the project', () => {
     setActivePinia(createPinia())
     const project = useProjectStore()
     const objectTree = useObjectTreeStore()
 
-    project.load(sample as Project)
+    project.load(sample)
     const json = project.toJSON()
 
     expect(objectTree.node(TOP_LEVEL_IDS.workspace)?.kind).toBe('folder')

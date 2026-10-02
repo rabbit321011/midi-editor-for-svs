@@ -10,13 +10,13 @@ import type {
   V5PSamplingSettings,
 } from './types'
 import type { TrackId } from '@/types'
-import { V5P_DEFAULT_MODEL, type V5PModelId } from './v5pModel'
+import { isV5PModelId, V5P_DEFAULT_MODEL, type V5PModelId } from './v5pModel'
 
 export const V5P_SAMPLE_RATE = 44100 as const
 export const V5P_HOP_SAMPLES = 2048 as const
 export const V5P_FRAME_RATE = V5P_SAMPLE_RATE / V5P_HOP_SAMPLES
 export const V5P_DEFAULT_SAMPLING_SETTINGS: V5PSamplingSettings = {
-  guidance: { mode: 'unified', cfg: 1 },
+  guidance: { mode: 'three-way', audio: 0.4, text: 0.6, midi: 0.5, formula: 'audio-text-midi-telescoping.v1' },
   steps: 32,
   seed: 42,
 }
@@ -90,7 +90,7 @@ export function validateSynthesisUnit(unit: SynthesisUnitObjectNode): string[] {
   const errors: string[] = []
   const { guide, frameContract, hTokenTrack, midiPTokenTrack } = unit.synthesisUnit
   const presetId = unit.synthesisUnit.presetId
-  if (presetId != null && presetId !== 'V5P_40K_EMA' && presetId !== 'V5Pg_20K') {
+  if (presetId != null && !isV5PModelId(presetId)) {
     errors.push('SynthesisUnit presetId is invalid')
   }
   const sampling = unit.synthesisUnit.samplingSettings
@@ -104,7 +104,7 @@ export function validateSynthesisUnit(unit: SynthesisUnitObjectNode): string[] {
     const values = sampling.guidance.mode === 'unified'
       ? [sampling.guidance.cfg]
       : [sampling.guidance.audio, sampling.guidance.text, sampling.guidance.midi]
-    if (values.some(value => !Number.isFinite(value) || value < 0 || value > 10)) {
+    if (values.some(value => !Number.isFinite(value) || value < -1 || value > 10)) {
       errors.push('SynthesisUnit CFG settings are invalid')
     }
     if (sampling.guidance.mode === 'three-way'

@@ -3,6 +3,7 @@ import { NButton, NInput, NInputNumber, NSelect, NSlider, NSwitch, NSpace } from
 import { useProjectStore } from '@/stores/project'
 import { useSvcConfigStore } from '@/stores/svcConfig'
 import { useUiSettingsStore, type WorkbenchTheme } from '@/stores/uiSettings'
+import { MIDI_INSTRUMENT_OPTIONS } from '@/utils/midiInstrument'
 
 const uiSettings = useUiSettingsStore()
 const project = useProjectStore()
@@ -97,6 +98,14 @@ function readFileAsDataUrl(file: File): Promise<string> {
     </section>
 
     <section class="settings-section">
+      <h2>MIDI 试听</h2>
+      <div class="settings-grid">
+        <label>MIDI 音色</label>
+        <n-select v-model:value="uiSettings.settings.midiInstrument" :options="MIDI_INSTRUMENT_OPTIONS" size="small" aria-label="MIDI 音色" />
+      </div>
+    </section>
+
+    <section class="settings-section">
       <h2>自动保存</h2>
       <div class="settings-grid compact">
         <label>间隔分钟</label>
@@ -150,6 +159,8 @@ function readFileAsDataUrl(file: File): Promise<string> {
 <style scoped>
 .settings-page {
   flex: 1;
+  min-width: 0;
+  container-type: inline-size;
   overflow: auto;
   padding: 24px 28px;
   color: var(--app-text);
@@ -179,7 +190,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
 }
 .settings-grid {
   display: grid;
-  grid-template-columns: 150px minmax(220px, 360px);
+  grid-template-columns: minmax(80px, 150px) minmax(0, 360px);
   gap: 12px 16px;
   align-items: center;
 }
@@ -196,4 +207,8 @@ function readFileAsDataUrl(file: File): Promise<string> {
   border-top: 1px solid var(--app-border);
 }
 .settings-error { margin-top: 10px; color: var(--app-danger); font-size: 12px; }
+@container (max-width: 450px) {
+  .settings-grid, .settings-grid.compact { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .settings-grid label { margin-top: 6px; }
+}
 </style>

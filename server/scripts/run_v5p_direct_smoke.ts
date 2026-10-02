@@ -23,6 +23,7 @@ const midiFixture = JSON.parse(fs.readFileSync(
 
 const jobId = process.argv[2] || 'v5p-smoke-1step'
 const steps = Number(process.argv[3] || 1)
+const presetId = String(process.argv[4] || 'V5P_40K_EMA') as SynthesisDirectControlRequest['presetId']
 const sourceSHA256 = sha256File(fixtureWav)
 if (sourceSHA256 !== midiFixture.sourceSHA256) {
   console.warn('MIDI-P fixture source hash is stale; binding smoke to the current Owned Guide bytes')
@@ -87,7 +88,7 @@ const snapshot = {
 }
 const request: SynthesisDirectControlRequest = {
   jobId,
-  presetId: 'V5P_40K_EMA',
+  presetId,
   referenceWav,
   targetWav,
   snapshot,

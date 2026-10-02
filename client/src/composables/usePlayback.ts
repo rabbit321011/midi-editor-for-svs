@@ -1,4 +1,4 @@
-import { onUnmounted } from 'vue'
+import { onUnmounted, watch } from 'vue'
 import { usePlaybackStore } from '@/stores/playback'
 import { useTracksStore } from '@/stores/tracks'
 import { useSelectionStore } from '@/stores/selection'
@@ -6,6 +6,9 @@ import { useObjectTreeStore } from '@/stores/objectTree'
 import type { AudioSegment } from '@/types'
 import type { SynthesisUnitObjectNode, TrackObjectNode } from '@/object-workbench'
 import { getAudioBlobMeta } from '@/utils/audioMeta'
+import { audibleSegments } from '@/utils/audioTrackMix'
+import { useUiSettingsStore } from '@/stores/uiSettings'
+import { prepareMidiInstrument, scheduleMidiTone, type MidiVoice } from '@/utils/midiInstrument'
 
 type SynthesisMidiPlaybackItem = {
   trackId: string
@@ -18,10 +21,11 @@ export function usePlayback() {
   const tracks = useTracksStore()
   const selection = useSelectionStore()
   const objectTree = useObjectTreeStore()
+  const uiSettings = useUiSettingsStore()
 
   let audioCtx: AudioContext | null = null
   let scheduledSources: AudioBufferSourceNode[] = []
-  let scheduledMidiNodes: OscillatorNode[] = []
+  let scheduledMidiNodes: MidiVoice[] = []
   let scheduledGainNodes = new Map<string, GainNode[]>()
   let scheduleBaseWall: number = 0
   let scheduleBaseTimeline: number = 0
@@ -71,6 +75,17 @@ export function usePlayback() {
 
     const list = collectSegments()
     const synthesisMidi = collectSynthesisMidi()
+    try {
+      await ac.resume()
+      if (synthesisMidi.length) await prepareMidiInstrument(ac, uiSettings.settings.midiInstrument)
+    } catch (error: any) {
+      if (generation === schedulingGeneration) {
+        isScheduling = false
+        window.alert(error?.message || 'MIDI 试听准备失败')
+      }
+      return
+    }
+    if (generation !== schedulingGeneration) return
     if (list.length === 0 && synthesisMidi.length === 0) {
       if (generation === schedulingGeneration) isScheduling = false
       return
@@ -189,17 +204,8 @@ export function usePlayback() {
   }
 
   function collectSegments(): Array<{ seg: AudioSegment }> {
-    const all = tracks.getAllSegments()
     const out: Array<{ seg: AudioSegment }> = []
-
-    const hasSolo = tracks.trackOrder.some(tid => {
-      const t = tracks.tracks[tid]
-      return t && !t.ignored && t.solo
-    })
-
-    for (const seg of all) {
-      if (seg.ignored) continue
-      if (!isTrackAudible(seg.trackId, hasSolo)) continue
+    for (const seg of audibleSegments(tracks.getAllSegments(), tracks.tracks, tracks.trackOrder)) {
       if (!tracks.sourceBlobs.has(seg.sourceFile) && !tracks.sourceBlobs.has(seg.trackId)) continue
       if (playSelectedOnly && !selection.isSelected(seg.id)) continue
       out.push({ seg })
@@ -268,32 +274,18 @@ export function usePlayback() {
   }
 
   function schedulePianoTone(context: AudioContext, midiClass: number, startTime: number, duration: number, volume: number, trackId: string) {
-    const frequency = 440 * 2 ** ((midiClass / 2 - 69) / 12)
-    const endTime = startTime + Math.max(0.012, duration)
-    const attackEnd = Math.min(endTime, startTime + 0.008)
-    const releaseStart = Math.max(attackEnd, endTime - 0.035)
-    const gain = context.createGain()
-    gain.gain.setValueAtTime(0.0001, startTime)
-    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, 0.16 * volume), attackEnd)
-    gain.gain.setValueAtTime(Math.max(0.0001, 0.16 * volume), releaseStart)
-    gain.gain.exponentialRampToValueAtTime(0.0001, endTime)
-    gain.connect(context.destination)
+    const voice = scheduleMidiTone(context, uiSettings.settings.midiInstrument, midiClass, startTime, duration, volume)
+    scheduledMidiNodes.push(voice)
     const gains = scheduledGainNodes.get(trackId) ?? []
-    gains.push(gain)
+    gains.push(voice.output)
     scheduledGainNodes.set(trackId, gains)
-
-    for (const [multiple, level] of [[1, 1], [2, 0.24]] as const) {
-      const oscillator = context.createOscillator()
-      const harmonicGain = context.createGain()
-      oscillator.type = 'sine'
-      oscillator.frequency.setValueAtTime(frequency * multiple, startTime)
-      harmonicGain.gain.value = level
-      oscillator.connect(harmonicGain).connect(gain)
-      oscillator.start(startTime)
-      oscillator.stop(endTime + 0.005)
-      scheduledMidiNodes.push(oscillator)
-    }
   }
+
+  watch(() => uiSettings.settings.midiInstrument, () => {
+    if (!pb.isPlaying && !isScheduling) return
+    pause()
+    void play()
+  })
 
   function refreshTrackAudibility() {
     if (!audioCtx) return

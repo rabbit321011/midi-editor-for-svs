@@ -13,6 +13,7 @@ export interface SynthesisV5PResult {
   presetId: V5PModelId
   checkpointSHA256: string
   vaeSHA256: string
+  decoderSHA256?: string
   adapterSHA256: string
   seed: number
   samplingSettings: V5PSamplingSettings
@@ -35,6 +36,9 @@ export function readSynthesisV5PResult(
   for (const key of hashes) {
     if (typeof result[key] !== 'string' || !/^[a-f0-9]{64}$/i.test(result[key])) return null
   }
+  if (expectedPresetId === 'V5PgOV_300K_EMA') {
+    if (typeof result.decoderSHA256 !== 'string' || !/^[a-f0-9]{64}$/i.test(result.decoderSHA256)) return null
+  } else if (result.decoderSHA256 !== undefined) return null
   if (!Number.isSafeInteger(result.sampleCount) || result.sampleCount < 1) return null
   if (!Number.isFinite(result.duration) || result.duration <= 0) return null
   if (!Number.isSafeInteger(result.seed) || result.seed < 0) return null
@@ -54,7 +58,7 @@ function readSamplingSettings(value: unknown): value is V5PSamplingSettings {
 }
 
 function validCfg(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 10
+  return typeof value === 'number' && Number.isFinite(value) && value >= -1 && value <= 10
 }
 
 function isRecord(value: unknown): value is Record<string, any> {

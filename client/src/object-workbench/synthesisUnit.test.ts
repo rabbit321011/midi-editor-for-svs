@@ -51,6 +51,10 @@ describe('SynthesisUnit contract', () => {
     })
 
     expect(unit.synthesisUnit.frameContract.frameCount).toBe(64)
+    expect(unit.synthesisUnit.presetId).toBe('V5PgO_8K')
+    expect(unit.synthesisUnit.samplingSettings?.guidance).toEqual({
+      mode: 'three-way', audio: 0.4, text: 0.6, midi: 0.5, formula: 'audio-text-midi-telescoping.v1',
+    })
     expect(unit.synthesisUnit.segmentTrack).toMatchObject({ status: 'empty', revision: 0, items: [] })
     expect(unit.synthesisUnit.kanaTrack).toMatchObject({ status: 'empty', revision: 0, units: [], boundaries: [] })
     expect(unit.synthesisUnit.hTokenTrack).toMatchObject({ status: 'empty', revision: 0, events: [] })

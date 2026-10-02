@@ -7,6 +7,8 @@ const SVS_MODELS_PATH = path.join(PROJECT_ROOT, 'server', 'models', 'svs_models.
 const VRAM_PROFILE_DIR = path.join(PROJECT_ROOT, 'data', 'vram-profile')
 const V5P_CHECKPOINT = 'E:/MyProject/重要模型保存/V5P_40K_EMA/step_040000_final.pt'
 const V5PG_CHECKPOINT = 'E:/MyProject/重要模型保存/V5Pg_20K/step_020000_final.pt'
+const V5PGO_CHECKPOINT = 'E:/MyProject/重要模型保存/V5PgO/step_008000_final.pt'
+const V5PGOV_DECODER = 'E:/MyProject/ToLinuxServer/deliverables/V5PgOV_300K_EMA/V5PgOV_300K_EMA_decoder.pt'
 const MANAGED_SVS_IDS = new Set(['V4Hg_10k', 'V4fg_10k'])
 
 export type CatalogFamily = 'svs' | 'analysis' | 'svc' | 'msst'
@@ -81,6 +83,24 @@ export function getModelCatalog(): ModelCatalogEntry[] {
     capabilities: ['synthesis-unit', 'direct-control', 'midi-p', 'h-token', 'three-way-cfg'],
     vramProfile: readVramProfile('V5Pg_20K', 'V5P_40K_EMA'),
   })
+  entries.push({
+    id: 'V5PgO_8K',
+    family: 'svs',
+    engine: 'v5p_direct',
+    checkpoint: V5PGO_CHECKPOINT,
+    runtimeState: fs.existsSync(V5PGO_CHECKPOINT) ? 'configured' : 'unavailable',
+    capabilities: ['synthesis-unit', 'direct-control', 'midi-p', 'h-token', 'three-way-cfg'],
+    vramProfile: readVramProfile('V5PgO_8K', 'V5P_40K_EMA'),
+  })
+  entries.push({
+    id: 'V5PgOV_300K_EMA',
+    family: 'svs',
+    engine: 'v5p_direct',
+    checkpoint: V5PGO_CHECKPOINT,
+    runtimeState: fs.existsSync(V5PGO_CHECKPOINT) && fs.existsSync(V5PGOV_DECODER) ? 'configured' : 'unavailable',
+    capabilities: ['synthesis-unit', 'direct-control', 'midi-p', 'h-token', 'three-way-cfg'],
+    vramProfile: readVramProfile('V5PgOV_300K_EMA', 'V5P_40K_EMA'),
+  })
   entries.push(
     { id: 'GAME-1.0-medium', family: 'analysis', engine: 'game', runtimeState: 'configured', capabilities: ['midi-p'], vramProfile: readVramProfile('GAME-1.0-medium') },
     {
@@ -148,7 +168,12 @@ function readVramProfile(
       samples,
     }
   } catch {
-    return fallbackModelId && fallbackModelId !== modelId ? readVramProfile(fallbackModelId) : undefined
+    if (!fallbackModelId || fallbackModelId === modelId) return undefined
+    const fallback = readVramProfile(fallbackModelId)
+    const residentMiB = readResidentMiB(modelId)
+    return fallback && Number.isFinite(residentMiB)
+      ? { ...fallback, residentMiB }
+      : fallback
   }
 }
 

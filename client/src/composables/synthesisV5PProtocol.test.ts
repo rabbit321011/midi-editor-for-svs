@@ -23,6 +23,31 @@ describe('V5-P result protocol', () => {
       result,
     }, 'v5p-job-test', 'V5Pg_20K')).toEqual(result)
   })
+
+  it('accepts a V5PgO_8K result when the expected preset matches', () => {
+    const result = { ...fixture(), presetId: 'V5PgO_8K' as const }
+    expect(readSynthesisV5PResult({
+      type: 'v5p-result',
+      result,
+    }, 'v5p-job-test', 'V5PgO_8K')).toEqual(result)
+  })
+
+  it('requires decoder provenance only for V5PgOV', () => {
+    const result = {
+      ...fixture(),
+      presetId: 'V5PgOV_300K_EMA' as const,
+      decoderSHA256: 'f'.repeat(64),
+    }
+    expect(readSynthesisV5PResult({
+      type: 'v5p-result', result,
+    }, 'v5p-job-test', 'V5PgOV_300K_EMA')).toEqual(result)
+    expect(readSynthesisV5PResult({
+      type: 'v5p-result', result: { ...result, decoderSHA256: undefined },
+    }, 'v5p-job-test', 'V5PgOV_300K_EMA')).toBeNull()
+    expect(readSynthesisV5PResult({
+      type: 'v5p-result', result: { ...fixture(), decoderSHA256: 'f'.repeat(64) },
+    }, 'v5p-job-test')).toBeNull()
+  })
 })
 
 function fixture() {

@@ -4,6 +4,7 @@ import {
   moveHTokenEvent,
   replaceMidiPFrame,
   moveMidiPFrame,
+  transposeMidiPNotes,
   replaceHTokenTrackRange,
   replaceKanaTrackRange,
   replaceMidiPTrack,
@@ -18,6 +19,47 @@ import {
 } from './synthesisTrackTransactions'
 
 describe('SynthesisUnit track transactions', () => {
+  it('transposes selected note heads and FLOW together in one revision without changing boundaries', () => {
+    const unit = fixtureUnit()
+    replaceMidiPTrack(unit, { operation: 'GAME', origin: 'game', classes: [
+      121, 121, 121, 121, 130, 130, 255, 255, 140, 140, 140, 255, 255, 255, 255, 255,
+    ] })
+    const track = unit.synthesisUnit.midiPTokenTrack
+    // Two adjacent same-pitch notes must remain separate.
+    track.flowFrames = [1, 3, 5, 9, 10]
+    const flows = [...track.flowFrames]
+    const revision = track.revision
+    const otherTracks = structuredClone([unit.synthesisUnit.segmentTrack, unit.synthesisUnit.kanaTrack, unit.synthesisUnit.hTokenTrack])
+    transposeMidiPNotes(unit, [0, 1, 5], 1)
+    expect(track.classes).toEqual([145, 145, 121, 121, 154, 154, 255, 255, 140, 140, 140, 255, 255, 255, 255, 255])
+    expect(track.flowFrames).toEqual(flows)
+    expect(track.manualFrames).toEqual([0, 1, 4, 5])
+    expect(track.revision).toBe(revision + 1)
+    expect([unit.synthesisUnit.segmentTrack, unit.synthesisUnit.kanaTrack, unit.synthesisUnit.hTokenTrack]).toEqual(otherTracks)
+    transposeMidiPNotes(unit, [0, 4], -1)
+    expect(track.classes.slice(0, 6)).toEqual([121, 121, 121, 121, 130, 130])
+  })
+
+  it('rejects an entire octave edit when any selected pitch exceeds the range', () => {
+    for (const [pitch, octaves] of [[240, 1], [12, -1]]) {
+      const unit = fixtureUnit()
+      replaceMidiPTrack(unit, { operation: 'GAME', origin: 'game', classes: [120, pitch, ...Array(14).fill(255)] })
+      const before = structuredClone(unit)
+      expect(() => transposeMidiPNotes(unit, [0, 1], octaves)).toThrow('超出 MIDI-P 音域')
+      expect(unit).toEqual(before)
+    }
+  })
+
+  it('rejects REST and invalid selections without modifying the track', () => {
+    const unit = fixtureUnit()
+    replaceMidiPTrack(unit, { operation: 'GAME', origin: 'game', classes: [120, ...Array(15).fill(255)] })
+    for (const frames of [[0, 1], [-1], [16], []]) {
+      const before = structuredClone(unit)
+      expect(() => transposeMidiPNotes(unit, frames, 1)).toThrow()
+      expect(unit).toEqual(before)
+    }
+  })
+
   it('creates a user Segment without changing any other control track', () => {
     const unit = fixtureUnit()
     replaceMidiPTrack(unit, { operation: 'fixture midi', origin: 'user', classes: Array(16).fill(120) })

@@ -29,6 +29,7 @@ import {
   replaceHTokenTrackRange as applyReplaceHTokenTrackRange,
   replaceKanaTrackRange as applyReplaceKanaTrackRange,
   replaceMidiPFrame as applyReplaceMidiPFrame,
+  transposeMidiPNotes as applyTransposeMidiPNotes,
   replaceMidiPTrack as applyReplaceMidiPTrack,
   replaceMidiPTrackRange as applyReplaceMidiPTrackRange,
   replaceSegmentTrack as applyReplaceSegmentTrack,
@@ -809,6 +810,7 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
       duration: number
       checkpointSHA256: string
       vaeSHA256: string
+      decoderSHA256?: string
       adapterSHA256: string
       seed: number
       samplingSettings?: V5PSamplingSettings
@@ -849,6 +851,7 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
       duration: result.duration,
       checkpointSHA256: result.checkpointSHA256,
       vaeSHA256: result.vaeSHA256,
+      decoderSHA256: result.decoderSHA256,
       adapterSHA256: result.adapterSHA256,
       seed: result.seed,
       samplingSettings: structuredClone(
@@ -2128,6 +2131,17 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
     }
   }
 
+  function transposeSynthesisMidiPNotes(unitId: NodeId, frames: number[], octaves: number): { ok: boolean; reason?: string } {
+    const unit = index.value.nodes[unitId]
+    if (!unit || unit.kind !== 'synthesisUnit') return { ok: false, reason: '合成单元不存在' }
+    try {
+      applyTransposeMidiPNotes(unit, frames, octaves)
+      return { ok: true }
+    } catch (error: any) {
+      return { ok: false, reason: error?.message || 'MIDI-P 升降八度失败' }
+    }
+  }
+
   function moveSynthesisMidiPFrame(
     unitId: NodeId,
     sourceFrame: number,
@@ -2587,6 +2601,7 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
     moveSynthesisKanaSegmentBoundary,
     moveSynthesisHToken,
     setSynthesisMidiPFrame,
+    transposeSynthesisMidiPNotes,
     moveSynthesisMidiPFrame,
     replaceSynthesisMidiPTrack,
     replaceSynthesisMidiPTrackRange,

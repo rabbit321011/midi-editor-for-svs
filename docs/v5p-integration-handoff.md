@@ -78,12 +78,28 @@ VAE:        285k online VAE，SHA f18aeecacc04173cd2ea73bbdf8edae9e976d18e4ca050
 ```
 
 结构、H/PUL、GAME MIDI-P 合同与 40K EMA 完全一致；`v5p_direct_runner.py` 按 preset 校验
-schema、step、EMA offset 和训练合同。常驻 Runtime 按 modelId 独立管理，两个 V5-P 模型可分别
+schema、step、EMA offset 和训练合同。常驻 Runtime 按 modelId 独立管理，V5-P 模型可分别
 加载/释放。显存档案未单独标定时复用 40K EMA 档案，理论占用一致。
 
-### 2.2 统一 CFG 与三路 CFG
+### 2.2 V5PgO_8K Direct-Control 模型（2026-09-22）
 
-合成单元的高级采样菜单支持统一 CFG，以及 A 音频 / Text-H / MIDI-P 三路独立 CFG。两款 V5-P
+`V5PgO_8K` 是从 `V5Pg_20K` EMA 热启动的单卡 8k PgO 续训模型，网络结构、H/PUL、
+GAME MIDI-P、Direct-Control 和三路 CFG 合同不变。
+
+```text
+checkpoint: E:/MyProject/重要模型保存/V5PgO/step_008000_final.pt
+SHA256:     6882e0be20ca32a0e2dff9619efa47612ed4ca33f0d4cbc78d1de3da8023d6cc
+schema:     v5pgo_training_checkpoint_v1
+step:       8000，EMA step = 8000（EMA offset 0）
+VAE:        285k online VAE，SHA f18aeecacc04173cd2ea73bbdf8edae9e976d18e4ca050c38e2723281c5cba85
+```
+
+runner 严格校验 PgO 的单卡、梯度累积、FlowB=3、CKA=0 与 `v5pgo_two_cosine` 调度合同。
+2026-09-22 已通过 checkpoint SHA256、resident runtime 加载和 1-step Direct-Control 端到端合成门禁。
+
+### 2.3 统一 CFG 与三路 CFG
+
+合成单元的高级采样菜单支持统一 CFG，以及 A 音频 / Text-H / MIDI-P 三路独立 CFG。三款 V5-P
 模型的训练条件 dropout 均为 A 0.30 / Text 0.15 / MIDI 0.30。三路使用
 `audio-text-midi-telescoping.v1` 公式；三个值相同时严格退化为同值统一 CFG。菜单默认收起，当前不提供
 经验预设。每个 Take 冻结 guidance、steps 和 seed，服务端 preflight、audit 和 result 进行一致性校验。

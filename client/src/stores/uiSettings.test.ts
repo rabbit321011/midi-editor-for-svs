@@ -3,6 +3,19 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useUiSettingsStore } from './uiSettings'
 
 describe('ui settings store', () => {
+  it('persists the MIDI instrument and restores it in a new store', async () => {
+    const settings = useUiSettingsStore()
+    expect(settings.settings.midiInstrument).toBe('soft')
+    settings.update('midiInstrument', 'piano')
+    await Promise.resolve()
+    setActivePinia(createPinia())
+    expect(useUiSettingsStore().settings.midiInstrument).toBe('piano')
+  })
+
+  it('falls back to soft sound for an invalid stored MIDI instrument', () => {
+    localStorage.setItem('aisvc-ui-settings.v0.32', JSON.stringify({ midiInstrument: 'missing' }))
+    expect(useUiSettingsStore().settings.midiInstrument).toBe('soft')
+  })
   afterEach(() => vi.unstubAllGlobals())
   beforeEach(() => {
     setActivePinia(createPinia())

@@ -1,4 +1,5 @@
 import importlib.util
+import copy
 from pathlib import Path
 import sys
 import unittest
@@ -303,6 +304,87 @@ class TextControlCompilerTest(unittest.TestCase):
                 render_h_pul_placements,
                 {32: "k"},
             )
+
+    def direct_locked_fixture(self):
+        reason = "phone_ipa_length_mismatch"
+        return {
+            "Phrases": [{
+                "id": "kana-phrase:bridge", "start": 0, "end": 1,
+                "sourceStartFrame": 2, "sourceEndFrameExclusive": 8,
+                "tokens": [339, 216],
+                "kanaUnits": [{"id": "k:0", "kana": "きょ", "startFrame": 2, "endFrameExclusive": 8}],
+            }],
+            "HAlignment": {
+                "boundaryMode": "kana-hard",
+                "phrase_candidates": [{
+                    "status": "fallback", "fallback_reason": reason,
+                    "tokens": [339, 216, 365], "relative_frames": [],
+                }],
+                "phrase_audits": [{"cropStart": 0, "hAlignment": {
+                    "phone_match": {"status": "exact"},
+                    "mora_match": {"status": "exact"},
+                    "frontend_phrases": [{
+                        "fallback_reason": reason,
+                        "locked_tokens": [339, 216],
+                        "normalized_tokens": [32, 56, 48, 216],
+                        "direct_ipa_tokens": [339, 216],
+                        "direct_ipa_phones": ["kj", "o"],
+                        "expected_sofa_phones": ["ky", "o"],
+                    }],
+                    "phone_events": [
+                        {"sofa_phone": "ky", "kana": "きょ", "mora_index": 0, "interval": {"start": 0.10, "end": 0.20}},
+                        {"sofa_phone": "o", "kana": "きょ", "mora_index": 0, "interval": {"start": 0.20, "end": 0.35}},
+                    ],
+                }}],
+            },
+        }
+
+    def test_direct_locked_bridge_preserves_tokens_and_kana_bounds(self):
+        region = self.direct_locked_fixture()
+        original = copy.deepcopy(region["Phrases"])
+        events, audit = self.compiler.compile_h(
+            region, 10, render_h_pul_placements, {339: "kj", 216: "o"},
+        )
+        self.assertEqual([event["tokenId"] for event in events], [339, 216, 365])
+        self.assertTrue(all(2 <= event["frame"] < 8 for event in events[:-1]))
+        self.assertEqual(region["Phrases"], original)
+        self.assertEqual(audit["pulFrameCount"], 0)
+        self.assertEqual(audit["phraseModes"][0]["tokenBridge"]["mode"], "direct_locked_exact")
+
+    def test_direct_locked_bridge_rejects_unverified_mapping(self):
+        for fault in ("tokens", "acoustic", "mora", "interval", "vocab", "kana", "candidate", "sofa_error"):
+            with self.subTest(fault=fault):
+                region = self.direct_locked_fixture()
+                alignment = region["HAlignment"]["phrase_audits"][0]["hAlignment"]
+                vocab = {339: "kj", 216: "o"}
+                if fault == "tokens":
+                    alignment["frontend_phrases"][0]["direct_ipa_tokens"][0] = 32
+                elif fault == "acoustic":
+                    alignment["phone_match"]["status"] = "non_cl_phone_edit"
+                elif fault == "mora":
+                    alignment["mora_match"]["status"] = "mismatch"
+                elif fault == "interval":
+                    alignment["phone_events"][0]["interval"] = None
+                elif fault == "vocab":
+                    vocab[339] = "k"
+                elif fault == "kana":
+                    alignment["phone_events"][0]["kana"] = "か"
+                elif fault == "candidate":
+                    region["HAlignment"]["phrase_candidates"][0]["tokens"][0] = 32
+                else:
+                    alignment["error"] = "SOFA failed"
+                original = copy.deepcopy(region)
+                with self.assertRaisesRegex(ValueError, "hard Kana SOFA alignment failed"):
+                    self.compiler.compile_h(region, 10, render_h_pul_placements, vocab)
+                self.assertEqual(region, original)
+
+    def test_direct_locked_bridge_does_not_relax_frame_capacity(self):
+        region = self.direct_locked_fixture()
+        region["Phrases"][0]["kanaUnits"][0]["endFrameExclusive"] = 3
+        original = copy.deepcopy(region)
+        with self.assertRaises(ValueError):
+            self.compiler.compile_h(region, 10, render_h_pul_placements, {339: "kj", 216: "o"})
+        self.assertEqual(region, original)
 
 
 if __name__ == "__main__":

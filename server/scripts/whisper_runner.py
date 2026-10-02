@@ -33,6 +33,35 @@ def normalize_japanese_phrase(text):
     return "".join(str(text).split())
 
 
+def transcribe_segments(model, input_path, vad):
+    segments, info = model.transcribe(
+        input_path, language="ja", beam_size=1, vad_filter=vad,
+    )
+    raw_segments = list(segments)
+    has_text = any(normalize_japanese_phrase(getattr(segment, "text", "")) for segment in raw_segments)
+    # Singing may be rejected entirely by speech VAD. Retry only that case;
+    # keep Whisper's own no-speech thresholds and decoding options unchanged.
+    if (
+        vad and not has_text
+        and getattr(info, "duration", 0) > 0
+        and getattr(info, "duration_after_vad", None) == 0
+    ):
+        emit({
+            "type": "log",
+            "message": "VAD removed all audio; retrying once without VAD. Please review the resulting lyrics.",
+        })
+        segments, info = model.transcribe(
+            input_path, language="ja", beam_size=1, vad_filter=False,
+        )
+        raw_segments = list(segments)
+        if not any(normalize_japanese_phrase(getattr(segment, "text", "")) for segment in raw_segments):
+            raise ValueError(
+                "VAD removed all audio; Whisper still returned no lyrics after retrying without VAD. "
+                "Check that the selected Guide contains audible vocals."
+            )
+    return raw_segments, info
+
+
 def space_romaji(text):
     vowels = "aeiou"
     chunks = []
@@ -101,14 +130,9 @@ def main():
 
     emit({"type": "log", "message": "Transcribing audio..."})
     emit({"type": "progress", "progress": 20})
-    segments, info = model.transcribe(
-        args.input,
-        language="ja",
-        beam_size=1,
-        vad_filter=args.vad.lower() != "false",
+    raw_segments, info = transcribe_segments(
+        model, args.input, args.vad.lower() != "false",
     )
-
-    raw_segments = list(segments)
     detected_language = getattr(info, "language", "ja") or "ja"
     if detected_language != "ja":
         emit({"type": "error", "message": f"Japanese transcription required, detected: {detected_language}"})

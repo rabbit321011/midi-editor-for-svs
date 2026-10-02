@@ -1,5 +1,9 @@
 # License Scope
 
+Bundled piano samples under `client/public/instruments/salamander/` are by
+Alexander Holm and distributed under CC BY 3.0, not MIT. See the included
+`NOTICE.md`, upstream `README`, and `manifest.json` for attribution and provenance.
+
 The MIT License in [`LICENSE`](LICENSE) applies only to the original MIDI Editor for SVS editor source code and documentation in this repository for which `rabbit321011` owns the copyright.
 
 It does not grant a license to any of the following:

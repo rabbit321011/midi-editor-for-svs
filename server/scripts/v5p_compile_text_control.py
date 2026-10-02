@@ -158,7 +158,59 @@ def solve_windowed_monotonic_frames(target_frames, lower_frames, upper_frames, f
     }
 
 
-def constrain_h_candidates_to_kana(region, frame_count):
+def recover_direct_locked_events(phrase, candidate, alignment, inverse_vocab):
+    """Accept exact locked tokens without relying on a second G2P pass."""
+    reasons = {"phone_ipa_length_mismatch", "direct_phone_token_mismatch", "locked_token_mismatch"}
+    if candidate.get("fallback_reason") not in reasons:
+        return None
+    if alignment.get("error") or alignment.get("sample_fallback_reason"):
+        return None
+    if (alignment.get("phone_match") or {}).get("status") != "exact":
+        return None
+    if (alignment.get("mora_match") or {}).get("status") != "exact":
+        return None
+    plans = alignment.get("frontend_phrases") or []
+    if len(plans) != 1:
+        return None
+    plan = plans[0]
+    tokens = phrase.get("tokens") or []
+    events = alignment.get("phone_events") or []
+    symbols = plan.get("direct_ipa_phones") or []
+    expected = plan.get("expected_sofa_phones") or []
+    if (
+        not tokens
+        or plan.get("fallback_reason") != candidate.get("fallback_reason")
+        or plan.get("locked_tokens") != tokens
+        or plan.get("direct_ipa_tokens") != tokens
+        or candidate.get("tokens") != [*tokens, SEP_TOKEN_ID]
+        or len(events) != len(tokens)
+        or len(symbols) != len(tokens)
+        or expected != [event.get("sofa_phone") for event in events]
+        or symbols != [inverse_vocab.get(token) for token in tokens]
+    ):
+        return None
+    units = phrase.get("kanaUnits") or []
+    recovered = []
+    previous_start = -math.inf
+    for event, token, symbol in zip(events, tokens, symbols):
+        interval = event.get("interval") or {}
+        start, end = interval.get("start"), interval.get("end")
+        mora = event.get("mora_index", -1)
+        if (
+            not isinstance(start, (int, float)) or not isinstance(end, (int, float))
+            or not math.isfinite(start) or not math.isfinite(end)
+            or not 0 <= start <= end or start < previous_start
+            or not isinstance(mora, int) or not 0 <= mora < len(units)
+            or jaconv.kata2hira(str(event.get("kana", "")))
+            != jaconv.kata2hira(str(units[mora].get("kana", "")))
+        ):
+            return None
+        previous_start = start
+        recovered.append({**event, "token_id": token, "ipa_phone": symbol})
+    return recovered
+
+
+def constrain_h_candidates_to_kana(region, frame_count, inverse_vocab):
     h_alignment = region.get("HAlignment") or {}
     if h_alignment.get("boundaryMode") != "kana-hard":
         return
@@ -169,14 +221,19 @@ def constrain_h_candidates_to_kana(region, frame_count):
         raise ValueError("hard Kana phrase/audit count mismatch")
 
     for phrase_index, (phrase, candidate, audit) in enumerate(zip(phrases, candidates, audits)):
+        alignment = audit.get("hAlignment") or {}
+        recovered = None
         if candidate.get("status") != "eligible":
-            sofa_error = (audit.get("hAlignment") or {}).get("error")
-            raise ValueError(
-                f"phrase {phrase_index + 1} hard Kana SOFA alignment failed: "
-                f"{sofa_error or candidate.get('fallback_reason') or 'unknown error'}"
+            recovered = recover_direct_locked_events(
+                phrase, candidate, alignment, inverse_vocab
             )
+            if recovered is None:
+                raise ValueError(
+                    f"phrase {phrase_index + 1} hard Kana SOFA alignment failed: "
+                    f"{alignment.get('error') or candidate.get('fallback_reason') or 'unknown error'}"
+                )
         kana_units = phrase.get("kanaUnits") or []
-        phone_events = (audit.get("hAlignment") or {}).get("phone_events") or []
+        phone_events = recovered if recovered is not None else alignment.get("phone_events") or []
         lyric_tokens = [int(token) for token in phrase.get("tokens") or []]
         if len(phone_events) != len(lyric_tokens):
             raise ValueError(f"phrase {phrase_index + 1} hard Kana phone count mismatch")
@@ -211,6 +268,15 @@ def constrain_h_candidates_to_kana(region, frame_count):
                 f"{placement['max_abs_shift']} frames, exceeding the training limit"
             )
         sep_frame = phrase_end
+        if recovered is not None:
+            # Keep the original training audit; only the bounded editor candidate
+            # uses the verified direct mapping. No tokens or intervals change.
+            candidate["token_bridge"] = {
+                "mode": "direct_locked_exact",
+                "originalFallbackReason": candidate["fallback_reason"],
+            }
+            alignment["phone_events"] = recovered
+            candidate.update({"status": "eligible", "fallback_reason": None})
         candidate.update({
             "relative_frames": [
                 *[frame - phrase_start for frame in placement["frames"]],
@@ -350,7 +416,7 @@ def compile_h(region, frame_count, render_h_pul_placements, inverse_vocab):
     candidates = region["HAlignment"].get("phrase_candidates") or []
     if len(phrases) != len(candidates):
         raise ValueError("phrase/candidate count mismatch")
-    constrain_h_candidates_to_kana(region, frame_count)
+    constrain_h_candidates_to_kana(region, frame_count, inverse_vocab)
 
     # A partial KanaTrack can already own a terminal SEG boundary even though
     # later Kana phrases have not been materialized. The training renderer
@@ -405,6 +471,7 @@ def compile_h(region, frame_count, render_h_pul_placements, inverse_vocab):
                 "phraseId": phrase_id,
                 "placementMode": mode,
                 "fallbackReason": placement.get("fallback_reason"),
+                **({"tokenBridge": candidate["token_bridge"]} if candidate.get("token_bridge") else {}),
             }
         )
         raw_sep_frame = placement.get("sep_frame")

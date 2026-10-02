@@ -1,4 +1,5 @@
 # AI-Midi
+请查看“使用教程.pdf”
 
 AI-Midi 是一个本地运行的歌声编辑与 AI 合成工作台，提供时间线编排、音频对象管理、F0/MIDI 辅助编辑，以及 V5-P 合成单元工作流。
 
@@ -13,6 +14,18 @@ AudioObject
   -> 试听、比较
   -> 导出正式音频到时间线
 ```
+
+## MIDI 试听音色
+
+在 **设置 → MIDI 试听 → MIDI 音色** 中选择钢琴、柔和电子音或方波。
+主时间线和 SYN 编辑器共用选择，浏览器记住偏好；默认保留柔和电子音。
+钢琴使用随项目提供的 Salamander 本地采样，首次使用时加载，无需联网音源或额外下载。
+这只改变 MIDI 试听，不改变 MIDI-P 数据、AI 合成音色或 Take 音频。
+
+MIDI-P 支持 Ctrl 点击多选、Ctrl+上/下升降八度及撤销，音符的 FLOW 延续和时间边界保持不变。
+
+钢琴采样由 Alexander Holm 创作，适用 CC BY 3.0，详见
+`client/public/instruments/salamander/NOTICE.md`；不属于编辑器 MIT 授权。
 
 ## 项目结构
 

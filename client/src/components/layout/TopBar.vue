@@ -11,6 +11,7 @@ import { getAudioBlobMeta } from '@/utils/audioMeta'
 import { useObjectTreeStore } from '@/stores/objectTree'
 import { useObjectTreeUiStore } from '@/stores/objectTreeUi'
 import { useGpuRuntimeStore } from '@/stores/gpuRuntime'
+import { audibleSegments } from '@/utils/audioTrackMix'
 
 const project = useProjectStore()
 const tracks = useTracksStore()
@@ -170,13 +171,14 @@ async function restoreProject(data: any) {
 
 function exportSelected() {
   const segs = tracks.getAllSegments().filter(s => selection.isSelected(s.id))
-  exportSegments(segs.length ? segs : [])
+  exportSegments(segs)
 }
-function exportAll() { exportSegments(tracks.getAllSegments().filter(s => !s.ignored)) }
+function exportAll() { exportSegments(tracks.getAllSegments()) }
 
 async function exportSegments(segs: import('@/types').AudioSegment[]) {
-  if (segs.length === 0) { alert('没有可导出的片段'); return }
-  const segInputs = await Promise.all(segs.map(async seg => {
+  const audible = audibleSegments(segs, tracks.tracks, tracks.trackOrder)
+  if (audible.length === 0) { alert('没有可导出的可听片段'); return }
+  const segInputs = await Promise.all(audible.map(async seg => {
     const track = tracks.tracks[seg.trackId]
     const blob = tracks.sourceBlobs.get(seg.sourceFile) || tracks.sourceBlobs.get(seg.trackId)
     let sr = track?.sampleRate || 44100

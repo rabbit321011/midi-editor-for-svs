@@ -6,6 +6,7 @@ import { useObjectTreeStore } from '@/stores/objectTree'
 import { useHistoryStore } from '@/stores/history'
 import { useUiSettingsStore } from '@/stores/uiSettings'
 import { kanaToRomaji } from '@/utils/kanaRomaji'
+import LyricReferenceText from './LyricReferenceText.vue'
 import type { SynthesisSegmentObject } from '@/object-workbench'
 import {
   absoluteSegmentRange, applyLyricDrafts, confirmedLyricRanges, confirmLyricPosition, draftIsCurrent, findLyricCandidates, getUnitInstances,
@@ -49,7 +50,7 @@ let searchTimer: ReturnType<typeof setTimeout> | undefined
 let readingGeneration = 0
 const contextAudio = ref(false)
 const chosenRange = ref<LyricRange | null>(null)
-const referenceArea = ref<HTMLTextAreaElement | null>(null)
+const referenceArea = ref<InstanceType<typeof LyricReferenceText> | null>(null)
 const entryButton = ref<HTMLElement | null>(null)
 let referenceGeneration = 0
 let resizeObserver: ResizeObserver | undefined
@@ -244,10 +245,6 @@ function play() {
   const margin = contextAudio.value ? Math.round(unit.value.synthesisUnit.frameContract.frameRate) : 0
   emit('audition', Math.max(0, current.value.startFrame - margin), Math.min(unit.value.synthesisUnit.frameContract.frameCount, current.value.speechEndFrameExclusive + margin))
 }
-function captureRange() {
-  const element = referenceArea.value
-  chosenRange.value = element && element.selectionEnd > element.selectionStart ? { start: element.selectionStart, end: element.selectionEnd } : null
-}
 function useRange() {
   if (!chosenRange.value || !reference.value) return
   choose({ ...chosenRange.value, text: reference.value.text.slice(chosenRange.value.start, chosenRange.value.end), kana: readingForRange(reference.value, chosenRange.value), score: 1, reason: '手工选择' })
@@ -259,13 +256,19 @@ function showExpanded() {
 function scrollReference(focus = false) {
   nextTick(() => {
     const range = draft.value?.ranges[0] ?? result.value.candidates[0]
-    if (range && referenceArea.value) {
-      if (focus) referenceArea.value.focus()
-      referenceArea.value.setSelectionRange(range.start, range.end)
-      const line = reference.value?.text.slice(0, range.start).split('\n').length ?? 1
-      referenceArea.value.scrollTop = Math.max(0, (line - 3) * 24)
-    }
+    if (range) referenceArea.value?.reveal(range, focus)
   })
+}
+async function regenerateReferenceReading() {
+  if (!reference.value || readingBusy.value) return
+  const target = reference.value
+  const version = target.version
+  readingBusy.value = true
+  try {
+    const tokens = await readings(target.text)
+    if (reference.value === target && target.version === version) target.tokens = tokens
+  } catch (error: any) { message.value = error.message }
+  finally { readingBusy.value = false }
 }
 function setInstance(id: string) {
   if (!session.value) return
@@ -309,7 +312,8 @@ function onKey(event: KeyboardEvent) {
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
   }
 }
-watch(() => props.selectedId, () => { message.value = ''; search.value = ''; searchQuery.value = ''; readingGeneration++; void ensureDraft() })
+watch(() => props.selectedId, () => { message.value = ''; search.value = ''; searchQuery.value = ''; chosenRange.value = null; readingGeneration++; void ensureDraft(); if (fullDialog.value) scrollReference() })
+watch(() => reference.value?.version, () => { chosenRange.value = null })
 watch(() => draft.value?.ranges, () => { if (fullDialog.value) scrollReference() }, { deep: true })
 watch(search, value => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { searchQuery.value = value }, 180) })
 watch(panel, element => { resizeObserver?.disconnect(); if (element) { resizeObserver = new ResizeObserver(reposition); resizeObserver.observe(element) } })
@@ -371,7 +375,7 @@ onBeforeUnmount(() => { window.removeEventListener('resize', reposition); window
             <div class="lyric-actions"><NButton size="tiny" :loading="readingBusy" @click="regenerateReading">生成读音候选</NButton><button class="lyric-link" @click="clearPosition">暂不确定位置</button></div>
           </div>
           <div v-if="!fullDialog" class="lyric-candidates">
-            <button v-for="candidate in result.candidates.slice(0, 2)" :key="`${candidate.start}:${candidate.end}`" class="lyric-candidate" @click="choose(candidate)"><span>{{ candidate.text }}</span><small>{{ candidate.reason }} · 字符 {{ candidate.start + 1 }}</small></button>
+            <button v-for="candidate in result.candidates.slice(0, 2)" :key="`${candidate.start}:${candidate.end}`" class="lyric-candidate" @click="choose(candidate)"><span><mark>{{ candidate.text }}</mark></span><span v-if="uiSettings.settings.showRomaji" class="candidate-romaji"><mark v-if="candidate.kana">{{ kanaToRomaji(candidate.kana) }}</mark><template v-else>读音待生成</template></span><small>{{ candidate.reason }} · 字符 {{ candidate.start + 1 }}</small></button>
             <button class="lyric-link" @click="showExpanded">{{ result.candidates.length ? '其他候选 / 选择参考范围' : '未找到可靠候选，手工定位' }}</button>
           </div>
           <template v-if="fullDialog">
@@ -379,10 +383,11 @@ onBeforeUnmount(() => { window.removeEventListener('resize', reposition); window
               <label>时间线位置<NSelect :value="session?.instanceId ?? ''" :options="instanceOptions" @update:value="setInstance" /></label>
               <div class="lyric-actions"><strong>{{ reference.name }}</strong><button class="lyric-link" @click="openSetup">更换参考</button></div>
               <NInput v-model:value="search" placeholder="搜索听清的几个字" clearable><template #prefix><NIcon><SearchOutline /></NIcon></template></NInput>
+              <div class="lyric-actions"><span>匹配位置 · {{ result.candidates.length }} 处</span><NButton v-if="uiSettings.settings.showRomaji && !reference.tokens.length" size="tiny" :loading="readingBusy" @click="regenerateReferenceReading">生成参考读音</NButton></div>
               <div class="lyric-candidates">
-                <button v-for="candidate in result.candidates" :key="`${candidate.start}:${candidate.end}`" class="lyric-candidate" @click="choose(candidate)"><span>{{ reference.text.slice(Math.max(0, candidate.start - 14), candidate.start) }}<mark>{{ candidate.text }}</mark>{{ reference.text.slice(candidate.end, candidate.end + 14) }}</span><small>{{ candidate.reason }} · 字符 {{ candidate.start + 1 }}–{{ candidate.end }}</small></button>
+                <button v-for="candidate in result.candidates" :key="`${candidate.start}:${candidate.end}`" class="lyric-candidate" @click="choose(candidate)"><span>{{ reference.text.slice(Math.max(0, candidate.start - 14), candidate.start) }}<mark>{{ candidate.text }}</mark>{{ reference.text.slice(candidate.end, candidate.end + 14) }}</span><span v-if="uiSettings.settings.showRomaji" class="candidate-romaji"><mark v-if="candidate.kana">{{ kanaToRomaji(candidate.kana) }}</mark><template v-else>读音待生成</template></span><small>{{ candidate.reason }} · 字符 {{ candidate.start + 1 }}–{{ candidate.end }}</small></button>
               </div>
-              <label>参考全文<textarea ref="referenceArea" class="lyric-reference" :value="reference.text" readonly aria-label="参考全文" @mouseup="captureRange" @keyup="captureRange" @select="captureRange" /></label>
+              <div class="reference-field"><span>参考全文</span><LyricReferenceText ref="referenceArea" :reference="reference" :show-romaji="uiSettings.settings.showRomaji" :highlight="draft.ranges[0] ?? result.candidates[0]" @select="chosenRange = $event" /></div>
               <NButton size="small" :disabled="!chosenRange" @click="useRange">用于当前片段</NButton>
             </div>
             <div class="lyric-section">
@@ -455,8 +460,9 @@ mark { color: inherit; background: #318b7055; border-bottom: 1px solid #62bca0; 
 .lyric-candidate:hover { background: #8882; }
 .lyric-candidate span, .lyric-candidate small { display: block; }
 .lyric-candidate small { margin-top: 3px; }
+.candidate-romaji { color: var(--app-muted); font-size: 11px; line-height: 1.5; margin: 4px 0; }
+.reference-field { display: grid; gap: 5px; }
 .lyric-section { border-top: 1px solid var(--app-border); padding-top: 12px; margin-top: 12px; display: grid; gap: 8px; }
-.lyric-reference { box-sizing: border-box; width: 100%; height: 150px; resize: vertical; border: 1px solid var(--app-border); border-radius: 3px; padding: 8px; background: var(--app-surface, #18181c); color: inherit; line-height: 24px; font-family: inherit; scrollbar-width: thin; }
 .lyric-neighbor { display: flex; align-items: center; gap: 10px; padding: 4px; }
 .lyric-neighbor.current { background: #8882; }
 .lyric-neighbor span { min-width: 0; flex: 1; overflow-wrap: anywhere; }

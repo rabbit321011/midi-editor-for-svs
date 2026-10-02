@@ -67,48 +67,71 @@ const editorWorkspace = useEditorWorkspaceStore()
 }
 
 .editor-tabs {
-  flex: 0 0 32px;
+  flex: 0 0 38px;
   display: flex;
   align-items: flex-end;
-  gap: 2px;
-  padding: 4px 8px 0;
+  gap: 3px;
+  padding: 6px 12px 0;
   border-bottom: 1px solid var(--app-border);
   background: color-mix(in srgb, var(--app-surface) var(--center-opacity-percent), transparent);
 }
 
 .editor-tab {
-  height: 28px;
-  min-width: 96px;
-  padding: 0 12px;
+  height: 32px;
+  min-width: 110px;
+  padding: 0 14px;
   border: 1px solid transparent;
   border-bottom: 0;
   border-radius: 6px 6px 0 0;
   background: transparent;
   color: var(--app-muted);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.editor-tab:hover {
+  background: color-mix(in srgb, var(--app-hover) 60%, transparent);
+  color: var(--app-text);
 }
 
 .editor-tab.active {
   border-color: var(--app-border);
   background: color-mix(in srgb, var(--app-panel) var(--center-opacity-percent), transparent);
   color: var(--app-text);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.editor-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--app-accent);
 }
 
 .tab-close {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 3px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
 }
-.tab-close:hover { background: color-mix(in srgb, var(--app-border) 60%, transparent); }
+.tab-close:hover {
+  background: color-mix(in srgb, var(--app-danger) 20%, transparent);
+  color: var(--app-danger);
+}
 .tab-close svg { width: 12px; height: 12px; fill: currentColor; }
 
 .editor-surface {
@@ -124,5 +147,6 @@ const editorWorkspace = useEditorWorkspaceStore()
   align-items: center;
   justify-content: center;
   color: var(--app-muted);
+  font-size: 14px;
 }
 </style>

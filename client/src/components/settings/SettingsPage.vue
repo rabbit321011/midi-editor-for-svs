@@ -162,53 +162,73 @@ function readFileAsDataUrl(file: File): Promise<string> {
   min-width: 0;
   container-type: inline-size;
   overflow: auto;
-  padding: 24px 28px;
+  padding: 32px 36px;
   color: var(--app-text);
 }
 .settings-head {
-  margin-bottom: 22px;
+  margin-bottom: 32px;
 }
 .settings-head h1 {
-  font-size: 22px;
-  font-weight: 650;
-  margin: 0 0 4px;
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--app-text) 0%, var(--app-accent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 .settings-head p {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--app-muted);
 }
 .settings-section {
   max-width: 760px;
-  padding: 16px 0;
+  padding: 20px 0;
   border-top: 1px solid var(--app-border);
 }
 .settings-section h2 {
-  font-size: 14px;
-  margin: 0 0 12px;
+  font-size: 16px;
+  margin: 0 0 16px;
   color: var(--app-text);
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 .settings-grid {
   display: grid;
-  grid-template-columns: minmax(80px, 150px) minmax(0, 360px);
-  gap: 12px 16px;
+  grid-template-columns: minmax(100px, 180px) minmax(0, 380px);
+  gap: 16px 20px;
   align-items: center;
 }
 .settings-grid.compact {
-  grid-template-columns: 150px 180px;
+  grid-template-columns: 180px 200px;
 }
 .settings-grid label {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--app-muted);
+  font-weight: 500;
 }
 .settings-foot {
   max-width: 760px;
-  padding-top: 16px;
+  padding-top: 24px;
   border-top: 1px solid var(--app-border);
+  margin-top: 16px;
 }
-.settings-error { margin-top: 10px; color: var(--app-danger); font-size: 12px; }
+.settings-error {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--app-danger) 10%, transparent);
+  border: 1px solid var(--app-danger);
+  border-radius: 6px;
+  color: var(--app-danger);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 @container (max-width: 450px) {
-  .settings-grid, .settings-grid.compact { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-  .settings-grid label { margin-top: 6px; }
+  .settings-grid, .settings-grid.compact { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .settings-grid label { margin-top: 8px; }
 }
 </style>

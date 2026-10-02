@@ -57,13 +57,13 @@ const defaults: UiSettingsState = {
   svcDefaultCfg: 0.7,
   svsDefaultModel: '',
   svsDefaultSteps: 32,
-  centerOpacity: 1,
-  sideOpacity: 1,
-  topbarOpacity: 1,
+  centerOpacity: 0.95,
+  sideOpacity: 0.92,
+  topbarOpacity: 0.95,
   backgroundImageEnabled: false,
   backgroundImageUrl: '',
   backgroundImageDataUrl: '',
-  sidebarGlassEnabled: false,
+  sidebarGlassEnabled: true,
   centerGlassEnabled: false,
   sidebarWidth: 360,
   l1Width: 230,
@@ -242,10 +242,10 @@ export function workbenchPalette(theme: WorkbenchTheme): WorkbenchPalette {
     }
   }
   return {
-    surface: '#0d1117', panel: '#161b22', elevated: '#1c232d', border: '#30363d',
-    text: '#c9d1d9', muted: '#8b949e', accent: '#58a6ff', accentHover: '#79b8ff',
-    accentPressed: '#388bfd', hover: '#21262d', selected: '#1f3a5f', located: '#3a2f14',
-    warning: '#f0b72f', danger: '#f85149', success: '#3fb950',
+    surface: '#0B0E14', panel: '#161b22', elevated: '#1f2937', border: '#374151',
+    text: '#F8FAFC', muted: '#94a3b8', accent: '#22D3EE', accentHover: '#06b6d4',
+    accentPressed: '#0891b2', hover: '#1e293b', selected: '#0f3a5f', located: '#422006',
+    warning: '#F59E0B', danger: '#ef4444', success: '#10b981',
   }
 }
 

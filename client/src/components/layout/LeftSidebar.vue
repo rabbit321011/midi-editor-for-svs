@@ -572,6 +572,7 @@ function cssSafeId(id: NodeId) {
   width: 12px;
   cursor: col-resize;
   touch-action: none;
+  transition: opacity 0.2s ease;
 }
 .pane-resize-handle { transform: translateX(-6px); }
 .sidebar-resize-handle { right: -6px; }
@@ -582,17 +583,19 @@ function cssSafeId(id: NodeId) {
   top: 0;
   bottom: 0;
   left: 5px;
-  width: 1px;
+  width: 2px;
   background: var(--app-accent);
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.6);
 }
 .tree-notice {
   grid-column: 1 / -1;
   grid-row: 2;
-  min-height: 18px;
-  padding: 2px 8px 6px;
+  min-height: 20px;
+  padding: 3px 10px 7px;
   font-size: 11px;
-  color: var(--app-warning, #b7791f);
+  color: var(--app-warning);
   border-top: 1px solid var(--app-border);
+  background: color-mix(in srgb, var(--app-warning) 5%, transparent);
 }
 .tree-pane {
   min-width: 0;
@@ -615,8 +618,8 @@ function cssSafeId(id: NodeId) {
   min-width: 32px;
 }
 .pane-header {
-  height: 34px;
-  padding: 0 8px;
+  height: 38px;
+  padding: 0 10px;
   border-bottom: 1px solid var(--app-border);
   display: flex;
   align-items: center;
@@ -624,6 +627,8 @@ function cssSafeId(id: NodeId) {
   font-size: 12px;
   color: var(--app-muted);
   font-weight: 600;
+  letter-spacing: 0.02em;
+  background: color-mix(in srgb, var(--app-surface) 50%, transparent);
 }
 .tree-pane.collapsed .pane-header {
   padding: 0 4px;
@@ -633,7 +638,7 @@ function cssSafeId(id: NodeId) {
 .pane-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
 }
 .tree-scroll {
   flex: 1;
@@ -641,21 +646,26 @@ function cssSafeId(id: NodeId) {
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  padding: 4px 0;
+  padding: 6px 0;
 }
 .mini-btn {
   border: 1px solid var(--app-border);
   background: var(--app-surface);
   color: var(--app-muted);
-  border-radius: 3px;
+  border-radius: 4px;
   font-size: 10px;
-  padding: 1px 4px;
+  padding: 2px 5px;
+  transition: all 0.15s ease;
+}
+.mini-btn:hover {
+  border-color: var(--app-accent);
+  color: var(--app-text);
 }
 .collapse-btn {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border: 1px solid var(--app-border);
-  border-radius: 3px;
+  border-radius: 4px;
   background: var(--app-surface);
   color: var(--app-muted);
   display: inline-flex;
@@ -663,10 +673,17 @@ function cssSafeId(id: NodeId) {
   justify-content: center;
   padding: 0;
   cursor: pointer;
+  transition: all 0.15s ease;
+}
+.collapse-btn:hover {
+  border-color: var(--app-accent);
+  color: var(--app-text);
+  background: var(--app-hover);
 }
 .collapse-btn svg { width: 12px; height: 12px; fill: currentColor; }
 .mini-btn:disabled {
   opacity: 0.35;
+  cursor: not-allowed;
 }
 </style>
 
@@ -675,20 +692,44 @@ function cssSafeId(id: NodeId) {
   display: grid;
   grid-template-columns: 12px 40px minmax(0, 1fr) 20px;
   align-items: center;
-  gap: 4px;
-  height: 24px;
+  gap: 5px;
+  height: 26px;
   font-size: 12px;
   color: var(--app-text);
   cursor: default;
   user-select: none;
+  transition: background 0.15s ease;
+  padding: 0 4px;
+  border-radius: 4px;
+  margin: 0 4px;
 }
-.tree-row:hover { background: var(--app-hover); }
-.tree-row.selected { background: var(--app-selected); outline: 1px solid var(--app-accent); }
-.tree-row.located { background: var(--app-located); }
+.tree-row:hover {
+  background: var(--app-hover);
+}
+.tree-row.selected {
+  background: color-mix(in srgb, var(--app-accent) 15%, transparent);
+  border-left: 2px solid var(--app-accent);
+  padding-left: 2px;
+}
+.tree-row.located {
+  background: var(--app-located);
+  border-left: 2px solid var(--app-warning);
+  padding-left: 2px;
+}
 .tree-row.folder { color: var(--app-muted); }
 .tree-row.virtual-member { color: var(--app-muted); font-size: 11px; }
-.twisty { color: var(--app-muted); text-align: center; font-size: 13px; }
-.twisty svg { width: 12px; height: 12px; fill: currentColor; transition: transform 120ms ease; }
+.twisty {
+  color: var(--app-muted);
+  text-align: center;
+  font-size: 13px;
+  transition: transform 0.15s ease;
+}
+.twisty svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+  transition: transform 0.15s ease;
+}
 .twisty svg.expanded { transform: rotate(90deg); }
 .kind {
   min-width: 0;
@@ -699,58 +740,78 @@ function cssSafeId(id: NodeId) {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
 }
 .global-resource-dot {
   width: 6px;
   height: 6px;
   flex: 0 0 6px;
   border-radius: 50%;
-  background: #000;
-  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: var(--app-accent);
+  box-shadow: 0 0 6px rgba(34, 211, 238, 0.5);
   box-sizing: border-box;
 }
 .name {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  font-weight: 400;
 }
 .tree-play-btn {
   width: 18px;
   height: 18px;
   border: 1px solid var(--app-border);
-  border-radius: 3px;
+  border-radius: 4px;
   background: var(--app-surface);
   color: var(--app-muted);
   font-size: 9px;
   line-height: 16px;
   padding: 0;
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 .tree-play-btn svg { width: 11px; height: 11px; fill: currentColor; }
 .tree-play-btn:hover {
   border-color: var(--app-accent);
   color: var(--app-text);
+  background: var(--app-hover);
+  transform: scale(1.05);
 }
 .tree-context-menu {
   position: fixed;
   z-index: 10000;
-  width: 196px;
+  width: 200px;
   max-width: calc(100vw - 16px);
   box-sizing: border-box;
-  padding: 4px 0;
+  padding: 6px 0;
   background: color-mix(in srgb, var(--floating-menu-panel) var(--floating-menu-opacity), transparent);
   border: 1px solid var(--floating-menu-border);
   backdrop-filter: var(--floating-menu-backdrop);
-  border-radius: 4px;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  animation: menu-appear 0.15s ease;
+}
+@keyframes menu-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 .tree-menu-item {
-  padding: 6px 12px;
+  padding: 8px 14px;
   font-size: 12px;
   color: var(--floating-menu-text);
   cursor: pointer;
+  transition: background 0.15s ease;
 }
-.tree-menu-item:hover { background: color-mix(in srgb, var(--floating-menu-hover) 82%, transparent); }
+.tree-menu-item:hover {
+  background: color-mix(in srgb, var(--floating-menu-hover) 90%, transparent);
+}
 .tree-menu-item.danger { color: var(--app-danger); }
 body.resizing-sidebar {
   cursor: col-resize;

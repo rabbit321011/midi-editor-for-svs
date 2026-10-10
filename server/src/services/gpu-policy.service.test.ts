@@ -36,6 +36,15 @@ test('three-way CFG keeps sequential peak estimate and reports its time factor',
   assert.equal(threeWay.profilePolicy, 'sequential-branch-peak')
 })
 
+test('dual A reports sequential eight-branch time without doubling the peak batch', () => {
+  const single = estimateGpuMemory('V5PgO_8K', 45, 'three-way', 1)
+  const dual = estimateGpuMemory('V5PgO_8K', 45, 'three-way', 2)
+  assert.equal(dual.peakDeltaMiB, single.peakDeltaMiB)
+  assert.equal(dual.referenceCount, 2)
+  assert.equal(dual.estimatedTimeFactor, 4)
+  assert.throws(() => estimateGpuMemory('V5PgO_8K', 45, 'three-way', 17), /referenceCount/)
+})
+
 test('eviction order excludes the active model and sorts by last use', () => {
   const runtimes: ModelRuntimeStatus[] = [
     runtime('V4fg_10k', '2026-08-12T10:00:00Z'),

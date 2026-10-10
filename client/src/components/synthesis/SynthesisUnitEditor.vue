@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
-import { NButton, NDropdown, NIcon, NInput, NInputNumber, NModal, NPopover, NRadioButton, NRadioGroup, NSelect, NSlider, NSwitch } from 'naive-ui'
+import { NButton, NDropdown, NIcon, NInput, NInputNumber, NModal, NPopover, NRadioButton, NRadioGroup, NSelect, NSlider, NSwitch, useMessage } from 'naive-ui'
 import { Add, AlertCircleOutline, CheckmarkCircleOutline, ColorWandOutline, DownloadOutline, EllipsisHorizontal, LinkOutline, MicOutline, MusicalNotesOutline, OpenOutline, OptionsOutline, Pause, Play, Remove, Stop, TimeOutline, UnlinkOutline } from '@vicons/ionicons5'
 import { useObjectTreeStore } from '@/stores/objectTree'
 import { useGpuRuntimeStore, type ModelRuntimeStatus } from '@/stores/gpuRuntime'
@@ -10,6 +10,8 @@ import { useEditorWorkspaceStore } from '@/stores/editorWorkspace'
 import { useUiSettingsStore } from '@/stores/uiSettings'
 import HTokenPicker from './HTokenPicker.vue'
 import LyricProofreader from './LyricProofreader.vue'
+import ReferenceBars from './ReferenceBars.vue'
+import { createKanaAtFrame, removeSynthesisTake } from '@/object-workbench/synthesisTrackTransactions'
 import { lyricStatus } from '@/object-workbench/lyricProofreading'
 import { V5P_H_TOKEN_BY_ID, type V5PHTokenCatalogEntry } from '@/generated/v5pHTokenCatalog'
 import { useSynthesisUnitAnalysis } from '@/composables/useSynthesisUnitAnalysis'
@@ -35,6 +37,10 @@ import type { SynthesisMidiPResult } from '@/composables/synthesisMidiPProtocol'
 import { kanaToRomaji, romajiToKana } from '@/utils/kanaRomaji'
 import { kanaToHTokens } from '@/utils/kanaToHTokens'
 import { prepareMidiInstrument, scheduleMidiTone, type MidiVoice } from '@/utils/midiInstrument'
+import { applyTakeLoudnessSettings, audioRmsAndPeak, effectiveTakeLoudness, planTakeLoudness, prepareTakeLoudnessBlob } from '@/utils/takeLoudness'
+import type { TakeLoudnessAdjustment } from '@/object-workbench'
+import { createMultipleSynthesisMaterialSnapshot } from '@/object-workbench/synthesisMaterialSnapshot'
+import { additionalReferences, bindPrimaryReference, canBindPrimaryReference, configureMultiReference, referenceCyclePolicy, removeReference } from '@/object-workbench/synthesisMultiReference'
 
 const props = defineProps<{ objectId: string }>()
 const objectTree = useObjectTreeStore()
@@ -44,6 +50,14 @@ const history = useHistoryStore()
 const editorWorkspace = useEditorWorkspaceStore()
 const uiSettings = useUiSettingsStore()
 const analysis = useSynthesisUnitAnalysis()
+const message = useMessage()
+const takeLoudnessBusy = ref(false)
+const takePreviewLoading = ref(false)
+let takeLoadGeneration = 0
+let loudnessGeneration = 0
+let processedTakeCache: {
+  source: Blob; gain: number; clip: boolean; pending: Promise<Blob>
+} | null = null
 
 const waveformCanvas = ref<HTMLCanvasElement | null>(null)
 const audioElement = ref<HTMLAudioElement | null>(null)
@@ -68,9 +82,9 @@ const playbackRate = ref(1)
 const takePreparation = ref({ running: false, progress: 0, message: '' })
 const takeGeneration = ref({ running: false, progress: 0, message: '' })
 const samplingMenuOpen = ref(false)
+const referencePlaybackIndex = ref(0)
 const unifiedCfgDraft = ref(1)
 const threeWayDraft = ref({ audio: 0.4, text: 0.6, midi: 0.5 })
-const enabledCfgValues = new Map<string, number>()
 const forceCapacity = ref(false)
 const capacityRetry = ref<'v5p' | 'transcribe' | 'segment-transcribe' | 'sofa' | 'game' | 'midi-local'>('v5p')
 const capacityDialog = ref<{
@@ -127,7 +141,8 @@ const hDrag = ref<{
 const statusNotice = ref('')
 const blockingError = ref({ show: false, title: '操作失败', message: '' })
 const segmentMenu = ref({ show: false, x: 0, y: 0, segmentId: '', mode: 'object' as 'object' | 'empty', startFrame: 0, endFrameExclusive: 1 })
-const kanaMenu = ref({ show: false, x: 0, y: 0, kanaUnitId: '' })
+const kanaMenu = ref({ show: false, x: 0, y: 0, kanaUnitId: '', emptyFrame: -1 })
+const takeMenu = ref({ show: false, x: 0, y: 0, takeId: '' })
 type EditorSelection =
   | { type: 'guide' }
   | { type: 'segment', id: string }
@@ -239,18 +254,45 @@ const unitModel = computed<V5PModelId>({
     return value && isV5PModelId(value) ? value : V5P_DEFAULT_MODEL
   },
   set: value => {
+    if (synthesis.value?.multiReference?.enabled && value !== 'V5PgO_8K') {
+      flashStatus('请先关闭双 A，再切换到其他模型')
+      return
+    }
     if (unit.value) objectTree.setSynthesisUnitPreset(unit.value.id, value)
   },
 })
 const unitModelMeta = computed(() => V5P_MODEL_META[unitModel.value])
-const modelOptions = Object.entries(V5P_MODEL_META).map(([value, meta]) => ({
-  label: meta.label,
-  value,
-}))
+const modelOptions = computed(() => Object.entries(V5P_MODEL_META)
+  .filter(([value, meta]) => !meta.hidden || value === unitModel.value)
+  .map(([value, meta]) => ({
+    label: meta.hidden ? `${meta.label}（旧工程）` : meta.label, value,
+  })))
 const samplingSettings = computed(() => synthesis.value?.samplingSettings ?? V5P_DEFAULT_SAMPLING_SETTINGS)
+const multiEnabled = computed(() => Boolean(synthesis.value?.multiReference?.enabled))
+const extraReferences = computed(() => unit.value ? additionalReferences(unit.value) : [])
+const referenceRows = computed(() => {
+  const sources = [
+    ...(synthesis.value?.reference ? [{ unitId: synthesis.value.reference.unitId,
+      cfg: samplingSettings.value.guidance.mode === 'unified' ? samplingSettings.value.guidance.cfg : audioCfg.value }] : []),
+    ...(multiEnabled.value ? extraReferences.value : []),
+  ]
+  return sources.map(source => {
+    const node = objectTree.node(source.unitId)
+    const reference = node?.kind === 'synthesisUnit' ? node : null
+    const asset = reference ? objectTree.tree.assets[reference.synthesisUnit.guide.assetId] : null
+    const blob = asset?.blobKey ? tracks.sourceBlobs.get(asset.blobKey) ?? null : null
+    const status = !reference ? '引用不存在' : reference.synthesisUnit.segmentTrack.status !== 'ready' ? 'Segment 未生成'
+      : reference.synthesisUnit.hTokenTrack.status !== 'ready' ? 'H 未生成' : '控制已准备'
+    return { id: source.unitId, name: reference?.name ?? '引用对象不存在', cfg: source.cfg,
+      status, warning: status !== '控制已准备', playable: Boolean(blob), blob, unit: reference }
+  })
+})
+const referencePlaybackUnit = computed(() => referenceRows.value[referencePlaybackIndex.value]?.unit ?? null)
+const referencePlaybackBlob = computed(() => referenceRows.value[referencePlaybackIndex.value]?.blob ?? null)
 const guidanceMode = computed<'unified' | 'three-way'>({
   get: () => samplingSettings.value.guidance.mode,
   set: mode => {
+    if (multiEnabled.value && mode === 'unified') { flashStatus('双 A 使用三路独立 CFG'); return }
     if (!unit.value || mode === samplingSettings.value.guidance.mode) return
     const current = samplingSettings.value
     if (current.guidance.mode === 'unified') {
@@ -290,14 +332,6 @@ const unifiedCfg = computed<number>({
 const audioCfg = channelCfg('audio')
 const textCfg = channelCfg('text')
 const midiCfg = channelCfg('midi')
-function toggleChannelCfg(channel: 'audio' | 'text' | 'midi', enabled: boolean) {
-  const current = samplingSettings.value.guidance
-  if (current.mode !== 'three-way') return
-  const key = `${props.objectId}:${channel}`
-  if (!enabled && current[channel] !== 0) enabledCfgValues.set(key, current[channel])
-  const defaults = { audio: 0.4, text: 0.6, midi: 0.5 }
-  channelCfg(channel).value = enabled ? (enabledCfgValues.get(key) ?? defaults[channel]) : 0
-}
 const samplingSteps = computed<number>({
   get: () => samplingSettings.value.steps,
   set: steps => updateSamplingSettings({ ...samplingSettings.value, steps }),
@@ -344,7 +378,7 @@ function freezeSamplingSettings(settings: V5PSamplingSettings): V5PSamplingSetti
         audio: Number(settings.guidance.audio),
         text: Number(settings.guidance.text),
         midi: Number(settings.guidance.midi),
-        formula: 'audio-text-midi-telescoping.v1' as const,
+        formula: unitModel.value === 'V5PgO_8K' ? 'audio-text-midi-independent.v1' as const : 'audio-text-midi-telescoping.v1' as const,
       }
   return {
     guidance,
@@ -407,6 +441,9 @@ const referenceGuideBlob = computed(() => {
   return key ? tracks.sourceBlobs.get(key) ?? null : null
 })
 const takePrerequisiteMessage = computed(() => {
+  if (multiEnabled.value && unitModel.value !== 'V5PgO_8K') return '当前模型暂不支持双 A'
+  if (multiEnabled.value && referenceRows.value.length > 1 && samplingSettings.value.guidance.mode !== 'three-way') return '多 A 需要三路 CFG'
+  if (multiEnabled.value && referenceRows.value.some(row => !row.unit || !row.blob)) return '部分 A 参考或 Guide 不可用'
   if (!referenceUnit.value) return '请先绑定 A 区参考合成单元'
   if (!guideBlob.value) return '当前 B 区 Guide 尚未加载'
   if (!referenceGuideBlob.value) return 'A 区参考 Guide 尚未加载'
@@ -423,19 +460,12 @@ const activeTakeBlob = computed(() => {
   const blobKey = activeTakeAsset.value?.blobKey
   return blobKey ? tracks.sourceBlobs.get(blobKey) ?? null : null
 })
-const referenceStatus = computed(() => {
-  if (!synthesis.value?.reference) return { label: '未绑定', warning: false }
-  const reference = referenceUnit.value?.synthesisUnit
-  if (!reference) return { label: '引用对象不存在', warning: true }
-  if (reference.segmentTrack.status !== 'ready') return { label: 'Segment 未生成', warning: true }
-  if (reference.hTokenTrack.status !== 'ready') return { label: 'H 未生成', warning: true }
-  return { label: '控制已准备', warning: false }
-})
-const referenceMenuOptions = computed(() => Object.values(objectTree.index.nodes)
+const activeTakeLoudness = computed(() => unit.value ? effectiveTakeLoudness(unit.value, activeTake.value) : undefined)
+const referenceMenuOptions = computed(() => [...Object.values(objectTree.index.nodes)
   .filter(node => node.kind === 'synthesisUnit' && node.id !== props.objectId)
   .map((node) => {
     if (node.kind !== 'synthesisUnit') throw new Error('unreachable')
-    const policy = objectTree.canBindSynthesisReferenceUnit(props.objectId, node.id)
+    const policy = canBindPrimaryReference(objectTree.tree, props.objectId, node.id)
     return {
       label: `${node.name} · ${formatTime(node.synthesisUnit.guide.duration)}`,
       key: node.id,
@@ -443,7 +473,71 @@ const referenceMenuOptions = computed(() => Object.values(objectTree.index.nodes
       props: policy.reason ? { title: policy.reason } : undefined,
     }
   })
-  .sort((left, right) => String(left.label).localeCompare(String(right.label), 'zh-CN')))
+  .sort((left, right) => String(left.label).localeCompare(String(right.label), 'zh-CN')),
+  ])
+
+function toggleMultipleReferences(enabled: boolean) {
+  if (!unit.value || takeGeneration.value.running || takePreparation.value.running) return
+  const before = objectTree.snapshotTree()
+  const sources = extraReferences.value.filter(source => {
+    const node = objectTree.node(source.unitId)
+    return node?.kind === 'synthesisUnit' && source.unitId !== referenceUnit.value?.id
+      && referenceCyclePolicy(objectTree.tree, props.objectId, source.unitId).ok
+  })
+  const result = configureMultiReference(objectTree.tree, unit.value.id, { enabled, additionalReferences: sources })
+  if (!result.ok) { flashStatus(result.reason ?? '多 A 设置失败'); return }
+  if (enabled && samplingSettings.value.guidance.mode === 'unified') guidanceMode.value = 'three-way'
+  stopReferencePlayback()
+  referencePlaybackIndex.value = 0
+  history.push({ description: enabled ? '开启多 A' : '关闭多 A', patches: [], inversePatches: [],
+    objectTree: { kind: 'snapshot', before, after: objectTree.snapshotTree() } })
+}
+
+function setReferenceCfg(id: string, value: number) {
+  if (!unit.value || takeGeneration.value.running || takePreparation.value.running) return
+  if (id === synthesis.value?.reference?.unitId) {
+    if (samplingSettings.value.guidance.mode === 'unified') unifiedCfg.value = value
+    else audioCfg.value = value
+    return
+  }
+  const sources = extraReferences.value.map(source => source.unitId === id ? { ...source, cfg: value } : source)
+  const result = configureMultiReference(objectTree.tree, unit.value.id, { additionalReferences: sources })
+  if (!result.ok) flashStatus(result.reason ?? 'CFG 修改失败')
+}
+
+function removeReferenceRow(id: string) {
+  if (!unit.value || takeGeneration.value.running || takePreparation.value.running) return
+  const before = objectTree.snapshotTree()
+  stopReferencePlayback()
+  referencePlaybackIndex.value = 0
+  const result = removeReference(objectTree.tree, unit.value.id, id)
+  if (!result.ok) { flashStatus(result.reason ?? '移除参考失败'); return }
+  history.push({ description: '移除 A 参考', patches: [], inversePatches: [],
+    objectTree: { kind: 'snapshot', before, after: objectTree.snapshotTree() } })
+}
+
+function selectReferenceRow(index: number, id: string) {
+  if (index === 0) { bindReferenceUnit(id); return }
+  if (!unit.value || takeGeneration.value.running || takePreparation.value.running) return
+  const sources = extraReferences.value.map((source, sourceIndex) => sourceIndex === index - 1 ? { ...source, unitId: id } : source)
+  const before = objectTree.snapshotTree()
+  const result = configureMultiReference(objectTree.tree, unit.value.id, { additionalReferences: sources })
+  if (!result.ok) { flashStatus(result.reason ?? '绑定参考失败'); return }
+  stopReferencePlayback()
+  history.push({ description: '更换 A 参考', patches: [], inversePatches: [],
+    objectTree: { kind: 'snapshot', before, after: objectTree.snapshotTree() } })
+}
+
+function openReferenceRow(id: string) {
+  const node = objectTree.node(id)
+  if (node?.kind === 'synthesisUnit') editorWorkspace.openSynthesisUnitTab(id, node.name)
+}
+
+async function auditionReference(index: number) {
+  referencePlaybackIndex.value = index
+  await nextTick()
+  await toggleReferenceGuide()
+}
 const frameTicks = computed(() => Array.from({ length: frameCount.value }, (_, frame) => frame))
 const majorTickEvery = computed(() => pxPerFrame.value >= 18 ? 5 : pxPerFrame.value >= 10 ? 10 : 20)
 const midiReady = computed(() => synthesis.value?.midiPTokenTrack.status === 'ready')
@@ -570,10 +664,16 @@ const segmentMenuOptions = computed(() => segmentMenu.value.mode === 'empty'
     { label: '清空区域内 H Token', key: 'clear-h', disabled: analysisJob.value.running },
     { label: '重提取本句 MIDI-P', key: 'midi-local', disabled: analysisJob.value.running || midiLocal.value.running },
   ])
-const kanaMenuOptions = computed(() => [
+const kanaMenuOptions = computed(() => kanaMenu.value.emptyFrame >= 0 ? [
+  { label: '新建 Kana', key: 'new-kana', disabled: analysisJob.value.running },
+] : [
   { label: '自动对齐至 H Token', key: 'h', disabled: analysisJob.value.running },
   { label: '映射至 H Token', key: 'map-h', disabled: analysisJob.value.running },
 ])
+const takeMenuOptions = computed(() => {
+  const take = synthesis.value?.takes.find(item => item.id === takeMenu.value.takeId)
+  return [{ label: '删除 Take', key: 'delete', disabled: !take || take.status === 'running' || take.status === 'queued' }]
+})
 const guideMenuOptions = computed(() => [
   { label: 'GAME 自动生成 MIDI-P', key: 'midi-p', disabled: analysisJob.value.running },
   { label: '自动转录为 Segment', key: 'segment', disabled: analysisJob.value.running },
@@ -581,14 +681,21 @@ const guideMenuOptions = computed(() => [
 const timelineScrollRef = ref<HTMLElement | null>(null)
 
 watch(guideBlob, loadGuide, { immediate: true })
-watch(referenceGuideBlob, loadReferenceGuide, { immediate: true })
-watch(activeTakeBlob, loadActiveTake, { immediate: true })
+watch(referencePlaybackBlob, loadReferenceGuide, { immediate: true })
+watch(multiEnabled, enabled => { if (!enabled) referencePlaybackIndex.value = 0 })
+watch([activeTakeBlob, activeTakeLoudness], ([blob]) => { void loadActiveTake(blob) }, { immediate: true })
 watch(() => synthesis.value?.activeTakeId, takeId => {
   if (takeId && activeTakeBlob.value) auditionSource.value = 'take'
 })
 watch(pxPerFrame, () => nextTick(drawWaveform))
 watch(() => uiSettings.settings.theme, () => nextTick(drawWaveform))
 watch(() => props.objectId, () => {
+  takeMenu.value.show = false
+  kanaMenu.value.show = false
+  referencePlaybackIndex.value = 0
+  loudnessGeneration++
+  takeLoudnessBusy.value = false
+  processedTakeCache = null
   stopPlayback()
   playheadFrame.value = 0
   editorSelection.value = { type: 'guide' }
@@ -644,6 +751,8 @@ onActivated(() => {
 })
 
 onDeactivated(() => {
+  takeMenu.value.show = false
+  kanaMenu.value.show = false
   unbindEditorKeyboard()
   clearKanaObjectDragListeners()
   clearKanaSegDragListeners()
@@ -683,11 +792,103 @@ function loadReferenceGuide(blob: Blob | null) {
   referenceGuideUrl.value = blob ? URL.createObjectURL(blob) : ''
 }
 
-function loadActiveTake(blob: Blob | null) {
-  stopPrimaryPlayback()
+async function loadActiveTake(blob: Blob | null) {
+  const generation = ++takeLoadGeneration
+  if (auditionSource.value === 'take') stopPrimaryPlayback()
   if (takeUrl.value) URL.revokeObjectURL(takeUrl.value)
-  takeUrl.value = blob ? URL.createObjectURL(blob) : ''
+  takeUrl.value = ''
+  takePreviewLoading.value = Boolean(blob)
   if (!blob && auditionSource.value === 'take') auditionSource.value = 'guide'
+  try {
+    if (!blob) return
+    const processed = await takePlaybackBlob(blob, activeTakeLoudness.value)
+    if (generation !== takeLoadGeneration) return
+    takeUrl.value = URL.createObjectURL(processed)
+  } catch (error: any) {
+    if (generation === takeLoadGeneration) message.error(error?.message || 'Take 试听准备失败')
+  } finally {
+    if (generation === takeLoadGeneration) takePreviewLoading.value = false
+  }
+}
+
+function takePlaybackBlob(blob: Blob, adjustment?: TakeLoudnessAdjustment) {
+  if (!adjustment) return Promise.resolve(blob)
+  if (processedTakeCache?.source === blob && processedTakeCache.gain === adjustment.gain
+    && processedTakeCache.clip === adjustment.forcedClipping) return processedTakeCache.pending
+  const pending = prepareTakeLoudnessBlob(blob, adjustment)
+  processedTakeCache = { source: blob, gain: adjustment.gain, clip: adjustment.forcedClipping, pending }
+  void pending.catch(() => { if (processedTakeCache?.pending === pending) processedTakeCache = null })
+  return pending
+}
+
+function commitTakeLoudness(unitId: string, enabled: boolean, entries: Array<{ takeId: string; adjustment: TakeLoudnessAdjustment }> = []) {
+  const current = objectTree.node(unitId)
+  if (!current || current.kind !== 'synthesisUnit') throw new Error('合成单元不存在')
+  const before = objectTree.snapshotTree()
+  const result = applyTakeLoudnessSettings(current, enabled, entries)
+  if (!result.ok) throw new Error(result.reason)
+  history.push({
+    description: enabled ? '所有 Take 的响度对齐 Guide' : '恢复 Take 原始音量',
+    patches: [], inversePatches: [],
+    objectTree: { kind: 'snapshot', before, after: objectTree.snapshotTree() },
+  })
+}
+
+async function toggleTakeLoudness(enabled: boolean) {
+  if (!unit.value || takeLoudnessBusy.value) return
+  const unitId = unit.value.id
+  if (!enabled) {
+    try { commitTakeLoudness(unitId, false) } catch (error: any) { message.error(error.message) }
+    return
+  }
+  const guide = guideBlob.value
+  if (!guide) return message.error('Guide 音频尚未载入')
+  const guideSHA256 = unit.value.synthesisUnit.guide.audioSHA256
+  const modelSamples = unit.value.synthesisUnit.frameContract.modelSampleCount
+  const candidates = unit.value.synthesisUnit.takes.filter(take => take.status === 'ready').map(take => {
+    const asset = take.outputAssetId ? objectTree.tree.assets[take.outputAssetId] : null
+    return { id: take.id, name: take.name, hash: take.outputSHA256,
+      key: asset?.blobKey, blob: asset?.blobKey ? tracks.sourceBlobs.get(asset.blobKey) : null }
+  })
+  const generation = ++loudnessGeneration
+  takeLoudnessBusy.value = true
+  const context = new AudioContext({ sampleRate: 44100 })
+  try {
+    const reference = await context.decodeAudioData(await guide.arrayBuffer())
+    const guideChannels = Array.from({ length: reference.numberOfChannels }, (_, index) => reference.getChannelData(index))
+    if (audioRmsAndPeak(guideChannels, Math.min(modelSamples, reference.length)).rms <= 1e-7) {
+      throw new Error('Guide 有效区间接近静音，无法对齐')
+    }
+    const entries: Array<{ takeId: string; adjustment: TakeLoudnessAdjustment }> = []
+    const clipped: string[] = []
+    const skipped: string[] = []
+    // Decode sequentially so many Takes do not retain many PCM buffers at once.
+    for (const candidate of candidates) {
+      if (generation !== loudnessGeneration || props.objectId !== unitId) return
+      if (!candidate.blob || !candidate.hash) { skipped.push(candidate.name); continue }
+      try {
+        const decoded = await context.decodeAudioData(await candidate.blob.arrayBuffer())
+        const channels = Array.from({ length: decoded.numberOfChannels }, (_, index) => decoded.getChannelData(index))
+        const adjustment = {
+          ...planTakeLoudness(guideChannels, channels, modelSamples),
+          guideSHA256, outputSHA256: candidate.hash,
+        }
+        if (candidate.key && tracks.sourceBlobs.get(candidate.key) !== candidate.blob) throw new Error('Take 已更新')
+        entries.push({ takeId: candidate.id, adjustment })
+        if (adjustment.forcedClipping) clipped.push(candidate.name)
+      } catch { skipped.push(candidate.name) }
+    }
+    if (generation !== loudnessGeneration || props.objectId !== unitId) return
+    if (guideBlob.value !== guide) throw new Error('Guide 已更新，请重新对齐')
+    commitTakeLoudness(unitId, true, entries)
+    if (clipped.length) message.warning(`${clipped.join(',')}只能强制削波`, { duration: 6000 })
+    if (skipped.length) message.warning(`${skipped.join(',')}已跳过（音频不可用或接近静音）`, { duration: 6000 })
+  } catch (error: any) {
+    if (generation === loudnessGeneration) message.error(error?.message || 'Take 响度对齐失败')
+  } finally {
+    await context.close()
+    if (generation === loudnessGeneration) takeLoudnessBusy.value = false
+  }
 }
 
 function syncAudioPlaybackPosition() {
@@ -722,7 +923,7 @@ function bindReferenceUnit(referenceNodeId: string) {
   }
   const reference = objectTree.node(referenceUnitId)
   const before = objectTree.snapshotTree()
-  const result = objectTree.bindSynthesisReferenceUnit(unit.value.id, referenceUnitId)
+  const result = bindPrimaryReference(objectTree.tree, unit.value.id, referenceUnitId)
   if (!result.ok) {
     flashStatus(result.reason ?? 'A 区参考绑定失败')
     return
@@ -745,6 +946,7 @@ function unbindReferenceUnit() {
     flashStatus(result.reason ?? 'A 区参考解除失败')
     return
   }
+  if (unit.value.synthesisUnit.multiReference) unit.value.synthesisUnit.multiReference.enabled = false
   history.push({
     description: `解除 A 区参考 · ${referenceName}`,
     patches: [],
@@ -766,7 +968,19 @@ function handleReferenceDrop(event: DragEvent) {
   const referenceUnitId = event.dataTransfer?.getData('application/x-aisvc-node-id')
   if (!referenceUnitId) return
   event.preventDefault()
-  bindReferenceUnit(referenceUnitId)
+  if (takeGeneration.value.running || takePreparation.value.running) return
+  if (!multiEnabled.value || !synthesis.value?.reference) { bindReferenceUnit(referenceUnitId); return }
+  if (!unit.value) return
+  const id = resolveReferenceUnitId(referenceUnitId)
+  if (!id) { flashStatus('A 区参考只接受 SYN'); return }
+  const before = objectTree.snapshotTree()
+  const result = configureMultiReference(objectTree.tree, unit.value.id, {
+    additionalReferences: [...extraReferences.value, { unitId: id, cfg: -1 }],
+  })
+  if (!result.ok) { flashStatus(result.reason ?? '新增参考失败'); return }
+  history.push({ description: '新增 A 参考', patches: [], inversePatches: [],
+    objectTree: { kind: 'snapshot', before, after: objectTree.snapshotTree() } })
+  flashStatus(`已添加 ${objectTree.node(id)?.name ?? 'A 参考'}`)
 }
 
 function openReferenceUnit() {
@@ -787,7 +1001,7 @@ async function toggleReferenceGuide() {
     return
   }
   stopPrimaryPlayback()
-  if (audio.ended || audio.currentTime >= (referenceUnit.value?.synthesisUnit.guide.duration ?? 0)) {
+  if (audio.ended || audio.currentTime >= (referencePlaybackUnit.value?.synthesisUnit.guide.duration ?? 0)) {
     audio.currentTime = 0
   }
   try {
@@ -832,6 +1046,7 @@ function drawWaveform() {
 }
 
 async function togglePlayback() {
+  if (auditionSource.value === 'take' && takePreviewLoading.value) return
   stopReferencePlayback()
   if (auditionSource.value === 'midi-p') {
     await toggleMidiPPlayback()
@@ -1065,6 +1280,7 @@ function handleTimelineWheel(event: WheelEvent) {
 }
 
 async function generateTake() {
+  if (takePrerequisiteMessage.value) { flashStatus(takePrerequisiteMessage.value); return }
   if (!unit.value || !referenceUnit.value || !guideBlob.value || !referenceGuideBlob.value) {
     flashStatus('请先绑定可用的 A 区参考和完整 Guide')
     return
@@ -1078,13 +1294,16 @@ async function generateTake() {
       await generateTakeCore()
       return
     }
-    const durationSeconds = unit.value.synthesisUnit.guide.duration ?? 0
+    const durationSeconds = (unit.value.synthesisUnit.guide.duration ?? 0)
+      + (multiEnabled.value ? Math.max(0, ...referenceRows.value.map(row => row.unit?.synthesisUnit.guide.duration ?? 0))
+        : referenceUnit.value?.synthesisUnit.guide.duration ?? 0)
     const modelId = unitModel.value
-    takePreparation.value = { running: true, progress: 8, message: '检查显存与 V5-P Runtime' }
+    takePreparation.value = { running: true, progress: 8, message: `检查显存与 ${unitModelMeta.value.label} Runtime` }
     const prepared = await gpuRuntime.prepareRuntime(
       modelId,
       durationSeconds,
       samplingSettings.value.guidance.mode,
+      multiEnabled.value ? Math.max(1, referenceRows.value.filter(row => row.cfg > -1).length) : 1,
     ) as any
     if (!prepared.ok) {
       takePreparation.value = { running: false, progress: 0, message: '' }
@@ -1128,14 +1347,18 @@ async function generateTake() {
 }
 
 async function generateTakeCore() {
+  if (takePrerequisiteMessage.value) { flashStatus(takePrerequisiteMessage.value); return }
   if (!unit.value || !referenceUnit.value || !guideBlob.value || !referenceGuideBlob.value) {
     flashStatus('请先绑定可用的 A 区参考和完整 Guide')
     return
   }
   if (takeGeneration.value.running) return
   let snapshot: ReturnType<typeof createSynthesisMaterialSnapshot>
+  const frozenSampling = freezeSamplingSettings(samplingSettings.value)
   try {
-    snapshot = createSynthesisMaterialSnapshot(referenceUnit.value, unit.value)
+    snapshot = multiEnabled.value && referenceRows.value.length > 1 && frozenSampling.guidance.mode === 'three-way'
+      ? createMultipleSynthesisMaterialSnapshot(referenceRows.value.map(row => ({ unit: row.unit!, cfg: row.cfg })), unit.value)
+      : createSynthesisMaterialSnapshot(referenceUnit.value, unit.value)
   } catch (error: any) {
     flashStatus(error?.message || 'V5-P 合成材料尚未准备完成')
     return
@@ -1146,14 +1369,16 @@ async function generateTakeCore() {
   const modelMeta = unitModelMeta.value
   // samplingSettings is a Vue computed value; build a plain transport object
   // instead of passing its reactive Proxy to structuredClone/fetch.
-  const frozenSampling = freezeSamplingSettings(samplingSettings.value)
   const queued = objectTree.queueSynthesisTake(targetUnitId, {
     id: takeId,
     name: `Take ${(synthesis.value?.takes.length ?? 0) + 1}`,
     status: 'running',
     targetUnitRevision: snapshot.target.unitRevision,
-    referenceUnitId: snapshot.reference.unitId,
-    referenceUnitRevision: snapshot.reference.unitRevision,
+    referenceUnitId: snapshot.multiA?.primaryUnitId ?? snapshot.reference.unitId,
+    referenceUnitRevision: snapshot.multiA?.references[0].unitRevision ?? snapshot.reference.unitRevision,
+    ...(snapshot.multiA ? { referenceSources: snapshot.multiA.references.map(source => ({
+      unitId: source.unitId, unitRevision: source.unitRevision, audioCfg: source.audioCfg, guideSHA256: source.guide.audioSHA256,
+    })) } : {}),
     presetId: modelId,
     checkpointSHA256: modelMeta.checkpointSHA256,
     vaeSHA256: modelMeta.vaeSHA256,
@@ -1167,10 +1392,11 @@ async function generateTakeCore() {
     flashStatus(queued.reason ?? 'Take 创建失败')
     return
   }
-  takeGeneration.value = { running: true, progress: 0, message: '准备 V5-P' }
+  takeGeneration.value = { running: true, progress: 0, message: `准备 ${unitModelMeta.value.label}` }
   try {
     const { result, blob } = await runSynthesisV5P({
       referenceBlob: referenceGuideBlob.value,
+      ...(snapshot.multiA ? { referenceBlobs: referenceRows.value.map(row => ({ unitId: row.id, blob: row.blob! })) } : {}),
       targetBlob: guideBlob.value,
       snapshot,
       presetId: modelId,
@@ -1316,6 +1542,26 @@ async function runCapacityRetry() {
   }
 }
 
+function openTakeMenu(event: MouseEvent, takeId: string) {
+  event.preventDefault()
+  event.stopPropagation()
+  takeMenu.value = { show: false, x: event.clientX, y: event.clientY, takeId }
+  nextTick(() => { takeMenu.value.show = true })
+}
+
+function chooseTakeMenu(key: string) {
+  takeMenu.value.show = false
+  if (key !== 'delete' || !unit.value) return
+  const before = objectTree.snapshotTree()
+  const take = synthesis.value?.takes.find(item => item.id === takeMenu.value.takeId)
+  try {
+    removeSynthesisTake(unit.value, takeMenu.value.takeId)
+    if (editingTakeId.value === takeMenu.value.takeId) cancelTakeRename()
+    history.push({ description: `删除 Take · ${take?.name ?? ''}`, patches: [], inversePatches: [],
+      objectTree: { kind: 'snapshot', before, after: objectTree.snapshotTree() } })
+  } catch (error: any) { flashStatus(error?.message || '删除 Take 失败') }
+}
+
 function selectTake(takeId: string) {
   const result = objectTree.setActiveSynthesisTake(props.objectId, takeId)
   if (!result.ok) {
@@ -1363,18 +1609,23 @@ function commitTakeRename() {
 
 async function exportActiveTake() {
   const take = activeTake.value
-  const blob = activeTakeBlob.value
-  if (!take || !blob || take.status !== 'ready') {
+  const source = activeTakeBlob.value
+  if (!take || !source || take.status !== 'ready') {
     flashStatus('当前没有可导出的 Take')
     return
   }
+  const outputFileName = `${unit.value?.name ?? 'Take'}_${take.name}.wav`
+  const timelineStart = synthesis.value?.defaultTimelineStart ?? 0
+  let blob: Blob
+  try { blob = await takePlaybackBlob(source, activeTakeLoudness.value) }
+  catch (error: any) { message.error(error?.message || 'Take 导出准备失败'); return }
   const before = objectTree.snapshotTree()
   const tracksBefore = tracks.snapshotState()
   const result = await objectTree.addRenderedAudioToTimeline({
     blob,
-    outputFileName: `${unit.value?.name ?? 'V5-P'}_${take.name}.wav`,
+    outputFileName,
     renderKind: 'v5p',
-    timelineStart: synthesis.value?.defaultTimelineStart ?? 0,
+    timelineStart,
   })
   if (result.ok && result.renderObjectId) {
     const renderObject = objectTree.node(result.renderObjectId)
@@ -2504,12 +2755,33 @@ async function executeSegmentAlignment(segmentId: string, target: SegmentTextCon
 function openKanaMenu(event: MouseEvent, kanaUnitId: string) {
   event.preventDefault()
   event.stopPropagation()
-  kanaMenu.value = { show: false, x: event.clientX, y: event.clientY, kanaUnitId }
+  kanaMenu.value = { show: false, x: event.clientX, y: event.clientY, kanaUnitId, emptyFrame: -1 }
+  nextTick(() => { kanaMenu.value.show = true })
+}
+
+function openEmptyKanaMenu(event: MouseEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+  const frame = frameFromPointer(event)
+  if (synthesis.value?.kanaTrack.units.some(item => item.startFrame <= frame && frame < item.endFrameExclusive)
+    || synthesis.value?.kanaTrack.boundaries.some(item => item.frame === frame)) return
+  kanaMenu.value = { show: false, x: event.clientX, y: event.clientY, kanaUnitId: '', emptyFrame: frame }
   nextTick(() => { kanaMenu.value.show = true })
 }
 
 function chooseKanaMenu(key: string) {
   kanaMenu.value.show = false
+  if (key === 'new-kana' && unit.value) {
+    const before = objectTree.snapshotTree()
+    try {
+      const kana = createKanaAtFrame(unit.value, kanaMenu.value.emptyFrame)
+      history.push({ description: '新建 Kana', patches: [], inversePatches: [],
+        objectTree: { kind: 'snapshot', before, after: objectTree.snapshotTree() } })
+      selectKana(kana.id)
+      openKanaEditor(kana.id)
+    } catch (error: any) { flashStatus(error?.message || '新建 Kana 失败') }
+    return
+  }
   if (key === 'map-h') {
     mapKanaToHTokens(kanaMenu.value.kanaUnitId)
     return
@@ -3086,6 +3358,9 @@ function hideHTokenTooltip() {
 }
 
 onBeforeUnmount(() => {
+  loudnessGeneration++
+  takeLoadGeneration++
+  processedTakeCache = null
   unbindEditorKeyboard()
   clearMidiDragListeners()
   const context = midiAudioContext
@@ -3159,47 +3434,26 @@ onBeforeUnmount(() => {
       <div class="reference-heading">
         <NIcon><LinkOutline /></NIcon>
         <span>A 区参考</span>
+        <NButton quaternary circle size="tiny" class="multi-a-toggle" :class="{ enabled: multiEnabled }" :type="multiEnabled ? 'primary' : 'default'"
+          :title="multiEnabled ? '关闭多 A 参考' : '开启多 A 参考'" :aria-pressed="multiEnabled"
+          :disabled="takeGeneration.running || takePreparation.running || (unitModel !== 'V5PgO_8K' && !multiEnabled)"
+          @click="toggleMultipleReferences(!multiEnabled)">
+          <span class="multi-a-indicator" aria-hidden="true" />
+        </NButton>
         <small>完整 Guide · 跟随最新</small>
       </div>
-      <template v-if="referenceUnit">
-        <NDropdown trigger="click" :options="referenceMenuOptions" @select="chooseReferenceUnit">
-          <button type="button" class="reference-main" title="更换 A 区参考">
-            <strong>{{ referenceUnit.name }}</strong>
-            <span>
-              {{ formatTime(referenceUnit.synthesisUnit.guide.duration) }} · unit r{{ referenceUnit.synthesisUnit.unitRevision }} · H r{{ referenceUnit.synthesisUnit.hTokenTrack.revision }}
-            </span>
-          </button>
-        </NDropdown>
-        <span class="reference-state" :class="{ warning: referenceStatus.warning }">{{ referenceStatus.label }}</span>
-        <NButton quaternary circle size="small" :disabled="!referenceGuideUrl" :title="referencePlaying ? '暂停 A 区完整 Guide' : '试听 A 区完整 Guide'" @click="toggleReferenceGuide">
-          <template #icon><NIcon><Pause v-if="referencePlaying" /><Play v-else /></NIcon></template>
-        </NButton>
-        <NButton quaternary circle size="small" title="打开参考合成单元" @click="openReferenceUnit">
-          <template #icon><NIcon><OpenOutline /></NIcon></template>
-        </NButton>
-        <NButton quaternary circle size="small" title="解除 A 区参考" @click="unbindReferenceUnit">
-          <template #icon><NIcon><UnlinkOutline /></NIcon></template>
-        </NButton>
-      </template>
-      <template v-else-if="synthesis.reference">
-        <div class="reference-main invalid">
-          <strong>引用对象不存在</strong>
-          <span>{{ synthesis.reference.unitId }}</span>
-        </div>
-        <span class="reference-state warning">{{ referenceStatus.label }}</span>
-        <NButton quaternary circle size="small" title="解除失效引用" @click="unbindReferenceUnit">
-          <template #icon><NIcon><UnlinkOutline /></NIcon></template>
-        </NButton>
-      </template>
-      <template v-else>
+      <ReferenceBars :references="referenceRows" :options="referenceMenuOptions"
+        :busy="takeGeneration.running || takePreparation.running"
+        :playing-id="referencePlaying ? referencePlaybackUnit?.id ?? null : null"
+        @select="selectReferenceRow" @cfg="setReferenceCfg" @remove="removeReferenceRow"
+        @unbind="removeReferenceRow" @play="auditionReference" @open="openReferenceRow">
         <span class="reference-empty-state">未绑定</span>
         <NDropdown trigger="click" :options="referenceMenuOptions" @select="chooseReferenceUnit">
           <NButton size="small" secondary :disabled="referenceMenuOptions.length === 0">
-            <template #icon><NIcon><LinkOutline /></NIcon></template>
-            选择合成单元
+            <template #icon><NIcon><LinkOutline /></NIcon></template>选择合成单元
           </NButton>
         </NDropdown>
-      </template>
+      </ReferenceBars>
       <NPopover v-model:show="samplingMenuOpen" trigger="click" placement="bottom-end" class="sampling-popover">
         <template #trigger>
           <NButton size="small" secondary :disabled="takePreparation.running || takeGeneration.running" :title="`高级采样控制 · ${samplingSummary}`">
@@ -3211,7 +3465,7 @@ onBeforeUnmount(() => {
           <header><strong>高级采样控制</strong><span>设置只影响之后生成的新 Take</span></header>
           <label class="sampling-mode"><span>引导模式</span>
             <NRadioGroup v-model:value="guidanceMode" size="small">
-              <NRadioButton value="unified">统一 CFG</NRadioButton>
+              <NRadioButton value="unified" :disabled="multiEnabled">统一 CFG</NRadioButton>
               <NRadioButton value="three-way" :disabled="!unitModelMeta.supportsThreeWayCfg">三路 CFG</NRadioButton>
             </NRadioGroup>
           </label>
@@ -3219,10 +3473,11 @@ onBeforeUnmount(() => {
             <label><span>统一 CFG</span><small>同时加强 A 区音色、Text/H 和 MIDI-P。当前兼容模式。</small><NInputNumber v-model:value="unifiedCfg" :min="-1" :max="10" :step="0.1" /></label>
           </div>
           <div v-else class="sampling-fields three-way-fields">
-            <label><span>A 区音色 CFG</span><NSwitch :value="audioCfg !== 0" aria-label="A 区 CFG 强化" @update:value="toggleChannelCfg('audio', $event)" /><NInputNumber v-model:value="audioCfg" :min="-1" :max="10" :step="0.1" /></label>
-            <label><span>Text / H CFG</span><NSwitch :value="textCfg !== 0" aria-label="Text CFG 强化" @update:value="toggleChannelCfg('text', $event)" /><NInputNumber v-model:value="textCfg" :min="-1" :max="10" :step="0.1" /></label>
-            <label><span>MIDI-P CFG</span><NSwitch :value="midiCfg !== 0" aria-label="MIDI CFG 强化" @update:value="toggleChannelCfg('midi', $event)" /><NInputNumber v-model:value="midiCfg" :min="-1" :max="10" :step="0.1" /></label>
-            <p>三路均为同一数值时，与该数值的统一 CFG 等价。三路模式顺序执行四个条件分支，预计约为统一 CFG 的 2 倍耗时。</p>
+            <label><span>A 区音色 CFG</span><NInputNumber v-model:value="audioCfg" :min="-1" :max="10" :step="0.1" /></label>
+            <label><span>Text / H CFG</span><NInputNumber v-model:value="textCfg" :min="-1" :max="10" :step="0.1" /></label>
+            <label><span>MIDI-P CFG</span><NInputNumber v-model:value="midiCfg" :min="-1" :max="10" :step="0.1" /></label>
+            <p v-if="unitModel === 'V5PgO_8K'">独立 dropout · A / Text / MIDI · 四个条件分支</p>
+            <p v-else>三路均为同一数值时，与该数值的统一 CFG 等价。三路模式顺序执行四个条件分支，预计约为统一 CFG 的 2 倍耗时。</p>
           </div>
           <div class="sampling-fields sampling-common">
             <label><span>采样步数</span><small>默认 32；步数越高通常越慢。</small><NInputNumber v-model:value="samplingSteps" :min="1" :max="256" :step="1" /></label>
@@ -3237,7 +3492,7 @@ onBeforeUnmount(() => {
         type="primary"
         :loading="takePreparation.running || takeGeneration.running"
         :disabled="takePreparation.running || takeGeneration.running"
-        :title="takePrerequisiteMessage || '生成 V5-P Take'"
+        :title="takePrerequisiteMessage || '生成 Take'"
         @click="generateTake"
       >
         <template #icon><NIcon><ColorWandOutline /></NIcon></template>
@@ -3250,7 +3505,7 @@ onBeforeUnmount(() => {
         <strong>{{ unit.name }}</strong>
         <span>r{{ synthesis.unitRevision }}</span>
       </div>
-      <div class="unit-model-picker" title="当前合成单元使用的 V5-P 模型">
+      <div class="unit-model-picker" title="当前合成单元使用的模型">
         <NSelect
           v-model:value="unitModel"
           :options="modelOptions"
@@ -3308,17 +3563,29 @@ onBeforeUnmount(() => {
             @click="take.status === 'ready' && selectTake(take.id)"
             @dblclick.stop="beginTakeRename(take)"
             @keydown.f2.prevent="beginTakeRename(take)"
+            @contextmenu="openTakeMenu($event, take.id)"
           >
             <strong>{{ take.name }}</strong>
             <span>{{ take.status === 'ready' ? formatTime(take.duration ?? 0) : take.status }}</span>
           </button>
         </template>
       </div>
+      <label class="take-loudness-toggle" title="所有 Take 的响度对齐 Guide">
+        <NSwitch
+          :value="Boolean(synthesis.takeLoudnessAligned)" size="small"
+          aria-label="所有 Take 的响度对齐 Guide"
+          :loading="takeLoudnessBusy"
+          :disabled="takeLoudnessBusy || !guideBlob || !synthesis.takes.some(take => take.status === 'ready')"
+          @update:value="toggleTakeLoudness"
+        />
+        <span>对齐 Guide</span>
+      </label>
       <NButton
         quaternary
         circle
         size="small"
-        :disabled="!activeTakeBlob"
+        :disabled="!activeTakeBlob || takePreviewLoading"
+        :loading="takePreviewLoading"
         :title="playing && auditionSource === 'take' ? '暂停当前 Take' : '试听当前 Take'"
         @click="auditionSource = 'take'; togglePlayback()"
       >
@@ -3427,7 +3694,7 @@ onBeforeUnmount(() => {
             <small>r{{ synthesis.kanaTrack.revision }}</small>
             <NButton size="tiny" secondary class="row-action kana-action" :disabled="analysisBusy" @click.stop="alignSelectedKana">H</NButton>
           </div>
-          <div class="track-space grid-space" :style="{ width: `${timelineWidth}px` }" @click="seekFromPointer">
+          <div class="track-space grid-space" :style="{ width: `${timelineWidth}px` }" @click="seekFromPointer" @contextmenu="openEmptyKanaMenu">
             <div
               v-for="kana in synthesis.kanaTrack.units"
               :key="kana.id"
@@ -3713,6 +3980,9 @@ onBeforeUnmount(() => {
       @select="chooseKanaMenu"
       @clickoutside="kanaMenu.show = false"
     />
+    <NDropdown trigger="manual" placement="bottom-start"
+      :show="takeMenu.show" :x="takeMenu.x" :y="takeMenu.y" :options="takeMenuOptions"
+      @select="chooseTakeMenu" @clickoutside="takeMenu.show = false" />
     <NModal v-model:show="midiGenerationConfirm.show" preset="card" title="覆盖手工 MIDI-P" class="alignment-confirm-modal">
       <div class="alignment-confirm-content">
         <div class="overwrite-range">frame 0..{{ frameCount - 1 }}</div>
@@ -3888,7 +4158,7 @@ onBeforeUnmount(() => {
           <span>需要约 {{ (capacityDialog.requiredMiB / 1024).toFixed(1) }} GB</span>
           <span>当前可用 {{ (capacityDialog.freeMiB / 1024).toFixed(1) }} GB</span>
           <span>估算来自 {{ capacityDialog.estimate.sampleSeconds }}s / {{ capacityDialog.estimate.steps ?? 1 }}步标定</span>
-          <span v-if="capacityDialog.estimate.guidanceMode === 'three-way'">三路 CFG 顺序执行四个条件分支，预计约 {{ capacityDialog.estimate.estimatedTimeFactor ?? 2 }}× 耗时</span>
+          <span v-if="capacityDialog.estimate.guidanceMode === 'three-way'">三路 CFG 顺序最多 {{ 4 * (capacityDialog.estimate.referenceCount ?? 1) }} 个条件分支，预计约 {{ capacityDialog.estimate.estimatedTimeFactor ?? 2 }}× 耗时</span>
         </div>
         <div v-if="capacityDialog.insufficient" class="capacity-insufficient">您的显存实在不足。</div>
         <div v-else-if="capacityDialog.evictions.length > 0" class="capacity-evictions">
@@ -3978,7 +4248,7 @@ onBeforeUnmount(() => {
 .reference-heading {
   flex: 0 0 170px;
   display: grid;
-  grid-template-columns: 18px auto;
+  grid-template-columns: 18px minmax(0, 1fr) 22px;
   align-items: center;
   column-gap: 7px;
   color: var(--app-text);
@@ -3989,6 +4259,10 @@ onBeforeUnmount(() => {
   color: var(--app-muted);
   font-size: 9px;
 }
+.multi-a-toggle { width: 22px; height: 22px; }
+.multi-a-toggle.enabled { color: var(--app-accent); background: var(--app-selected); }
+.multi-a-indicator { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--app-muted); background: transparent; }
+.multi-a-toggle.enabled .multi-a-indicator { border-color: var(--app-accent); background: var(--app-accent); box-shadow: 0 0 0 2px var(--app-selected); }
 .reference-main {
   width: clamp(240px, 34vw, 460px);
   min-width: 0;
@@ -4034,7 +4308,7 @@ onBeforeUnmount(() => {
 .sampling-fields label { display: grid; gap: 5px; align-content: start; color: var(--app-text); }
 .sampling-fields label small { min-height: 30px; color: var(--app-muted); font-size: 10px; line-height: 1.45; }
 .sampling-fields.three-way-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.sampling-fields.three-way-fields p { grid-column: 1 / -1; margin: 0; color: var(--app-warning); font-size: 10px; line-height: 1.5; }
+.sampling-fields.three-way-fields p { grid-column: 1 / -1; margin: 0; min-height: 30px; color: var(--app-warning); font-size: 10px; line-height: 1.5; }
 .sampling-common { padding-top: 10px; border-top: 1px solid var(--app-border); }
 .sampling-training { padding: 7px 8px; border-left: 2px solid var(--app-accent); background: var(--app-surface); color: var(--app-muted); font: 10px ui-monospace, SFMono-Regular, Consolas, monospace; }
 .unit-model-picker {
@@ -4088,6 +4362,7 @@ onBeforeUnmount(() => {
   text-transform: uppercase;
 }
 .take-heading small { color: var(--app-muted); font-size: 9px; }
+.take-loudness-toggle { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; white-space: nowrap; }
 .take-prerequisite-hint {
   flex: 0 1 auto;
   min-width: 0;

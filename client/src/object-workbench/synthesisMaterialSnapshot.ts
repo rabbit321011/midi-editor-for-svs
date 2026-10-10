@@ -6,6 +6,8 @@ import type {
 import { createV5PABFrameMap, type V5PABFrameMap } from './synthesisABFrameMap'
 import { compileV5PJointHTransport, type V5PJointHTransport } from './synthesisDirectH'
 import { validateSynthesisUnit } from './synthesisUnit'
+import { V5P_DEFAULT_MODEL } from './v5pModel'
+import { MAX_A_REFERENCES } from './synthesisMultiReference'
 
 export interface SynthesisMaterialGuideSnapshot {
   assetId: string
@@ -34,6 +36,11 @@ export interface SynthesisMaterialSnapshot {
     unitRevision: number
     guide: SynthesisMaterialGuideSnapshot
     text: SynthesisMaterialTextSnapshot
+  }
+  multiA?: {
+    schema: 'aisvc.pgo-multi-a.v1'
+    primaryUnitId: string
+    references: Array<SynthesisMaterialSnapshot['reference'] & { audioCfg: number; leadingPadFrames: number }>
   }
   target: {
     unitId: string
@@ -66,6 +73,37 @@ export interface CreateSynthesisMaterialSnapshotOptions {
   now?: string
   referenceEncodedPaddedFrameCount?: number
   targetEncodedPaddedFrameCount?: number
+}
+
+export function createMultiSynthesisMaterialSnapshot(
+  primary: SynthesisUnitObjectNode, secondary: SynthesisUnitObjectNode,
+  target: SynthesisUnitObjectNode, primaryCfg: number, secondaryCfg: number,
+): SynthesisMaterialSnapshot {
+  return createMultipleSynthesisMaterialSnapshot(
+    [{ unit: primary, cfg: primaryCfg }, { unit: secondary, cfg: secondaryCfg }], target)
+}
+
+export function createMultipleSynthesisMaterialSnapshot(
+  sources: Array<{ unit: SynthesisUnitObjectNode; cfg: number }>, target: SynthesisUnitObjectNode,
+): SynthesisMaterialSnapshot {
+  if ((target.synthesisUnit.presetId ?? V5P_DEFAULT_MODEL) !== 'V5PgO_8K') throw new Error('当前仅 PgO 8K 支持双 A')
+  if (sources.length < 2 || sources.length > MAX_A_REFERENCES || new Set(sources.map(source => source.unit.id)).size !== sources.length) throw new Error('参考数量或身份无效')
+  if (sources[0].unit.id !== target.synthesisUnit.reference?.unitId) throw new Error('主参考不一致')
+  if (!sources.every(source => Number.isFinite(source.cfg) && source.cfg >= -1 && source.cfg <= 10)) throw new Error('A CFG 无效')
+  const snapshots = sources.map(({ unit }) => createSynthesisMaterialSnapshot(unit, {
+    ...target, synthesisUnit: { ...target.synthesisUnit, reference: { ...target.synthesisUnit.reference!, unitId: unit.id } },
+  }))
+  const common = snapshots.reduce((longest, snapshot) => snapshot.reference.guide.sampleCount > longest.reference.guide.sampleCount ? snapshot : longest)
+  return {
+    ...common,
+    multiA: {
+      schema: 'aisvc.pgo-multi-a.v1', primaryUnitId: sources[0].unit.id,
+      references: snapshots.map((snapshot, index) => ({
+        ...snapshot.reference, audioCfg: sources[index].cfg,
+        leadingPadFrames: common.frameMap.bOffsetFrame - snapshot.frameMap.bOffsetFrame,
+      })),
+    },
+  }
 }
 
 export function createSynthesisMaterialSnapshot(

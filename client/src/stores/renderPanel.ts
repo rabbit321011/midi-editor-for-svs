@@ -1,7 +1,9 @@
 import { computed, reactive, ref } from 'vue'
-import { defineStore } from 'pinia'
-import type { RenderInputRef, RenderPanelMode, RenderSlotId } from '@/object-workbench'
-import { makeRenderInputRef, validateRenderSlot } from '@/object-workbench'
+import { acceptHMRUpdate, defineStore } from 'pinia'
+import { useDbSearchStore } from './dbSearch'
+import { bindRenderSlotNode, writeRenderSlotInput } from '@/object-workbench/renderSlotTransactions'
+import type { RenderInputRef, RenderPanelMode, RenderSlotId } from '@/object-workbench/renderInputs'
+import { makeRenderInputRef, validateRenderSlot } from '@/object-workbench/renderInputs'
 import { useObjectTreeStore } from './objectTree'
 import type { MsstModelId, MsstOutputMode } from '@/composables/msstModels'
 
@@ -19,6 +21,14 @@ export interface CapacityPromptPayload {
 }
 
 export const useRenderPanelStore = defineStore('renderPanel', () => {
+  const db = useDbSearchStore()
+  const dbAudio = computed(() => {
+    const objectTree = useObjectTreeStore()
+    const node = db.inputId ? objectTree.node(db.inputId) : undefined
+    if (!node || !['audio', 'synthesisUnit', 'trackObject', 'group'].includes(node.kind)) return null
+    const kind = node.kind === 'synthesisUnit' ? 'synthesisUnit' : node.kind === 'audio' ? 'audioObject' : node.kind === 'group' ? 'group' : 'trackObject'
+    return makeRenderInputRef(objectTree.tree, kind, node.id)
+  })
   const mode = ref<RenderPanelMode>('svc')
   const svcStatus = ref<SvcRenderStatus>('idle')
   const svcProgress = ref(0)
@@ -117,41 +127,16 @@ export const useRenderPanelStore = defineStore('renderPanel', () => {
     const validation = validateRenderSlot(objectTree.tree, slotId, input)
     if (!validation.ok) return { ok: false, reason: validation.reason }
 
-    if (slotId === 'svc.condAudio') svc.condAudio = input
-    if (slotId === 'svc.sourceAudio') svc.sourceAudio = input
-    if (slotId === 'svs.timbreAudio') svs.timbreAudio = input
-    if (slotId === 'svs.melody') svs.melody = input
-    if (slotId === 'svs.refText') svs.refText = input
-    if (slotId === 'svs.targetText') svs.targetText = input
-    if (slotId === 'whisper.audio') whisper.audio = input
-    if (slotId === 'msst.audio') msst.audio = input
+    writeRenderSlotInput({ svc, svs, whisper, msst, db }, slotId, input)
     return { ok: true }
   }
 
   function setSlotFromNode(slotId: RenderSlotId, id: string): { ok: boolean; reason?: string } {
-    const objectTree = useObjectTreeStore()
-    const node = objectTree.node(id)
-    if (!node) return { ok: false, reason: '原对象不存在' }
-    const acceptsAudioObject = slotId === 'svc.condAudio'
-      || slotId === 'svs.timbreAudio'
-      || slotId === 'whisper.audio'
-      || slotId === 'msst.audio'
-    if (node.kind !== 'trackObject' && node.kind !== 'group' && !(acceptsAudioObject && node.kind === 'audio')) {
-      return { ok: false, reason: acceptsAudioObject ? '该槽位只接受 AudioObject/TrackObject/GroupObject' : '槽位只接受 TrackObject 或 GroupObject' }
-    }
-    const kind = node.kind === 'group' ? 'group' : node.kind === 'audio' ? 'audioObject' : 'trackObject'
-    return setSlot(slotId, makeRenderInputRef(objectTree.tree, kind, id))
+    return bindRenderSlotNode(useObjectTreeStore().tree, { svc, svs, whisper, msst, db }, slotId, id)
   }
 
   function clearSlot(slotId: RenderSlotId) {
-    if (slotId === 'svc.condAudio') svc.condAudio = null
-    if (slotId === 'svc.sourceAudio') svc.sourceAudio = null
-    if (slotId === 'svs.timbreAudio') svs.timbreAudio = null
-    if (slotId === 'svs.melody') svs.melody = null
-    if (slotId === 'svs.refText') svs.refText = null
-    if (slotId === 'svs.targetText') svs.targetText = null
-    if (slotId === 'whisper.audio') whisper.audio = null
-    if (slotId === 'msst.audio') msst.audio = null
+    writeRenderSlotInput({ svc, svs, whisper, msst, db }, slotId, null)
   }
 
   function pruneMissingInputs() {
@@ -165,6 +150,7 @@ export const useRenderPanelStore = defineStore('renderPanel', () => {
       ['svs.targetText', svs.targetText],
       ['whisper.audio', whisper.audio],
       ['msst.audio', msst.audio],
+      ['db.audio', dbAudio.value],
     ]
     for (const [slotId, input] of slots) {
       if (input && !objectTree.node(input.id)) clearSlot(slotId)
@@ -182,6 +168,9 @@ export const useRenderPanelStore = defineStore('renderPanel', () => {
   }
 
   function resetForProject() {
+    db.inputId = null
+    db.points = []
+    db.selectedId = null
     svc.condAudio = null
     svc.sourceAudio = null
     svs.timbreAudio = null
@@ -372,6 +361,7 @@ export const useRenderPanelStore = defineStore('renderPanel', () => {
     svs,
     whisper,
     msst,
+    dbAudio,
     canRunSvc,
     canRunSvs,
     canRunWhisper,
@@ -406,3 +396,4 @@ export const useRenderPanelStore = defineStore('renderPanel', () => {
     resolveCapacity,
   }
 })
+if (import.meta.hot) import.meta.hot.accept(acceptHMRUpdate(useRenderPanelStore, import.meta.hot))

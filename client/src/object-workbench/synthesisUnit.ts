@@ -108,7 +108,7 @@ export function validateSynthesisUnit(unit: SynthesisUnitObjectNode): string[] {
       errors.push('SynthesisUnit CFG settings are invalid')
     }
     if (sampling.guidance.mode === 'three-way'
-      && sampling.guidance.formula !== 'audio-text-midi-telescoping.v1') {
+      && !['audio-text-midi-telescoping.v1', 'audio-text-midi-independent.v1'].includes(sampling.guidance.formula)) {
       errors.push('SynthesisUnit 3CFG formula is invalid')
     }
   }

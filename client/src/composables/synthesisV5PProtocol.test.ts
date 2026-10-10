@@ -1,7 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { readSynthesisV5PResult } from './synthesisV5PProtocol'
+import { V5P_MODEL_META } from '@/object-workbench'
 
 describe('V5-P result protocol', () => {
+  it('requires the correct F1 EMA and base provenance for both steps', () => {
+    for (const presetId of ['V5F_F1_3K_EMA', 'V5F_F1_6K_EMA'] as const) {
+      const result = {
+        ...fixture(), presetId,
+        checkpointSHA256: V5P_MODEL_META[presetId].checkpointSHA256,
+        vaeSHA256: V5P_MODEL_META[presetId].vaeSHA256,
+        baseCheckpointSHA256: V5P_MODEL_META.V5PgO_8K.checkpointSHA256,
+        loraWeightSource: 'ema' as const,
+      }
+      expect(readSynthesisV5PResult({ type: 'v5p-result', result }, 'v5p-job-test', presetId)).toEqual(result)
+      expect(readSynthesisV5PResult({
+        type: 'v5p-result', result: { ...result, baseCheckpointSHA256: 'b'.repeat(64) },
+      }, 'v5p-job-test', presetId)).toBeNull()
+    }
+  })
   it('accepts a hash-bound immutable Take result', () => {
     expect(readSynthesisV5PResult({
       type: 'v5p-result',

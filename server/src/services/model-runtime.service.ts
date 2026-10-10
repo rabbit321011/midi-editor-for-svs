@@ -369,6 +369,11 @@ async function buildV5PResources(
         sha256: preset.vaeDecoderCheckpointSHA256,
       },
     } : {}),
+    ...(preset.baseCheckpoint && preset.f1Support && preset.f1Loader ? {
+      baseCheckpoint: { path: preset.baseCheckpoint, sha256: preset.baseCheckpointSHA256 },
+      f1Support: { path: preset.f1Support, sha256: preset.f1SupportSHA256 },
+      f1Loader: { path: preset.f1Loader, sha256: await sha256File(preset.f1Loader) },
+    } : {}),
     placement: {
       path: preset.placement,
       sha256: preset.placementSHA256,
@@ -381,6 +386,10 @@ async function buildV5PResources(
       path: preset.directRunner,
       sha256: await sha256File(preset.directRunner),
     },
+    ...(preset.id === 'V5PgO_8K' ? { pgoGuidance: {
+      path: `${PROJECT_ROOT}/server/scripts/pgo_guidance.py`,
+      sha256: await sha256File(`${PROJECT_ROOT}/server/scripts/pgo_guidance.py`),
+    } } : {}),
     midiPModule: {
       path: midiModule,
       sha256: preset.melodyHashes['midi_p_v4ph.py'],

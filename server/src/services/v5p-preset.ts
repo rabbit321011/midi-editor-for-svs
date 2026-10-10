@@ -3,7 +3,7 @@ export const V5P_PYTHON = 'C:/Users/jbbj/AppData/Local/Programs/Python/Python310
 export const SINGER_ROOT = 'E:/AIscene/YingMusic_Singer_Plus'
 export const V5P_DIRECT_RUNNER = 'E:/AIscene/AISVC-midi-web/server/scripts/v5p_direct_runner.py'
 
-export const V5P_MODEL_IDS = ['V5P_40K_EMA', 'V5Pg_20K', 'V5PgO_8K', 'V5PgOV_300K_EMA'] as const
+export const V5P_MODEL_IDS = ['V5P_40K_EMA', 'V5Pg_20K', 'V5PgO_8K', 'V5PgOV_300K_EMA', 'V5F_F1_3K_EMA', 'V5F_F1_6K_EMA'] as const
 
 export type V5PModelId = typeof V5P_MODEL_IDS[number]
 
@@ -34,9 +34,14 @@ export interface V5PDirectPreset {
   singerRoot: string
   melodyHashes: Record<string, string>
   supportsThreeWayCfg: boolean
+  baseCheckpoint?: string
+  baseCheckpointSHA256?: string
+  f1Support?: string
+  f1SupportSHA256?: string
+  f1Loader?: string
 }
 
-const V5P_DIRECT_PRESETS: Record<V5PModelId, V5PDirectPreset> = {
+const LEGACY_PRESETS: Record<Exclude<V5PModelId, 'V5F_F1_3K_EMA' | 'V5F_F1_6K_EMA'>, V5PDirectPreset> = {
   V5P_40K_EMA: {
   id: 'V5P_40K_EMA',
   label: 'V5-P 40K EMA',
@@ -169,7 +174,31 @@ const V5P_DIRECT_PRESETS: Record<V5PModelId, V5PDirectPreset> = {
   },
 }
 
-export const V5P_DIRECT_PRESET = V5P_DIRECT_PRESETS.V5P_40K_EMA
+const F1_ROOT = 'E:/MyProject/重要模型保存/V5F_F1_3K_6K'
+function f1Preset(id: 'V5F_F1_3K_EMA' | 'V5F_F1_6K_EMA', step: number, checkpointSHA256: string): V5PDirectPreset {
+  return {
+    ...LEGACY_PRESETS.V5PgO_8K,
+    id, label: `V5-F F1 ${step / 1000}K EMA`, vaeLabel: 'F1 encoder + decoder LoRA / 285k online VAE',
+    checkpoint: `${F1_ROOT}/step_${String(step).padStart(6, '0')}.pt`,
+    checkpointSHA256, checkpointSchema: 'f1-adapter-checkpoint-v1',
+    checkpointStep: step, weightSource: 'ema',
+    trainingCodeSHA256: 'de3a959969443a88fdbe27ca85cc3b5b8f509805842aaf919794260ab68334d1',
+    baseCheckpoint: LEGACY_PRESETS.V5PgO_8K.checkpoint,
+    baseCheckpointSHA256: LEGACY_PRESETS.V5PgO_8K.checkpointSHA256,
+    vaeConfig: 'E:/AIscene/AISVC-midi-web/server/models/f1/vae_config.json',
+    vaeConfigSHA256: 'ca94f7c9d57dda4000ba2df87fc58229918359aca7d507847b91724f250551d4',
+    f1Support: `${F1_ROOT}/F1_workbench_support.zip`,
+    f1SupportSHA256: '68651055e0d4c8b30c7d5fd07e5646a32ab845960beae312dfe8f9e21bf8593f',
+    f1Loader: 'E:/AIscene/AISVC-midi-web/server/scripts/f1_runtime.py',
+  }
+}
+const V5P_DIRECT_PRESETS: Record<V5PModelId, V5PDirectPreset> = {
+  ...LEGACY_PRESETS,
+  V5F_F1_3K_EMA: f1Preset('V5F_F1_3K_EMA', 3000, '90d9eb27e730b796d9051046de1bb8c4e3f9993b97b3758bc31c03faaa596f23'),
+  V5F_F1_6K_EMA: f1Preset('V5F_F1_6K_EMA', 6000, '0b22d3eeeb6b83da70909c5ffb29a5b924707d3cadbddbf8d8f872c46a56622c'),
+}
+
+export const V5P_DIRECT_PRESET = V5P_DIRECT_PRESETS.V5PgO_8K
 
 export function getV5PDirectPreset(id: string): V5PDirectPreset {
   const preset = V5P_DIRECT_PRESETS[id as V5PModelId]

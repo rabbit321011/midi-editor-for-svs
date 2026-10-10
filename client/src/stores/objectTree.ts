@@ -1,5 +1,8 @@
 import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
+import type { TakeLoudnessAdjustment } from '@/object-workbench'
+import { applyTakeLoudnessSettings } from '@/utils/takeLoudness'
+import { additionalReferences, bindPrimaryReference, canBindPrimaryReference } from '@/object-workbench/synthesisMultiReference'
 import type { AudioSegment, GroupElementSnapshot, Project } from '@/types'
 import type { AudioObjectNode, FolderNode, GroupObjectNode, LegacyObjectTreeMaps, NodeId, ProjectObjectTree, SynthesisClipboardItem, SynthesisHPlacementRange, SynthesisHTokenEvent, SynthesisKanaSegmentBoundary, SynthesisKanaUnit, SynthesisSegmentObject, SynthesisTake, SynthesisUnitObjectNode, TextSegment, TrackFolderNode, TrackObjectContentType, TrackObjectNode, TreeNode, V5PModelId, V5PSamplingSettings } from '@/object-workbench'
 import {
@@ -349,7 +352,8 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
     const referencing = Object.values(index.value.nodes).filter(node => (
       node.kind === 'synthesisUnit'
       && node.id !== unit.id
-      && node.synthesisUnit.reference?.unitId === unit.id
+      && (node.synthesisUnit.reference?.unitId === unit.id
+        || (node.synthesisUnit.multiReference?.enabled && additionalReferences(node).some(source => source.unitId === unit.id)))
     ))
     if (referencing.length > 0) {
       return { ok: false, reason: `该合成单元仍被 ${referencing.length} 个 A 区参考绑定` }
@@ -728,28 +732,7 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
     unitId: NodeId,
     referenceUnitId: NodeId,
   ): { ok: boolean; reason?: string } {
-    const unit = index.value.nodes[unitId]
-    const referenceUnit = index.value.nodes[referenceUnitId]
-    if (!unit || unit.kind !== 'synthesisUnit') return { ok: false, reason: '目标合成单元不存在' }
-    if (!referenceUnit || referenceUnit.kind !== 'synthesisUnit') {
-      return { ok: false, reason: 'A 区参考只接受合成单元' }
-    }
-    if (unitId === referenceUnitId) return { ok: false, reason: '合成单元不能绑定自身作为 A 区参考' }
-    if (unit.synthesisUnit.reference?.unitId === referenceUnitId) {
-      return { ok: false, reason: '已经绑定该 A 区参考' }
-    }
-
-    const visited = new Set<NodeId>()
-    let cursor: NodeId | null = referenceUnitId
-    while (cursor) {
-      if (cursor === unitId) return { ok: false, reason: '该绑定会形成合成单元循环引用' }
-      if (visited.has(cursor)) return { ok: false, reason: '候选参考链中已经存在循环引用' }
-      visited.add(cursor)
-      const current: TreeNode | undefined = index.value.nodes[cursor]
-      if (!current || current.kind !== 'synthesisUnit') break
-      cursor = current.synthesisUnit.reference?.unitId ?? null
-    }
-    return { ok: true }
+    return canBindPrimaryReference(tree.value, unitId, referenceUnitId)
   }
 
   function bindSynthesisReferenceUnit(
@@ -757,21 +740,7 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
     referenceUnitId: NodeId,
     now?: string,
   ): { ok: boolean; reason?: string } {
-    const policy = canBindSynthesisReferenceUnit(unitId, referenceUnitId)
-    if (!policy.ok) return policy
-    const unit = index.value.nodes[unitId]
-    if (!unit || unit.kind !== 'synthesisUnit') return { ok: false, reason: '目标合成单元不存在' }
-    const timestamp = now ?? new Date().toISOString()
-    unit.synthesisUnit.reference = {
-      unitId: referenceUnitId,
-      audioSource: 'guide',
-      range: 'full-guide',
-      revisionPolicy: 'follow-latest',
-      boundAt: timestamp,
-    }
-    unit.synthesisUnit.unitRevision += 1
-    unit.synthesisUnit.updatedAt = timestamp
-    return { ok: true }
+    return bindPrimaryReference(tree.value, unitId, referenceUnitId, now)
   }
 
   function unbindSynthesisReferenceUnit(
@@ -783,6 +752,7 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
     if (!unit.synthesisUnit.reference) return { ok: false, reason: '尚未绑定 A 区参考' }
     const timestamp = now ?? new Date().toISOString()
     unit.synthesisUnit.reference = null
+    if (unit.synthesisUnit.multiReference) unit.synthesisUnit.multiReference.enabled = false
     unit.synthesisUnit.unitRevision += 1
     unit.synthesisUnit.updatedAt = timestamp
     return { ok: true }
@@ -811,9 +781,12 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
       checkpointSHA256: string
       vaeSHA256: string
       decoderSHA256?: string
+      baseCheckpointSHA256?: string
+      loraWeightSource?: 'ema'
       adapterSHA256: string
       seed: number
       samplingSettings?: V5PSamplingSettings
+      referenceSources?: SynthesisTake['referenceSources']
     },
     completedAt?: string,
   ): Promise<{ ok: boolean; reason?: string }> {
@@ -852,6 +825,9 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
       checkpointSHA256: result.checkpointSHA256,
       vaeSHA256: result.vaeSHA256,
       decoderSHA256: result.decoderSHA256,
+      baseCheckpointSHA256: result.baseCheckpointSHA256,
+      loraWeightSource: result.loraWeightSource,
+      ...(result.referenceSources ? { referenceSources: structuredClone(result.referenceSources) } : {}),
       adapterSHA256: result.adapterSHA256,
       seed: result.seed,
       samplingSettings: structuredClone(
@@ -914,6 +890,14 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
     if (!trimmedName) return { ok: false, reason: 'Take 名称不能为空' }
     take.name = trimmedName
     return { ok: true }
+  }
+
+  function setSynthesisTakeLoudness(
+    unitId: NodeId, enabled: boolean, entries: Array<{ takeId: string; adjustment: TakeLoudnessAdjustment }> = [],
+  ): { ok: boolean; reason?: string } {
+    const unit = index.value.nodes[unitId]
+    if (!unit || unit.kind !== 'synthesisUnit') return { ok: false, reason: '合成单元不存在' }
+    return applyTakeLoudnessSettings(unit, enabled, entries)
   }
 
   function setSynthesisUnitPreset(unitId: NodeId, presetId: V5PModelId): { ok: boolean; reason?: string } {
@@ -2562,6 +2546,7 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
     cancelSynthesisTake,
     setActiveSynthesisTake,
     renameSynthesisTake,
+    setSynthesisTakeLoudness,
     setSynthesisUnitPreset,
     setSynthesisUnitSamplingSettings,
     dropAudioObjectToTimeline,

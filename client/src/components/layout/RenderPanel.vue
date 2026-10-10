@@ -12,9 +12,14 @@ import { useRenderSvsPipeline } from '@/composables/useRenderSvsPipeline'
 import { useRenderWhisperPipeline } from '@/composables/useRenderWhisperPipeline'
 import { useRenderMsstPipeline } from '@/composables/useRenderMsstPipeline'
 import { MSST_MODEL_OPTIONS, getMsstModel } from '@/composables/msstModels'
-import { validateRenderSlot, type RenderInputRef, type RenderSlotId } from '@/object-workbench'
+import { validateRenderSlot, type RenderInputRef, type RenderSlotId } from '@/object-workbench/renderInputs'
+import DbSearchPanel from './DbSearchPanel.vue'
+import RenderInputSlot from './RenderInputSlot.vue'
+import { useDbSearchStore } from '@/stores/dbSearch'
+import { bindRenderSlotNode, resolveRenderSlotNode, writeRenderSlotInput } from '@/object-workbench/renderSlotTransactions'
 
 const renderPanel = useRenderPanelStore()
+const db = useDbSearchStore()
 const selection = useSelectionStore()
 const objectTree = useObjectTreeStore()
 const objectTreeUi = useObjectTreeUiStore()
@@ -25,6 +30,12 @@ const renderSvsPipeline = useRenderSvsPipeline()
 const renderWhisperPipeline = useRenderWhisperPipeline()
 const renderMsstPipeline = useRenderMsstPipeline()
 const notice = ref('')
+const slotTargets = { svc: renderPanel.svc, svs: renderPanel.svs, whisper: renderPanel.whisper, msst: renderPanel.msst, db }
+const dbAudio = computed(() => {
+  if (!db.inputId) return null
+  const result = resolveRenderSlotNode(objectTree.tree, 'db.audio', db.inputId)
+  return result.ok ? result.input : null
+})
 
 watch(
   () => Object.keys(objectTree.index.nodes).sort().join('\0'),
@@ -63,7 +74,7 @@ function pickSelected(slotId: RenderSlotId) {
     flash('请选择一个对象')
     return
   }
-  const result = renderPanel.setSlotFromNode(slotId, id)
+  const result = bindRenderSlotNode(objectTree.tree, slotTargets, slotId, id)
   flash(result.ok ? '已放入槽位' : result.reason ?? '无法放入槽位')
 }
 
@@ -78,7 +89,7 @@ function handleDrop(slotId: RenderSlotId, event: DragEvent) {
     flash('没有可放入的对象')
     return
   }
-  const result = renderPanel.setSlotFromNode(slotId, id)
+  const result = bindRenderSlotNode(objectTree.tree, slotTargets, slotId, id)
   flash(result.ok ? '已放入槽位' : result.reason ?? '无法放入槽位')
 }
 
@@ -112,10 +123,11 @@ function clearSlot(slotId: RenderSlotId) {
     flash(localProcessingMessage())
     return
   }
-  renderPanel.clearSlot(slotId)
+  writeRenderSlotInput(slotTargets, slotId, null)
 }
 
 function isSlotLocked(slotId: RenderSlotId) {
+  if (slotId === 'db.audio') return db.searching || renderPanel.isLocalProcessingRunning
   if (!renderPanel.isLocalProcessingRunning) return false
   if (slotId.startsWith('svc.')) return renderPanel.localProcessingTool !== 'svc'
   if (slotId.startsWith('svs.')) return renderPanel.localProcessingTool !== 'svs'
@@ -184,7 +196,7 @@ onMounted(() => {
       <button class="mode-btn" :class="{ active: renderPanel.mode === 'svs' }" @click="renderPanel.setMode('svs')">SVS</button>
       <button class="mode-btn" :class="{ active: renderPanel.mode === 'whisper' }" @click="renderPanel.setMode('whisper')">Whisper</button>
       <button class="mode-btn" :class="{ active: renderPanel.mode === 'msst' }" @click="renderPanel.setMode('msst')">MSST</button>
-      <button class="mode-btn" :class="{ active: renderPanel.mode === 'chat' }" @click="renderPanel.setMode('chat')">Chat</button>
+      <button class="mode-btn" :class="{ active: renderPanel.mode === 'db' }" @click="renderPanel.setMode('db')">DB</button>
     </div>
 
     <div v-if="renderPanel.mode === 'svc'" class="panel-body">
@@ -355,17 +367,10 @@ onMounted(() => {
     </div>
 
     <div v-else-if="renderPanel.mode === 'whisper'" class="panel-body">
-      <div class="slot-row" @dragover="allowDrop" @drop="handleDrop('whisper.audio', $event)">
-        <div class="slot-title">转写音频</div>
-        <n-tag size="small" :bordered="false">{{ slotLabel(renderPanel.whisper.audio) }}</n-tag>
-        <div class="slot-actions">
-          <n-button size="tiny" :disabled="isToolLocked('whisper') || renderPanel.whisperStatus === 'running'" @click="pickSelected('whisper.audio')">放入</n-button>
-          <n-button size="tiny" :disabled="!renderPanel.whisper.audio || isToolLocked('whisper') || renderPanel.whisperStatus === 'running'" @click="clearSlot('whisper.audio')">清空</n-button>
-        </div>
-        <div v-if="renderPanel.whisper.audio && slotReason('whisper.audio', renderPanel.whisper.audio)" class="slot-error">
-          {{ slotReason('whisper.audio', renderPanel.whisper.audio) }}
-        </div>
-      </div>
+      <RenderInputSlot title="转写音频" :input="renderPanel.whisper.audio"
+        :disabled="isToolLocked('whisper') || renderPanel.whisperStatus === 'running'"
+        :error="slotReason('whisper.audio', renderPanel.whisper.audio)"
+        @pick="pickSelected('whisper.audio')" @clear="clearSlot('whisper.audio')" @drop="handleDrop('whisper.audio', $event)" />
       <n-space vertical :size="8">
         <label class="field-label">输出名</label>
         <n-input v-model:value="renderPanel.whisper.outputName" size="small" placeholder="Whisper_text" />
@@ -393,17 +398,10 @@ onMounted(() => {
     </div>
 
     <div v-else-if="renderPanel.mode === 'msst'" class="panel-body">
-      <div class="slot-row" @dragover="allowDrop" @drop="handleDrop('msst.audio', $event)">
-        <div class="slot-title">处理音频</div>
-        <n-tag size="small" :bordered="false">{{ slotLabel(renderPanel.msst.audio) }}</n-tag>
-        <div class="slot-actions">
-          <n-button size="tiny" :disabled="isToolLocked('msst') || renderPanel.msstStatus === 'running'" @click="pickSelected('msst.audio')">放入</n-button>
-          <n-button size="tiny" :disabled="!renderPanel.msst.audio || isToolLocked('msst') || renderPanel.msstStatus === 'running'" @click="clearSlot('msst.audio')">清空</n-button>
-        </div>
-        <div v-if="renderPanel.msst.audio && slotReason('msst.audio', renderPanel.msst.audio)" class="slot-error">
-          {{ slotReason('msst.audio', renderPanel.msst.audio) }}
-        </div>
-      </div>
+      <RenderInputSlot title="处理音频" :input="renderPanel.msst.audio"
+        :disabled="isToolLocked('msst') || renderPanel.msstStatus === 'running'"
+        :error="slotReason('msst.audio', renderPanel.msst.audio)"
+        @pick="pickSelected('msst.audio')" @clear="clearSlot('msst.audio')" @drop="handleDrop('msst.audio', $event)" />
       <n-space vertical :size="8">
         <label class="field-label">输出名</label>
         <n-input v-model:value="renderPanel.msst.outputName" size="small" placeholder="MSST_output" />
@@ -427,10 +425,13 @@ onMounted(() => {
       </n-button>
     </div>
 
-    <div v-else class="panel-body chat-body">
-      <n-input type="textarea" size="small" placeholder="和 LLM 对话" :autosize="{ minRows: 8, maxRows: 14 }" />
-      <n-button size="small" block @click="flash('chatWithLLM 暂未接入')">发送</n-button>
-    </div>
+    <DbSearchPanel v-else>
+      <template #input>
+        <RenderInputSlot title="输入音频" :input="dbAudio" :disabled="isSlotLocked('db.audio')"
+          :error="slotReason('db.audio', dbAudio)" @pick="pickSelected('db.audio')"
+          @clear="clearSlot('db.audio')" @drop="handleDrop('db.audio', $event)" />
+      </template>
+    </DbSearchPanel>
 
     <div class="notice">{{ notice }}</div>
     <NModal :show="renderPanel.capacityPrompt !== null" preset="card" title="显存容量检查" class="capacity-modal" @update:show="updateCapacityShow">

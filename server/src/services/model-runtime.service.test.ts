@@ -9,7 +9,7 @@ import {
 
 test('unloaded V5-P runtime is reported without a worker', () => {
   const status = getV5PRuntimeStatus()
-  assert.equal(status.id, 'V5P_40K_EMA')
+  assert.equal(status.id, 'V5PgO_8K')
   assert.equal(status.state, 'unloaded')
   assert.equal(status.pid, undefined)
   assert.equal(isV5PRuntimeReady(), false)

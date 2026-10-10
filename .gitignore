@@ -8,6 +8,15 @@ vite.config.ts.timestamp-*.mjs
 __pycache__/
 *.py[cod]
 
+# Local DB search encoder assets
+server/models/paraspeechclap-intrinsic/
+server/models/**/*.pt
+server/models/**/*.pth
+server/models/**/*.pth.tar
+server/models/**/*.ckpt
+server/models/**/*.safetensors
+server/models/**/*.bin
+
 # 项目数据目录（生成的音频文件）
 data/
 server/data/

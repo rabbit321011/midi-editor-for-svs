@@ -1,9 +1,11 @@
 import type { SynthesisMaterialSnapshot, V5PGuidance } from '@/object-workbench'
+import { V5P_DEFAULT_MODEL } from '@/object-workbench'
 import type { V5PModelId } from '@/object-workbench'
 import { readSynthesisV5PResult, type SynthesisV5PResult } from './synthesisV5PProtocol'
 
 export interface RunSynthesisV5POptions {
   referenceBlob: Blob
+  referenceBlobs?: Array<{ unitId: string; blob: Blob }>
   targetBlob: Blob
   snapshot: SynthesisMaterialSnapshot
   presetId?: V5PModelId
@@ -19,15 +21,24 @@ export async function runSynthesisV5P(
 ): Promise<{ result: SynthesisV5PResult; blob: Blob }> {
   const jobId = `v5p-${crypto.randomUUID().slice(0, 12)}`
   options.onProgress?.(1, '上传 A/B Owned Guide')
+  const uploadedReferences = options.snapshot.multiA
+    ? await Promise.all(options.snapshot.multiA.references.map(async (reference, index) => {
+        const source = options.referenceBlobs?.find(item => item.unitId === reference.unitId)
+        if (!source) throw new Error('双 A 参考音频缺失')
+        return { unitId: reference.unitId, ...(await uploadTempWav(`render_${jobId}_v5p_a${index}`, source.blob)) }
+      })) : []
   const [referenceUpload, targetUpload] = await Promise.all([
-    uploadTempWav(`render_${jobId}_v5p_a`, options.referenceBlob),
+    options.snapshot.multiA
+      ? Promise.resolve(uploadedReferences.find(item => item.unitId === options.snapshot.reference.unitId)!)
+      : uploadTempWav(`render_${jobId}_v5p_a`, options.referenceBlob),
     uploadTempWav(`render_${jobId}_v5p_b`, options.targetBlob),
   ])
-  const presetId = options.presetId ?? 'V5P_40K_EMA'
+  const presetId = options.presetId ?? V5P_DEFAULT_MODEL
   const request = {
     jobId,
     presetId,
     referenceWav: referenceUpload.path,
+    ...(options.snapshot.multiA ? { referenceWavs: uploadedReferences.map(({ unitId, path }) => ({ unitId, path })) } : {}),
     targetWav: targetUpload.path,
     snapshot: options.snapshot,
     steps: options.steps ?? 32,

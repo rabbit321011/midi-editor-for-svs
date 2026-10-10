@@ -1,4 +1,5 @@
 import express from 'express'
+import { installDbSearchRoutes } from './services/db-search.service.js'
 import cors from 'cors'
 import fs from 'fs'
 import path from 'path'
@@ -67,6 +68,7 @@ import {
 const app = express()
 app.use(cors())
 app.use(express.json({ limit: '500mb' }))
+installDbSearchRoutes(app)
 const uiPreferences = new UiPreferencesRepository()
 app.get('/api/ui-preferences', (_req, res) => {
   try { res.json(uiPreferences.read()) }
@@ -258,6 +260,7 @@ app.post('/api/gpu/policy/estimate', async (req, res) => {
     const modelId = String(req.body?.modelId || '')
     const durationSeconds = Number(req.body?.durationSeconds)
     const guidanceMode = req.body?.guidanceMode === 'three-way' ? 'three-way' : 'unified'
+    const referenceCount = Number(req.body?.referenceCount ?? 1)
     if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) throw new Error('durationSeconds 无效')
     res.json({
       ok: true,
@@ -268,7 +271,7 @@ app.post('/api/gpu/policy/estimate', async (req, res) => {
         ...readSvsRuntimeStatus(),
         ...readAnalysisRuntimeStatus(),
       ],
-      estimate: estimateGpuMemory(modelId, durationSeconds, guidanceMode),
+      estimate: estimateGpuMemory(modelId, durationSeconds, guidanceMode, referenceCount),
     })
   } catch (error: any) {
     res.status(400).json({ ok: false, reason: error?.message || String(error) })

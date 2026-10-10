@@ -236,13 +236,24 @@ export type V5PGuidance =
       audio: number
       text: number
       midi: number
-      formula: 'audio-text-midi-telescoping.v1'
+      formula: 'audio-text-midi-telescoping.v1' | 'audio-text-midi-independent.v1'
     }
 
 export interface V5PSamplingSettings {
   guidance: V5PGuidance
   steps: number
   seed: number
+}
+
+export interface TakeLoudnessAdjustment {
+  guideSHA256: string
+  outputSHA256: string
+  gain: number
+  guideRms: number
+  sourceRms: number
+  sourcePeak: number
+  sampleCount: number
+  forcedClipping: boolean
 }
 
 export interface SynthesisTake {
@@ -262,12 +273,16 @@ export interface SynthesisTake {
   checkpointSHA256: string
   vaeSHA256: string
   decoderSHA256?: string
+  baseCheckpointSHA256?: string
+  loraWeightSource?: 'ema'
   adapterSHA256: string
   seed: number
   samplingSettings?: V5PSamplingSettings
   createdAt: string
   completedAt?: string
   error?: string
+  loudness?: TakeLoudnessAdjustment
+  referenceSources?: Array<{ unitId: NodeId; unitRevision: number; audioCfg: number; guideSHA256: string }>
 }
 
 export interface SynthesisUnitObjectNode extends BaseTreeNode {
@@ -281,10 +296,13 @@ export interface SynthesisUnitObjectNode extends BaseTreeNode {
     hTokenTrack: SynthesisHTokenTrack
     midiPTokenTrack: SynthesisMidiPTokenTrack
     reference: SynthesisReferenceBinding | null
+    multiReference?: { enabled: boolean; secondaryUnitId: NodeId | null; secondaryCfg: number;
+      additionalReferences?: Array<{ unitId: NodeId; cfg: number }> }
     presetId?: V5PModelId
     samplingSettings?: V5PSamplingSettings
     unitRevision: number
     takes: SynthesisTake[]
+    takeLoudnessAligned?: boolean
     activeTakeId: string | null
     timelineTrackId: TrackId | null
     defaultTimelineStart: number | null

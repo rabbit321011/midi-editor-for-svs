@@ -16,9 +16,50 @@ import {
   moveKanaSegmentBoundary,
   updateKanaUnit,
   updateSegmentObject,
+  createKanaAtFrame,
+  removeSynthesisTake,
 } from './synthesisTrackTransactions'
 
 describe('SynthesisUnit track transactions', () => {
+  it('creates one-frame あ on empty Kana space without changing other tracks', () => {
+    const unit = fixtureUnit()
+    const before = structuredClone({ segment: unit.synthesisUnit.segmentTrack,
+      h: unit.synthesisUnit.hTokenTrack, midi: unit.synthesisUnit.midiPTokenTrack })
+    const created = createKanaAtFrame(unit, 5)
+    expect(created).toMatchObject({ kana: 'あ', romaji: 'a', startFrame: 5, endFrameExclusive: 6, origin: 'user' })
+    expect(unit.synthesisUnit.kanaTrack.units).toContainEqual(created)
+    expect({ segment: unit.synthesisUnit.segmentTrack, h: unit.synthesisUnit.hTokenTrack, midi: unit.synthesisUnit.midiPTokenTrack }).toEqual(before)
+    for (const frame of [5, -1, 16]) {
+      const snapshot = structuredClone(unit)
+      expect(() => createKanaAtFrame(unit, frame)).toThrow()
+      expect(unit).toEqual(snapshot)
+    }
+    unit.synthesisUnit.kanaTrack.boundaries.push({ id: 'seg', frame: 7, kind: 'SEG', origin: 'user' })
+    expect(() => createKanaAtFrame(unit, 7)).toThrow('已有 Kana 或 SEG')
+  })
+
+  it('removes a Take and chooses another ready Take without changing model controls or output assets', () => {
+    const unit = fixtureUnit()
+    const base = {
+      targetUnitRevision: 1, referenceUnitId: 'ref', referenceUnitRevision: 1,
+      presetId: 'V5PgO_8K', checkpointSHA256: 'a'.repeat(64), vaeSHA256: 'b'.repeat(64),
+      adapterSHA256: 'c'.repeat(64), seed: 42, createdAt: '2026-10-05T00:00:00Z',
+    }
+    unit.synthesisUnit.takes = [
+      { ...base, id: 'a', name: 'A', status: 'ready', outputAssetId: 'asset:a' },
+      { ...base, id: 'b', name: 'B', status: 'ready', outputAssetId: 'asset:b' },
+      { ...base, id: 'running', name: 'Running', status: 'running' },
+    ]
+    unit.synthesisUnit.activeTakeId = 'b'
+    removeSynthesisTake(unit, 'b')
+    expect(unit.synthesisUnit.activeTakeId).toBe('a')
+    expect(unit.synthesisUnit.takes.map(take => take.id)).toEqual(['a', 'running'])
+    const snapshot = structuredClone(unit)
+    expect(() => removeSynthesisTake(unit, 'running')).toThrow('不能删除')
+    expect(unit).toEqual(snapshot)
+    removeSynthesisTake(unit, 'a')
+    expect(unit.synthesisUnit.activeTakeId).toBeNull()
+  })
   it('transposes selected note heads and FLOW together in one revision without changing boundaries', () => {
     const unit = fixtureUnit()
     replaceMidiPTrack(unit, { operation: 'GAME', origin: 'game', classes: [

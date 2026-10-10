@@ -1,5 +1,6 @@
 {
   "name": "aisvc-midi-web",
+  "version": "0.1.1-pre",
   "private": true,
   "license": "MIT",
   "scripts": {

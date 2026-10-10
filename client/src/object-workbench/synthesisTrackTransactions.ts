@@ -585,6 +585,35 @@ export function deleteKanaUnit(unit: SynthesisUnitObjectNode, unitId: string) {
   touchUnit(unit)
 }
 
+export function createKanaAtFrame(unit: SynthesisUnitObjectNode, frame: number) {
+  const track = unit.synthesisUnit.kanaTrack
+  validateRange(unit, frame, frame + 1)
+  if (track.units.some(item => item.startFrame <= frame && frame < item.endFrameExclusive)
+    || track.boundaries.some(item => item.frame === frame)) throw new Error('该 frame 已有 Kana 或 SEG')
+  const kana: SynthesisKanaUnit = {
+    id: `kana:user:${crypto.randomUUID()}`, kana: 'あ', romaji: 'a',
+    startFrame: frame, endFrameExclusive: frame + 1, origin: 'user',
+  }
+  replaceKanaTrackRange(unit, {
+    operation: 'create Kana', origin: 'user', startFrame: frame, endFrameExclusive: frame + 1,
+    units: [kana], boundaries: [],
+  })
+  return kana
+}
+
+export function removeSynthesisTake(unit: SynthesisUnitObjectNode, takeId: string) {
+  const synthesis = unit.synthesisUnit
+  const take = synthesis.takes.find(item => item.id === takeId)
+  if (!take) throw new Error('Take 不存在')
+  if (take.status === 'running' || take.status === 'queued') throw new Error('不能删除运行中或排队中的 Take')
+  synthesis.takes = synthesis.takes.filter(item => item.id !== takeId)
+  if (synthesis.activeTakeId === takeId) {
+    synthesis.activeTakeId = [...synthesis.takes].reverse().find(item => item.status === 'ready')?.id ?? null
+  }
+  // Exported audio and snapshot undo can still own the output asset.
+  synthesis.updatedAt = new Date().toISOString()
+}
+
 export function moveKanaSharedBoundary(
   unit: SynthesisUnitObjectNode,
   request: MoveKanaSharedBoundaryRequest,

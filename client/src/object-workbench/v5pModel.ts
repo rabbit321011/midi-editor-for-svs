@@ -1,4 +1,4 @@
-export const V5P_MODEL_IDS = ['V5P_40K_EMA', 'V5Pg_20K', 'V5PgO_8K', 'V5PgOV_300K_EMA'] as const
+export const V5P_MODEL_IDS = ['V5P_40K_EMA', 'V5Pg_20K', 'V5PgO_8K', 'V5PgOV_300K_EMA', 'V5F_F1_3K_EMA', 'V5F_F1_6K_EMA'] as const
 
 export type V5PModelId = typeof V5P_MODEL_IDS[number]
 
@@ -11,8 +11,10 @@ export const V5P_MODEL_META: Record<V5PModelId, {
   decoderSHA256?: string
   adapterSHA256: string
   supportsThreeWayCfg: boolean
+  hidden?: boolean
 }> = {
   V5P_40K_EMA: {
+    hidden: true,
     label: 'V5-P 40K EMA',
     checkpointSHA256: '3a532f5bd5965dff7d011996b7ca72d7884c5494a2d44d6c28b0bab21bace96c',
     vaeSHA256: 'dc2c4a8ec9731594951a27eff4a188a89b82859649c341c51d050101d1ce0b39',
@@ -20,6 +22,7 @@ export const V5P_MODEL_META: Record<V5PModelId, {
     supportsThreeWayCfg: true,
   },
   V5Pg_20K: {
+    hidden: true,
     label: 'V5-Pg 20K',
     checkpointSHA256: '36c424a6c4e1afabf9e1d7d29a343b4d6816e869297b021e05001b9cf1d2143f',
     vaeSHA256: 'f18aeecacc04173cd2ea73bbdf8edae9e976d18e4ca050c38e2723281c5cba85',
@@ -38,6 +41,20 @@ export const V5P_MODEL_META: Record<V5PModelId, {
     checkpointSHA256: '6882e0be20ca32a0e2dff9619efa47612ed4ca33f0d4cbc78d1de3da8023d6cc',
     vaeSHA256: 'f18aeecacc04173cd2ea73bbdf8edae9e976d18e4ca050c38e2723281c5cba85',
     decoderSHA256: 'a1755fbde268039163809e884fd8d15849dae9c415fef4714c87a838abe842cb',
+    adapterSHA256: 'a61f6c9987b718555375b92ac4395384085d3f03c016d8cbb961f19f8ea7db38',
+    supportsThreeWayCfg: true,
+  },
+  V5F_F1_3K_EMA: {
+    label: 'V5-F F1 3K EMA',
+    checkpointSHA256: '90d9eb27e730b796d9051046de1bb8c4e3f9993b97b3758bc31c03faaa596f23',
+    vaeSHA256: 'f18aeecacc04173cd2ea73bbdf8edae9e976d18e4ca050c38e2723281c5cba85',
+    adapterSHA256: 'a61f6c9987b718555375b92ac4395384085d3f03c016d8cbb961f19f8ea7db38',
+    supportsThreeWayCfg: true,
+  },
+  V5F_F1_6K_EMA: {
+    label: 'V5-F F1 6K EMA',
+    checkpointSHA256: '0b22d3eeeb6b83da70909c5ffb29a5b924707d3cadbddbf8d8f872c46a56622c',
+    vaeSHA256: 'f18aeecacc04173cd2ea73bbdf8edae9e976d18e4ca050c38e2723281c5cba85',
     adapterSHA256: 'a61f6c9987b718555375b92ac4395384085d3f03c016d8cbb961f19f8ea7db38',
     supportsThreeWayCfg: true,
   },

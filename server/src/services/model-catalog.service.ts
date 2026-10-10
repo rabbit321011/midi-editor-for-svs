@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { getV5PDirectPreset } from './v5p-preset.js'
 
 const PROJECT_ROOT = 'E:/AIscene/AISVC-midi-web'
 const SINGER_ROOT = 'E:/AIscene/YingMusic_Singer_Plus'
@@ -12,9 +13,10 @@ const V5PGOV_DECODER = 'E:/MyProject/ToLinuxServer/deliverables/V5PgOV_300K_EMA/
 const MANAGED_SVS_IDS = new Set(['V4Hg_10k', 'V4fg_10k'])
 
 export type CatalogFamily = 'svs' | 'analysis' | 'svc' | 'msst'
-export type CatalogEngine = 't1' | 'v4h_phone_pul' | 'v5p_direct' | 'game' | 'some' | 'whisper' | 'sofa' | 'svc' | 'msst'
+export type CatalogEngine = 't1' | 'v4h_phone_pul' | 'v5p_direct' | 'v5f_lora' | 'game' | 'some' | 'whisper' | 'sofa' | 'svc' | 'msst'
 
 export interface ModelCatalogEntry {
+  hidden?: boolean
   id: string
   family: CatalogFamily
   engine: CatalogEngine
@@ -23,6 +25,7 @@ export interface ModelCatalogEntry {
   runtimeState: 'configured' | 'unavailable'
   capabilities: string[]
   vramProfile?: {
+    estimated?: boolean
     device?: string
     steps?: number
     residentMiB?: number
@@ -101,6 +104,26 @@ export function getModelCatalog(): ModelCatalogEntry[] {
     capabilities: ['synthesis-unit', 'direct-control', 'midi-p', 'h-token', 'three-way-cfg'],
     vramProfile: readVramProfile('V5PgOV_300K_EMA', 'V5P_40K_EMA'),
   })
+  for (const entry of entries) {
+    if (entry.id.startsWith('V5P') && entry.id !== 'V5PgO_8K') entry.hidden = true
+  }
+  for (const id of ['V5F_F1_3K_EMA', 'V5F_F1_6K_EMA']) {
+    const preset = getV5PDirectPreset(id)
+    entries.push({
+      id, family: 'svs', engine: 'v5f_lora', checkpoint: preset.checkpoint,
+      vaeCheckpoint: preset.vaeCheckpoint,
+      runtimeState: [preset.checkpoint, preset.baseCheckpoint, preset.vaeCheckpoint, preset.vaeConfig,
+        preset.f1Support, preset.f1Loader].every(file => file && fs.existsSync(file)) ? 'configured' : 'unavailable',
+      capabilities: ['synthesis-unit', 'direct-control', 'midi-p', 'h-token', 'three-way-cfg', 'dit-encoder-decoder-lora'],
+      // Until measured, reserve conservatively above the PgO base rather than
+      // presenting a base-model measurement as an F-1 measurement.
+      vramProfile: readVramProfile(id) ?? {
+        estimated: true, device: 'cuda:0', residentMiB: readResidentMiB(id) ?? 3072,
+        peakDeltaMiB: 8192, sampleSeconds: 60, steps: 32,
+        samples: [{ seconds: 60, peakDeltaMiB: 8192 }],
+      },
+    })
+  }
   entries.push(
     { id: 'GAME-1.0-medium', family: 'analysis', engine: 'game', runtimeState: 'configured', capabilities: ['midi-p'], vramProfile: readVramProfile('GAME-1.0-medium') },
     {

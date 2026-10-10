@@ -20,14 +20,17 @@ export interface GpuEstimate {
   requiredIfUnloadedMiB: number
   guidanceMode: 'unified' | 'three-way'
   estimatedTimeFactor: number
-  profilePolicy: 'measured' | 'sequential-branch-peak'
+  referenceCount: number
+  profilePolicy: 'measured' | 'sequential-branch-peak' | 'conservative-unmeasured'
 }
 
 export function estimateGpuMemory(
   modelId: string,
   durationSeconds: number,
   guidanceMode: 'unified' | 'three-way' = 'unified',
+  referenceCount = 1,
 ): GpuEstimate {
+  if (!Number.isInteger(referenceCount) || referenceCount < 1 || referenceCount > 16) throw new Error('referenceCount 无效')
   const model = getModelCatalog().find(item => item.id === modelId)
   if (!model?.vramProfile) throw new Error(`${modelId} 尚未标定显存`)
   const samples = [...(model.vramProfile.samples ?? [])].sort((left, right) => left.seconds - right.seconds)
@@ -49,8 +52,10 @@ export function estimateGpuMemory(
     requiredIfLoadedMiB: inferenceDeltaMiB,
     requiredIfUnloadedMiB: inferenceDeltaMiB + (residentMiB ?? 0),
     guidanceMode,
-    estimatedTimeFactor: guidanceMode === 'three-way' ? 2 : 1,
-    profilePolicy: guidanceMode === 'three-way' ? 'sequential-branch-peak' : 'measured',
+    referenceCount,
+    estimatedTimeFactor: (guidanceMode === 'three-way' ? 2 : 1) * referenceCount,
+    profilePolicy: model.vramProfile.estimated ? 'conservative-unmeasured'
+      : guidanceMode === 'three-way' ? 'sequential-branch-peak' : 'measured',
   }
 }
 

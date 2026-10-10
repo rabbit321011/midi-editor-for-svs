@@ -93,7 +93,7 @@ const request: SynthesisDirectControlRequest = {
   targetWav,
   snapshot,
   steps,
-  cfg: 1,
+  cfg: Number(process.argv[5] ?? 1),
   seed: 42,
   device: 'cuda:0',
 }

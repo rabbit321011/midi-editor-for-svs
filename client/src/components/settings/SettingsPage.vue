@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
+import { useDbSearchStore } from '@/stores/dbSearch'
 import { NButton, NInput, NInputNumber, NSelect, NSlider, NSwitch, NSpace } from 'naive-ui'
 import { useProjectStore } from '@/stores/project'
 import { useSvcConfigStore } from '@/stores/svcConfig'
@@ -8,6 +10,8 @@ import { MIDI_INSTRUMENT_OPTIONS } from '@/utils/midiInstrument'
 const uiSettings = useUiSettingsStore()
 const project = useProjectStore()
 const svcConfig = useSvcConfigStore()
+const db = useDbSearchStore()
+onMounted(() => db.loadSettings())
 
 const themeOptions: Array<{ label: string; value: WorkbenchTheme }> = [
   { label: 'Light', value: 'light' },
@@ -95,6 +99,22 @@ function readFileAsDataUrl(file: File): Promise<string> {
         <label>中栏毛玻璃</label>
         <n-switch v-model:value="uiSettings.settings.centerGlassEnabled" />
       </div>
+    </section>
+
+    <section class="settings-section">
+      <h2>DB 音频检索</h2>
+      <div class="settings-grid">
+        <label>向量库路径</label>
+        <n-input v-model:value="db.settings.vectorLibraryPath" size="small" :disabled="db.busySettings" />
+        <label>音频库路径</label>
+        <n-input v-model:value="db.settings.audioLibraryPath" size="small" :disabled="db.busySettings" />
+        <span />
+        <n-space>
+          <n-button size="small" :disabled="db.busySettings" @click="db.saveSettings">保存</n-button>
+          <n-button size="small" :disabled="db.busySettings || !db.settingsLoaded" @click="db.checkSettings">检查已保存路径</n-button>
+        </n-space>
+      </div>
+      <div class="settings-error" role="status">{{ db.settingsMessage }}</div>
     </section>
 
     <section class="settings-section">

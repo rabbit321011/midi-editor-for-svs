@@ -6,6 +6,7 @@ import gc
 import hashlib
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import sys
@@ -82,6 +83,8 @@ def require_number(value, label, minimum=None, maximum=None):
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{label} must be a number")
     value = float(value)
+    if not math.isfinite(value):
+        raise ValueError(f"{label} must be finite")
     if minimum is not None and value < minimum:
         raise ValueError(f"{label} is outside its contract")
     if maximum is not None and value > maximum:
@@ -224,6 +227,20 @@ def validate_job(job, direct_control):
     steps = require_integer(render.get("steps"), "sampling steps", 1, 256)
     seed = require_integer(render.get("seed"), "sampling seed", 0, 0xFFFFFFFF)
     guidance = validate_guidance(render.get("guidance"), render.get("cfg"))
+    multi_references = None
+    independent = guidance.get("formula") == "audio-text-midi-independent.v1"
+    if independent and job.get("preset", {}).get("id") != "V5PgO_8K":
+        raise ValueError("independent CFG is only supported by PgO")
+    if independent:
+        import pgo_guidance
+        if require_resource(job["resources"], "pgoGuidance") != Path(pgo_guidance.__file__).resolve():
+            raise ValueError("different PgO guidance implementation loaded")
+    if snapshot.get("multiA") is not None:
+        if not independent:
+            raise ValueError("dual A requires independent PgO CFG")
+        multi_references = pgo_guidance.validate_multi(snapshot, inputs, guidance, direct_control)
+    elif "references" in inputs:
+        raise ValueError("single A job contains extra audio")
     cfg = guidance["cfg"] if guidance["mode"] == "unified" else 0.0
     device = str(render.get("device", ""))
     if device != "cpu" and not device.startswith("cuda:"):
@@ -244,6 +261,7 @@ def validate_job(job, direct_control):
         "guidance": guidance,
         "seed": seed,
         "device": device,
+        "multiReferences": multi_references,
     }
 
 
@@ -258,14 +276,14 @@ def validate_guidance(value, legacy_cfg):
         }
     if guidance.get("mode") != "three-way":
         raise ValueError("unsupported guidance mode")
-    if guidance.get("formula") != "audio-text-midi-telescoping.v1":
+    if guidance.get("formula") not in {"audio-text-midi-telescoping.v1", "audio-text-midi-independent.v1"}:
         raise ValueError("unsupported 3CFG formula")
     return {
         "mode": "three-way",
         "audio": require_number(guidance.get("audio"), "guidance.audio", -1, 10),
         "text": require_number(guidance.get("text"), "guidance.text", -1, 10),
         "midi": require_number(guidance.get("midi"), "guidance.midi", -1, 10),
-        "formula": "audio-text-midi-telescoping.v1",
+        "formula": guidance["formula"],
     }
 
 
@@ -440,6 +458,22 @@ def training_contract(checkpoint_schema):
 def build_model(checkpoint, model_config, vae_config, vae_checkpoint, singer_root,
                 preset, resources, device, vae_decoder_checkpoint=None):
     import torch
+
+    if preset["id"] in {"V5F_F1_3K_EMA", "V5F_F1_6K_EMA"}:
+        import f1_runtime
+        if vae_decoder_checkpoint is not None:
+            raise ValueError("F-1 cannot be stacked on a V decoder")
+        loader = require_resource(resources, "f1Loader")
+        if loader != Path(f1_runtime.__file__).resolve():
+            raise ValueError("F-1 loaded a different loader implementation")
+        base = require_resource(resources, "baseCheckpoint")
+        support = require_resource(resources, "f1Support")
+        if resources["baseCheckpoint"]["sha256"] != f1_runtime.BASE_SHA256 or resources["vaeCheckpoint"]["sha256"] != f1_runtime.VAE_SHA256:
+            raise ValueError("F-1 base hash identity mismatch")
+        policy, vae = f1_runtime.build_model(
+            checkpoint, base, model_config, vae_config, vae_checkpoint, preset, support, device)
+        emit("loaded_checkpoint", device=device, f1=policy._f1_adapter_audit)
+        return policy, vae
 
     if not hasattr(torch, "load_orig"):
         torch.load_orig = torch.load
@@ -623,6 +657,10 @@ def sample_with_guidance(policy, sample_kwargs, guidance):
             cfg_strength=1.0 if guidance["cfg"] < 0 else guidance["cfg"],
             guidance_scale=guidance["cfg"],
         )
+    if guidance.get("formula") == "audio-text-midi-independent.v1":
+        from pgo_guidance import independent_cfg
+        with independent_cfg(policy, guidance):
+            return policy.sample(**sample_kwargs, cfg_strength=1.0, guidance_scale=1.0)
     with ThreeWayCFG(policy, guidance):
         # Nonzero cfg_strength selects the standard CFG path; the wrapper replaces
         # its packed two-branch forward with the four sequential training branches.
@@ -631,6 +669,25 @@ def sample_with_guidance(policy, sample_kwargs, guidance):
 
 def synthesize(policy, vae, reference_audio, target_audio, validated):
     import torch
+
+    if hasattr(policy, "_f1_adapter_audit"):
+        import f1_runtime
+        return f1_runtime.synthesize(
+            policy, vae, reference_audio, target_audio, validated,
+            types.SimpleNamespace(emit=emit, build_control_tensors=build_control_tensors))
+
+    if validated.get("multiReferences"):
+        from pgo_guidance import synthesize_multi
+        return synthesize_multi(
+            policy, vae, validated, types.SimpleNamespace(
+                emit=emit, load_audio=load_audio, tensor_sha256=tensor_sha256,
+                build_control_tensors=build_control_tensors))
+    if validated["guidance"].get("formula") == "audio-text-midi-independent.v1":
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.backends.cudnn.allow_tf32 = False
+        torch.manual_seed(validated["seed"])
+        if validated["device"].startswith("cuda:"):
+            torch.cuda.manual_seed_all(validated["seed"])
 
     device = validated["device"]
     frame_map = validated["frameMap"]
@@ -720,8 +777,11 @@ def save_result(output_dir, job, validated, audio, audit, resource_hashes, start
     wav_path = output_dir / "take.wav"
     audit_path = output_dir / "audit.json"
     result_path = output_dir / "result.json"
+    samples = audio.numpy()
+    sample_count = int(audio.shape[-1])
     sf.write(
-        str(wav_path), audio.numpy().reshape(-1, 1), SAMPLE_RATE, subtype="PCM_16"
+        str(wav_path), samples.T if audio.ndim == 2 else samples.reshape(-1, 1), SAMPLE_RATE,
+        subtype="FLOAT" if "f1" in audit or "multiReference" in audit else "PCM_16"
     )
     output_sha = sha256_file(wav_path)
     completed_at = time.time()
@@ -755,12 +815,14 @@ def save_result(output_dir, job, validated, audio, audit, resource_hashes, start
         "outputWav": str(wav_path.resolve()),
         "outputSHA256": output_sha,
         "sampleRate": SAMPLE_RATE,
-        "sampleCount": int(audio.numel()),
-        "duration": int(audio.numel()) / SAMPLE_RATE,
+        "sampleCount": sample_count,
+        "duration": sample_count / SAMPLE_RATE,
         "auditFile": str(audit_path.resolve()),
         "presetId": job["preset"]["id"],
         "checkpointSHA256": resource_hashes["checkpoint"],
         "vaeSHA256": resource_hashes["vaeCheckpoint"],
+        **({"baseCheckpointSHA256": resource_hashes["baseCheckpoint"], "loraWeightSource": "ema"}
+           if "baseCheckpoint" in resource_hashes else {}),
         **({"decoderSHA256": resource_hashes["vaeDecoderCheckpoint"]}
            if "vaeDecoderCheckpoint" in resource_hashes else {}),
         "adapterSHA256": resource_hashes["directControlAdapter"],
@@ -770,6 +832,10 @@ def save_result(output_dir, job, validated, audio, audit, resource_hashes, start
             "steps": validated["steps"],
             "seed": validated["seed"],
         },
+        **({"referenceSources": [
+            {key: source[key] for key in ("unitId", "unitRevision", "audioCfg", "guideSHA256")}
+            for source in audit["multiReference"]["sources"]
+        ]} if "multiReference" in audit else {}),
     }
     result_path.write_text(
         json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"

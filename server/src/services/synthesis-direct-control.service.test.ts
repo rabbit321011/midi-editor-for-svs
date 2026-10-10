@@ -154,6 +154,93 @@ test('V5PgOV freezes the EMA decoder as a separate hash-locked resource', () => 
   assert.match(manifest.resources.vaeDecoderCheckpoint?.path ?? '', /V5PgOV_300K_EMA_decoder\.pt$/)
 })
 
+test('F1 manifests bind all three adapters to the original PgO/VAE bases', () => {
+  for (const presetId of ['V5F_F1_3K_EMA', 'V5F_F1_6K_EMA']) {
+    const request = fixtureRequest()
+    request.presetId = presetId
+    const preflight = validateSynthesisDirectControlRequest(request)
+    const resourceSHA256 = Object.fromEntries([
+      'checkpoint', 'modelConfig', 'vaeConfig', 'vaeCheckpoint', 'placement',
+      'directControlAdapter', 'runner', 'midi_p_v4ph.py', 'baseCheckpoint', 'f1Support', 'f1Loader',
+    ].map(key => [key, 'a'.repeat(64)]))
+    const manifest = buildV5PDirectJobManifest(request, { ...preflight, resourceSHA256 })
+    assert.equal(manifest.preset.id, presetId)
+    assert.equal(manifest.preset.weightSource, 'ema')
+    assert.equal(manifest.preset.checkpointSchema, 'f1-adapter-checkpoint-v1')
+    assert.match(manifest.resources.baseCheckpoint?.path ?? '', /V5PgO\/step_008000_final.pt$/)
+    assert.match(manifest.resources.f1Support?.path ?? '', /F1_workbench_support.zip$/)
+    assert.equal(manifest.resources.vaeDecoderCheckpoint, undefined)
+  }
+})
+
+function dualFixtureRequest(): any {
+  const request = fixtureRequest()
+  request.presetId = 'V5PgO_8K'
+  request.guidance = { mode: 'three-way', audio: -0.7, text: 0.6, midi: 0.5, formula: 'audio-text-midi-independent.v1' }
+  const first = structuredClone(request.snapshot.reference)
+  const second = structuredClone(first)
+  second.unitId = 'node:c'
+  second.guide = { ...second.guide, assetId: 'asset:c', sampleCount: 16384, frameCount: 8 }
+  second.text.denseHTokens = [46, 0, 0, 0, 0, 0, 0, 365]
+  second.text.hEvents[1].frame = 7
+  const map = buildV5PServerFrameMap(16384, 8192)
+  request.snapshot.reference = second
+  request.snapshot.frameMap = map
+  request.snapshot.hTransport = buildV5PServerHTransport(map, second.text.denseHTokens, request.snapshot.target.text.denseHTokens)
+  request.snapshot.midiPTransport = buildV5PServerMidiTransport(map, request.snapshot.target.midiP.classes)
+  request.snapshot.multiA = {
+    schema: 'aisvc.pgo-multi-a.v1', primaryUnitId: first.unitId,
+    references: [{ ...first, audioCfg: -0.7, leadingPadFrames: 4 }, { ...second, audioCfg: 0.2, leadingPadFrames: 0 }],
+  }
+  request.referenceWavs = [
+    { unitId: first.unitId, path: request.referenceWav },
+    { unitId: second.unitId, path: 'E:/AIscene/AISVC-midi-web/data/render_test_c/combined.wav' },
+  ]
+  request.referenceWav = request.referenceWavs[1].path
+  return request
+}
+
+test('dual A validates two hash-bound material sources and freezes both uploads', () => {
+  const request = dualFixtureRequest()
+  const preflight = validateSynthesisDirectControlRequest(request)
+  assert.equal(preflight.referenceWavs?.length, 2)
+  assert.equal(preflight.frameMap.bOffsetFrame, request.snapshot.frameMap.bOffsetFrame)
+  const hashes = Object.fromEntries(['checkpoint', 'modelConfig', 'vaeConfig', 'vaeCheckpoint', 'placement',
+    'directControlAdapter', 'runner', 'midi_p_v4ph.py', 'pgoGuidance'].map(key => [key, 'a'.repeat(64)]))
+  const manifest = buildV5PDirectJobManifest(request, { ...preflight, resourceSHA256: hashes })
+  assert.equal(manifest.inputs.references?.length, 2)
+  assert.equal(manifest.render.guidance.mode, 'three-way')
+  assert.match(manifest.resources.pgoGuidance?.path ?? '', /pgo_guidance.py$/)
+})
+
+test('multi A accepts a third separately uploaded reference', () => {
+  const request = dualFixtureRequest()
+  const third = structuredClone(request.snapshot.multiA.references[0])
+  third.unitId = 'node:d'
+  third.audioCfg = 0.4
+  request.snapshot.multiA.references.push(third)
+  request.referenceWavs.push({ unitId: third.unitId, path: 'E:/AIscene/AISVC-midi-web/data/render_test_d/combined.wav' })
+  expectThreeReference(request)
+})
+
+function expectThreeReference(request: any) {
+  const preflight = validateSynthesisDirectControlRequest(request)
+  assert.equal(preflight.referenceWavs?.length, 3)
+}
+
+test('dual A rejects offset, identity, CFG and model tampering', () => {
+  for (const fault of ['offset', 'duplicate', 'self', 'cfg', 'model', 'upload']) {
+    const request = dualFixtureRequest()
+    if (fault === 'offset') request.snapshot.multiA.references[0].leadingPadFrames++
+    if (fault === 'duplicate') request.snapshot.multiA.references[1].unitId = request.snapshot.multiA.references[0].unitId
+    if (fault === 'self') request.snapshot.multiA.references[1].unitId = request.snapshot.target.unitId
+    if (fault === 'cfg') request.snapshot.multiA.references[0].audioCfg = 0.9
+    if (fault === 'model') request.presetId = 'V5F_F1_6K_EMA'
+    if (fault === 'upload') request.referenceWavs[1].unitId = 'unexpected'
+    assert.throws(() => validateSynthesisDirectControlRequest(request), /./, fault)
+  }
+})
+
 function fixtureRequest(): any {
   const frameMap = buildV5PServerFrameMap(8_192, 8_192)
   const classes = [120, 121, 255, 122]

@@ -9,6 +9,49 @@ import { useHistoryStore } from './history'
 describe('SynthesisUnit object-tree integration', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
+  it('persists Take alignment separately from source assets and supports undo/redo', () => {
+    const objectTree = useObjectTreeStore()
+    const history = useHistoryStore()
+    const tree = createEmptyProjectObjectTree()
+    const unit = makeUnit('node:syn:loudness', 'Alignment')
+    unit.synthesisUnit.takes = [{
+      id: 'take:1', name: 'Take1', status: 'ready', outputAssetId: 'take-asset',
+      outputSHA256: 'b'.repeat(64), targetUnitRevision: 1, referenceUnitId: 'ref',
+      referenceUnitRevision: 1, presetId: 'V5PgO_8K', checkpointSHA256: 'c'.repeat(64),
+      vaeSHA256: 'd'.repeat(64), adapterSHA256: 'e'.repeat(64), seed: 42, createdAt: '2026-10-04T00:00:00Z',
+    }]
+    const workspace = tree.root.children.find(node => node.id === TOP_LEVEL_IDS.workspace)
+    if (!workspace || workspace.kind !== 'folder') throw new Error('workspace missing')
+    workspace.children.push(unit)
+    objectTree.loadObjectTree(tree)
+    const original = objectTree.snapshotTree()
+    const adjustment = {
+      guideSHA256: unit.synthesisUnit.guide.audioSHA256, outputSHA256: 'b'.repeat(64),
+      gain: 2, guideRms: 0.4, sourceRms: 0.2, sourcePeak: 0.9,
+      sampleCount: 4096, forcedClipping: true,
+    }
+    expect(objectTree.setSynthesisTakeLoudness(unit.id, true, [{ takeId: 'take:1', adjustment }])).toEqual({ ok: true })
+    const aligned = objectTree.snapshotTree()
+    history.push({ description: 'alignment', patches: [], inversePatches: [],
+      objectTree: { kind: 'snapshot', before: original, after: aligned } })
+    expect(objectTree.tree.assets).toEqual(original.assets)
+    expect(JSON.stringify(aligned)).toContain('"takeLoudnessAligned":true')
+    history.undo()
+    expect((objectTree.node(unit.id) as SynthesisUnitObjectNode).synthesisUnit.takeLoudnessAligned).toBeUndefined()
+    history.redo()
+    expect((objectTree.node(unit.id) as SynthesisUnitObjectNode).synthesisUnit.takes[0].loudness).toEqual(adjustment)
+    objectTree.loadObjectTree(JSON.parse(JSON.stringify(aligned)))
+    expect((objectTree.node(unit.id) as SynthesisUnitObjectNode).synthesisUnit.takeLoudnessAligned).toBe(true)
+    expect(objectTree.setSynthesisTakeLoudness(unit.id, false).ok).toBe(true)
+    expect((objectTree.node(unit.id) as SynthesisUnitObjectNode).synthesisUnit.takeLoudnessAligned).toBe(false)
+    const beforeBad = objectTree.snapshotTree()
+    expect(objectTree.setSynthesisTakeLoudness(unit.id, true, [
+      { takeId: 'take:1', adjustment },
+      { takeId: 'take:missing', adjustment },
+    ]).ok).toBe(false)
+    expect(objectTree.snapshotTree()).toEqual(beforeBad)
+  })
+
   it('copies an AudioObject into an independent Guide-only unit', async () => {
     const objectTree = useObjectTreeStore()
     const tracks = useTracksStore()

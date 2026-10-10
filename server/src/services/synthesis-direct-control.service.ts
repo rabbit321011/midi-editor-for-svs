@@ -17,6 +17,7 @@ export interface SynthesisDirectControlRequest {
   jobId: string
   presetId: V5PModelId
   referenceWav: string
+  referenceWavs?: Array<{ unitId: string; path: string }>
   targetWav: string
   snapshot: unknown
   steps?: number
@@ -28,7 +29,7 @@ export interface SynthesisDirectControlRequest {
 
 export type V5PGuidance =
   | { mode: 'unified'; cfg: number }
-  | { mode: 'three-way'; audio: number; text: number; midi: number; formula: 'audio-text-midi-telescoping.v1' }
+  | { mode: 'three-way'; audio: number; text: number; midi: number; formula: 'audio-text-midi-telescoping.v1' | 'audio-text-midi-independent.v1' }
 
 export interface SynthesisDirectControlPreflight {
   schema: 'aisvc.v5p-direct-preflight.v1'
@@ -37,6 +38,7 @@ export interface SynthesisDirectControlPreflight {
   snapshotSHA256: string
   frameMap: Record<string, any>
   referenceWav: string
+  referenceWavs?: Array<{ unitId: string; path: string }>
   targetWav: string
   render: {
     steps: number
@@ -61,9 +63,12 @@ export interface SynthesisDirectControlResult {
   checkpointSHA256: string
   vaeSHA256: string
   decoderSHA256?: string
+  baseCheckpointSHA256?: string
+  loraWeightSource?: 'ema'
   adapterSHA256: string
   seed: number
   samplingSettings: { guidance: V5PGuidance; steps: number; seed: number }
+  referenceSources?: Array<{ unitId: string; unitRevision: number; audioCfg: number; guideSHA256: string }>
 }
 
 interface DirectProcessEvent {
@@ -123,6 +128,11 @@ export function validateSynthesisDirectControlRequest(
 
   const steps = integer(req.steps ?? 32, 'steps', 1, 256)
   const guidance = validateGuidance(req.guidance, req.cfg)
+  if (guidance.mode === 'three-way' && guidance.formula === 'audio-text-midi-independent.v1' && req.presetId !== 'V5PgO_8K') {
+    throw new Error('独立 dropout 当前仅支持 PgO 8K')
+  }
+  const referenceWavs = snapshot.multiA ? validateMultiReferences(req, snapshot, guidance, targetGuide.sampleCount) : undefined
+  if (!snapshot.multiA && req.referenceWavs !== undefined) throw new Error('单 A 请求不能携带额外参考')
   if (guidance.mode === 'three-way' && !getV5PDirectPreset(req.presetId).supportsThreeWayCfg) {
     throw new Error(`${req.presetId} 不支持三路 CFG`)
   }
@@ -137,6 +147,7 @@ export function validateSynthesisDirectControlRequest(
     snapshotSHA256: sha256Text(canonicalJSON(snapshot)),
     frameMap: expectedFrameMap,
     referenceWav,
+    ...(referenceWavs ? { referenceWavs } : {}),
     targetWav,
     render: { steps, cfg, guidance, seed, device },
   }
@@ -149,14 +160,47 @@ function validateGuidance(value: unknown, legacyCfg?: number): V5PGuidance {
     return { mode: 'unified', cfg: finite(guidance.cfg, 'guidance.cfg', -1, 10) }
   }
   if (guidance.mode !== 'three-way') throw new Error('guidance mode 无效')
-  if (guidance.formula !== 'audio-text-midi-telescoping.v1') throw new Error('3CFG formula 无效')
+  if (!['audio-text-midi-telescoping.v1', 'audio-text-midi-independent.v1'].includes(guidance.formula)) throw new Error('3CFG formula 无效')
   return {
     mode: 'three-way',
     audio: finite(guidance.audio, 'guidance.audio', -1, 10),
     text: finite(guidance.text, 'guidance.text', -1, 10),
     midi: finite(guidance.midi, 'guidance.midi', -1, 10),
-    formula: 'audio-text-midi-telescoping.v1',
+    formula: guidance.formula,
   }
+}
+
+function validateMultiReferences(
+  req: SynthesisDirectControlRequest, snapshot: Record<string, any>, guidance: V5PGuidance, targetSamples: number,
+) {
+  const multi = record(snapshot.multiA, '双 A snapshot')
+  if (req.presetId !== 'V5PgO_8K' || guidance.mode !== 'three-way' || guidance.formula !== 'audio-text-midi-independent.v1') {
+    throw new Error('双 A 需要 PgO 8K 独立 dropout')
+  }
+  if (multi.schema !== 'aisvc.pgo-multi-a.v1' || !Array.isArray(multi.references) || multi.references.length < 2 || multi.references.length > 16) throw new Error('多 A 需要 2 到 16 个参考')
+  if (!Array.isArray(req.referenceWavs) || req.referenceWavs.length !== multi.references.length) throw new Error('多 A 上传音频数量不一致')
+  const ids = new Set<string>()
+  let longest: Record<string, any> | null = null
+  for (const [index, value] of multi.references.entries()) {
+    const source = record(value, `A${index + 1}`)
+    const id = nonempty(source.unitId, 'A unitId')
+    if (ids.has(id) || id === snapshot.target.unitId) throw new Error('双 A 存在重复或自身引用')
+    ids.add(id)
+    integer(source.unitRevision, 'A unitRevision', 0)
+    const guide = validateGuide(record(source.guide, 'A Guide'), 'A')
+    validateTextSnapshot(record(source.text, 'A Text'), guide.frameCount, 'A')
+    const cfg = finite(source.audioCfg, 'A CFG', -1, 10)
+    if (index === 0 && (id !== multi.primaryUnitId || cfg !== guidance.audio)) throw new Error('A1 CFG 或主参考不一致')
+    const native = buildV5PServerFrameMap(guide.sampleCount, targetSamples)
+    if (source.leadingPadFrames !== snapshot.frameMap.bOffsetFrame - native.bOffsetFrame) throw new Error('双 A 前补帧数不一致')
+    if (!longest || guide.sampleCount > longest.guide.sampleCount) longest = source
+  }
+  const basic = { unitId: longest!.unitId, unitRevision: longest!.unitRevision, guide: longest!.guide, text: longest!.text }
+  if (canonicalJSON(snapshot.reference) !== canonicalJSON(basic)) throw new Error('双 A 公共锚点不是最长参考')
+  const paths = req.referenceWavs.map(value => ({ unitId: nonempty(value.unitId, 'A audio unitId'), path: validateJobWavPath(value.path, 'A') }))
+  if (new Set(paths.map(value => value.unitId)).size !== multi.references.length || paths.some(value => !ids.has(value.unitId))) throw new Error('多 A 音频身份不一致')
+  if (paths.find(value => value.unitId === longest!.unitId)?.path !== validateJobWavPath(req.referenceWav, 'A')) throw new Error('双 A 最长参考音频不一致')
+  return paths
 }
 
 export async function verifySynthesisDirectControlResources(
@@ -179,6 +223,11 @@ export async function verifySynthesisDirectControlResources(
   )
   if (referenceWav.sampleCount !== referenceGuide.sampleCount) throw new Error('A Guide sampleCount 与 snapshot 不一致')
   if (targetWav.sampleCount !== targetGuide.sampleCount) throw new Error('B Guide sampleCount 与 snapshot 不一致')
+  for (const source of preflight.referenceWavs ?? []) {
+    const reference = snapshot.multiA.references.find((item: any) => item.unitId === source.unitId)
+    const audio = verifyOwnedGuideWav(source.path, reference.guide.audioSHA256, reference.guide.frameCount)
+    if (audio.sampleCount !== reference.guide.sampleCount) throw new Error('双 A 音频长度与 snapshot 不一致')
+  }
 
   const resources: Array<[string, string, string]> = [
     ['checkpoint', preset.checkpoint, preset.checkpointSHA256],
@@ -189,6 +238,10 @@ export async function verifySynthesisDirectControlResources(
   ]
   if (preset.vaeDecoderCheckpoint && preset.vaeDecoderCheckpointSHA256) {
     resources.push(['vaeDecoderCheckpoint', preset.vaeDecoderCheckpoint, preset.vaeDecoderCheckpointSHA256])
+  }
+  if (preset.baseCheckpoint && preset.baseCheckpointSHA256 && preset.f1Support && preset.f1SupportSHA256) {
+    resources.push(['baseCheckpoint', preset.baseCheckpoint, preset.baseCheckpointSHA256])
+    resources.push(['f1Support', preset.f1Support, preset.f1SupportSHA256])
   }
   for (const [name, expected] of Object.entries(preset.melodyHashes)) {
     resources.push([name, `${SINGER_ROOT}/src/YingMusicSinger/melody/${name}`, expected])
@@ -210,6 +263,8 @@ export async function verifySynthesisDirectControlResources(
   }
   resourceSHA256.directControlAdapter = await sha256FileCached(preset.directControlAdapter)
   resourceSHA256.runner = await sha256FileCached(preset.directRunner)
+  if (preset.id === 'V5PgO_8K') resourceSHA256.pgoGuidance = await sha256FileCached(`${PROJECT_ROOT}/server/scripts/pgo_guidance.py`)
+  if (preset.f1Loader) resourceSHA256.f1Loader = await sha256FileCached(preset.f1Loader)
   return { ...preflight, resourceSHA256 }
 }
 
@@ -241,6 +296,7 @@ export function buildV5PDirectJobManifest(
     inputs: {
       referenceWav: verified.referenceWav,
       targetWav: verified.targetWav,
+      ...(verified.referenceWavs ? { references: verified.referenceWavs.map(item => ({ unitId: item.unitId, wav: item.path })) } : {}),
     },
     render: verified.render,
     snapshotCanonical,
@@ -253,9 +309,17 @@ export function buildV5PDirectJobManifest(
       ...(preset.vaeDecoderCheckpoint ? {
         vaeDecoderCheckpoint: resource(preset.vaeDecoderCheckpoint, 'vaeDecoderCheckpoint'),
       } : {}),
+      ...(preset.baseCheckpoint && preset.f1Support && preset.f1Loader ? {
+        baseCheckpoint: resource(preset.baseCheckpoint, 'baseCheckpoint'),
+        f1Support: resource(preset.f1Support, 'f1Support'),
+        f1Loader: resource(preset.f1Loader, 'f1Loader'),
+      } : {}),
       placement: resource(preset.placement, 'placement'),
       directControlAdapter: resource(preset.directControlAdapter, 'directControlAdapter'),
       runner: resource(preset.directRunner, 'runner'),
+      ...(verified.resourceSHA256.pgoGuidance ? {
+        pgoGuidance: resource(`${PROJECT_ROOT}/server/scripts/pgo_guidance.py`, 'pgoGuidance'),
+      } : {}),
       midiPModule: resource(
         `${SINGER_ROOT}/src/YingMusicSinger/melody/midi_p_v4ph.py`,
         'midi_p_v4ph.py',
@@ -312,12 +376,21 @@ export async function runSynthesisDirectControl(
       ], onDirectEvent, { id: `v5p:${req.jobId}`, kind: 'svs', modelId: preset.id, device: verified.render.device })
     }
     const result = JSON.parse(fs.readFileSync(resultFile, 'utf-8')) as SynthesisDirectControlResult
+    const expectedSources = (req.snapshot as any).multiA?.references.map((source: any) => ({
+      unitId: source.unitId, unitRevision: source.unitRevision, audioCfg: source.audioCfg, guideSHA256: source.guide.audioSHA256,
+    }))
     if (
       result.schema !== 'aisvc.v5p-direct-result.v1'
       || result.jobId !== req.jobId
       || result.presetId !== req.presetId
       || result.snapshotSHA256 !== verified.snapshotSHA256
       || result.sampleRate !== 44100
+      || result.checkpointSHA256 !== preset.checkpointSHA256
+      || result.vaeSHA256 !== preset.vaeCheckpointSHA256
+      || result.adapterSHA256 !== verified.resourceSHA256.directControlAdapter
+      || (expectedSources && canonicalJSON(result.referenceSources) !== canonicalJSON(expectedSources))
+      || (preset.baseCheckpointSHA256 !== undefined
+        && (result.baseCheckpointSHA256 !== preset.baseCheckpointSHA256 || result.loraWeightSource !== 'ema'))
       || result.decoderSHA256 !== preset.vaeDecoderCheckpointSHA256
       || canonicalJSON(result.samplingSettings) !== canonicalJSON({
         guidance: verified.render.guidance,

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, watchEffect } from 'vue'
-import { darkTheme, NConfigProvider, NGlobalStyle, type GlobalThemeOverrides } from 'naive-ui'
+import { darkTheme, NConfigProvider, NGlobalStyle, NMessageProvider, type GlobalThemeOverrides } from 'naive-ui'
 import { useUiSettingsStore } from '@/stores/uiSettings'
 
 const uiSettings = useUiSettingsStore()
@@ -85,7 +85,9 @@ watchEffect(() => {
 <template>
   <NConfigProvider :theme="naiveTheme" :theme-overrides="naiveThemeOverrides">
     <NGlobalStyle />
-    <router-view />
+    <NMessageProvider placement="top">
+      <router-view />
+    </NMessageProvider>
   </NConfigProvider>
 </template>
 

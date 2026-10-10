@@ -12,7 +12,8 @@ const devices = computed(() => gpuRuntime.status?.gpus ?? [])
 const processes = computed(() => (gpuRuntime.status?.processes ?? [])
   .filter(item => item.status === 'running' || item.status === 'releasing'))
 const runtimes = computed(() => gpuRuntime.runtimes)
-const svsModels = computed(() => (gpuRuntime.status?.catalog ?? []).filter(item => item.family === 'svs'))
+const svsModels = computed(() => (gpuRuntime.status?.catalog ?? [])
+  .filter(item => item.family === 'svs' && (!item.hidden || item.id === 'V5PgOV_300K_EMA')))
 const analysisModels = computed(() => (gpuRuntime.status?.catalog ?? []).filter(item => item.family === 'analysis'))
 
 onMounted(() => {
@@ -93,6 +94,7 @@ function memoryLabel(mib?: number) {
 
 function engineLabel(engine: string) {
   if (engine === 'v5p_direct') return 'V5-P Direct Control'
+  if (engine === 'v5f_lora') return 'V5-F 三模块 LoRA'
   if (engine === 'v4h_phone_pul') return 'PH / PUL'
   if (engine === 't1') return 'T1'
   return engine
@@ -117,6 +119,7 @@ function runtimeResidentLabel(runtime: NonNullable<typeof gpuRuntime.runtimes>[n
 
 function profileLabel(profile: ModelCatalogItem['vramProfile']) {
   if (!profile) return '尚未标定'
+  if (profile.estimated) return '保守预算（峰值未标定）'
   const steps = profile.steps ? ` / ${profile.steps}步` : ''
   const curve = profile.samples?.length
     ? profile.samples.map(item => `${item.seconds}s ${((item.peakDeltaMiB ?? 0) / 1024).toFixed(1)}GB`).join(' · ')
@@ -205,7 +208,7 @@ function residentLabel(profile: ModelCatalogItem['vramProfile']) {
           <span class="runtime-kind">{{ profileLabel(model.vramProfile) }}</span>
           <span class="resident-badge">{{ residentLabel(model.vramProfile) }}</span>
           <n-button
-            v-if="['V5P_40K_EMA', 'V5Pg_20K', 'V5PgO_8K', 'V4Hg_10k', 'V4fg_10k', 'Whisper large-v3', 'SOFA Japanese', 'GAME-1.0-medium', 'OpenVPI-SOME'].includes(model.id)"
+            v-if="['V5PgO_8K', 'V5PgOV_300K_EMA', 'V5F_F1_3K_EMA', 'V5F_F1_6K_EMA', 'V4Hg_10k', 'V4fg_10k', 'Whisper large-v3', 'SOFA Japanese', 'GAME-1.0-medium', 'OpenVPI-SOME'].includes(model.id)"
             size="tiny"
             type="primary"
             ghost
@@ -215,7 +218,6 @@ function residentLabel(profile: ModelCatalogItem['vramProfile']) {
           >加载模型</n-button>
         </div>
       </div>
-      <p class="section-note">显存管理当前只管理 V5-P、V4Hg_10k 和 V4fg_10k；旧 SVS 面板的其他模型仍可运行，但不进入本页管理。</p>
     </section>
 
     <section class="page-section">

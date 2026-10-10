@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { createEmptyProjectObjectTree, TOP_LEVEL_IDS } from '@/object-workbench'
+import { createEmptyProjectObjectTree, createEmptySynthesisUnit, TOP_LEVEL_IDS } from '@/object-workbench'
 import type { AudioObjectNode, FolderNode, TextObjectNode, TrackFolderNode, TrackObjectNode } from '@/object-workbench'
 import { useObjectTreeStore } from './objectTree'
 import { useRenderPanelStore } from './renderPanel'
@@ -14,8 +14,8 @@ describe('right tool panel store', () => {
     expect(renderPanel.mode).toBe('whisper')
     renderPanel.setMode('msst')
     expect(renderPanel.mode).toBe('msst')
-    renderPanel.setMode('chat')
-    expect(renderPanel.mode).toBe('chat')
+    renderPanel.setMode('db')
+    expect(renderPanel.mode).toBe('db')
   })
 
   it('uses one local processing lock for asset-producing tools but releases it on completion', () => {
@@ -57,6 +57,32 @@ describe('right tool panel store', () => {
     expect(renderPanel.whisper.audio).toMatchObject({ kind: 'audioObject', id: 'node:workspace:audio' })
     expect(renderPanel.setSlotFromNode('msst.audio', 'node:workspace:audio')).toMatchObject({ ok: true })
     expect(renderPanel.msst.audio).toMatchObject({ kind: 'audioObject', id: 'node:workspace:audio' })
+  })
+
+  it('routes DB through shared slot actions, keeping SYN acceptance exclusive to DB', () => {
+    setActivePinia(createPinia())
+    const objectTree = useObjectTreeStore()
+    const renderPanel = useRenderPanelStore()
+    const tree = createEmptyProjectObjectTree()
+    const syn = createEmptySynthesisUnit({
+      id: 'syn', name: 'Guide SYN', defaultTimelineStart: null,
+      guide: { assetId: 'guide', audioSHA256: 'hash', sampleRate: 44100, channels: 1, sampleCount: 44100, duration: 1,
+        source: { sourceAudioObjectId: 'source', sourceAssetId: 'source', effectiveStartSample: 0, effectiveEndSampleExclusive: 44100, sourceTimelineStart: null, resolverManifest: '' } },
+    })
+    const reference = trackObjectNode('syn-track', syn.id)
+    workspace(tree).children.push(syn, audio('audio'), text('text'))
+    tracksRoot(tree).children.push(trackFolder('syn-track-folder', reference))
+    objectTree.loadObjectTree(tree)
+    expect(renderPanel.setSlotFromNode('db.audio', 'audio').ok).toBe(true)
+    expect(renderPanel.dbAudio).toMatchObject({ id: 'audio', kind: 'audioObject' })
+    expect(renderPanel.setSlotFromNode('db.audio', syn.id).ok).toBe(true)
+    expect(renderPanel.dbAudio).toMatchObject({ id: syn.id, kind: 'synthesisUnit' })
+    expect(renderPanel.setSlotFromNode('db.audio', reference.id).ok).toBe(true)
+    expect(renderPanel.setSlotFromNode('db.audio', 'text').ok).toBe(false)
+    expect(renderPanel.setSlotFromNode('whisper.audio', syn.id).ok).toBe(false)
+    expect(renderPanel.setSlotFromNode('msst.audio', reference.id).ok).toBe(false)
+    renderPanel.clearSlot('db.audio')
+    expect(renderPanel.dbAudio).toBeNull()
   })
 
   it('enables Whisper and MSST only when no local processing task is running', () => {

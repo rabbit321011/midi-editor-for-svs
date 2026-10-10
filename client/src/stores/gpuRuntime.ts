@@ -22,6 +22,7 @@ export interface GpuProcessStatus {
 }
 
 export interface ModelCatalogItem {
+  hidden?: boolean
   id: string
   family: 'svs' | 'analysis' | 'svc' | 'msst'
   engine: string
@@ -30,6 +31,7 @@ export interface ModelCatalogItem {
   runtimeState: 'configured' | 'unavailable'
   capabilities: string[]
   vramProfile?: {
+    estimated?: boolean
     device?: string
     steps?: number
     residentMiB?: number
@@ -66,7 +68,8 @@ export interface GpuPolicyEstimate {
   requiredIfUnloadedMiB: number
   guidanceMode?: 'unified' | 'three-way'
   estimatedTimeFactor?: number
-  profilePolicy?: 'measured' | 'sequential-branch-peak'
+  referenceCount?: number
+  profilePolicy?: 'measured' | 'sequential-branch-peak' | 'conservative-unmeasured'
 }
 
 export type CompositeRuntimeRoute = 'resident' | 'oneshot'
@@ -261,11 +264,12 @@ export const useGpuRuntimeStore = defineStore('gpuRuntime', () => {
     modelId: string,
     durationSeconds: number,
     guidanceMode: 'unified' | 'three-way' = 'unified',
+    referenceCount = 1,
   ) {
     const response = await fetch('/api/gpu/policy/estimate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ modelId, durationSeconds, guidanceMode }),
+      body: JSON.stringify({ modelId, durationSeconds, guidanceMode, referenceCount }),
     })
     const payload = await response.json()
     if (!response.ok || !payload.ok) throw new Error(payload.reason || '显存策略估算失败')
@@ -282,9 +286,10 @@ export const useGpuRuntimeStore = defineStore('gpuRuntime', () => {
     modelId: string,
     durationSeconds: number,
     guidanceMode: 'unified' | 'three-way' = 'unified',
+    referenceCount = 1,
   ) {
     await refresh()
-    const policy = await estimatePolicy(modelId, durationSeconds, guidanceMode)
+    const policy = await estimatePolicy(modelId, durationSeconds, guidanceMode, referenceCount)
     const runtime = runtimes.value.find(item => item.modelId === modelId
       && (item.state === 'ready' || item.state === 'busy'))
     if (runtime?.state === 'busy') {
@@ -305,7 +310,7 @@ export const useGpuRuntimeStore = defineStore('gpuRuntime', () => {
     }
     if (runtimeMode.value === 'auto') {
       for (const item of needed) await unloadRuntime(item.id)
-      const after = await estimatePolicy(modelId, durationSeconds, guidanceMode)
+      const after = await estimatePolicy(modelId, durationSeconds, guidanceMode, referenceCount)
       if (after.freeMiB < required) {
         return { ok: false as const, insufficient: true, policy, required, evictions: needed }
       }

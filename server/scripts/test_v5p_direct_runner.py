@@ -110,6 +110,28 @@ class V5PDirectRunnerTest(unittest.TestCase):
         self.assertEqual(validated["hTransport"]["tokens"][83], 46)
         self.assertEqual(validated["hTransport"]["tokens"][159], 365)
 
+    def test_validate_job_freezes_b_only_weights_on_the_joint_frame_map(self):
+        job = build_job()
+        snapshot = json.loads(job["snapshotCanonical"])
+        snapshot["target"]["text"]["hEvents"][0].update(id="b:phone", guidanceWeight=0.3)
+        job["snapshotCanonical"] = runner.canonical_json(snapshot)
+        job["snapshotSHA256"] = runner.sha256_text(job["snapshotCanonical"])
+        with self.assertRaisesRegex(ValueError, "require independent PgO"):
+            runner.validate_job(job, direct)
+        job["preset"]["id"] = "V5PgO_8K"
+        job["render"]["guidance"] = {
+            "mode": "three-way", "formula": "audio-text-midi-independent.v1",
+            "audio": 0.5, "text": 0.7, "midi": 0.5,
+        }
+        guidance_path = ROOT / "server/scripts/pgo_guidance.py"
+        job["resources"] = {"pgoGuidance": {"path": str(guidance_path), "sha256": runner.sha256_file(guidance_path)}}
+        validated = runner.validate_job(job, direct)
+        self.assertEqual(validated["hTokenWeights"], [{
+            "eventId": "b:phone", "localFrame": 8, "jointFrame": 83, "tokenId": 46, "weight": 0.3,
+        }])
+        self.assertEqual(validated["hTransport"], snapshot["hTransport"])
+        self.assertEqual(validated["hTransport"]["tokens"][83], 46)
+
     def test_validate_job_rejects_client_control_tampering(self):
         job = build_job()
         snapshot = json.loads(job["snapshotCanonical"])

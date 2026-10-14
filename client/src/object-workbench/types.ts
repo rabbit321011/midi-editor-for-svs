@@ -137,6 +137,7 @@ export interface SynthesisHTokenEvent {
   id: string
   frame: number
   tokenId: number
+  guidanceWeight?: number
   symbol?: string
   origin: 'segment-align' | 'kana-align' | 'imported' | 'user'
   generatedFrom?: SynthesisSourceRevisionRef

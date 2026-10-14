@@ -24,6 +24,7 @@ import {
   legacyProjectToObjectTree,
   removeNode,
   moveHTokenEvent as applyMoveHTokenEvent,
+  setHTokenGuidanceWeight as applySetHTokenGuidanceWeight,
   moveKanaSharedBoundary as applyMoveKanaSharedBoundary,
   moveKanaBoundary as applyMoveKanaBoundary,
   moveKanaUnit as applyMoveKanaUnit,
@@ -1766,6 +1767,17 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
     return { ok: true }
   }
 
+  function setSynthesisHTokenGuidanceWeight(unitId: NodeId, eventId: string, weight: number): { ok: boolean; reason?: string } {
+    const unit = index.value.nodes[unitId]
+    if (!unit || unit.kind !== 'synthesisUnit') return { ok: false, reason: '合成单元不存在' }
+    try {
+      applySetHTokenGuidanceWeight(unit, eventId, weight)
+      return { ok: true }
+    } catch (error: any) {
+      return { ok: false, reason: error?.message || 'H Token 权重修改失败' }
+    }
+  }
+
   function setSynthesisHTokenAtFrame(
     unitId: NodeId,
     frame: number,
@@ -2570,6 +2582,7 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
     addTextSegment,
     deleteTextSegment,
     setSynthesisHTokenAtFrame,
+    setSynthesisHTokenGuidanceWeight,
     fillSynthesisPulsesAfterFrame,
     clearSynthesisPulsesAfterFrame,
     replaceSynthesisSegmentTrack,

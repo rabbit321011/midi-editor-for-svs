@@ -17,6 +17,8 @@ describe('V5-P material snapshot', () => {
     target.synthesisUnit.midiPTokenTrack.classes[7] = 130
     target.synthesisUnit.midiPTokenTrack.classes[8] = 131
     target.synthesisUnit.midiPTokenTrack.manualFrames = [8]
+    reference.synthesisUnit.hTokenTrack.events[0].guidanceWeight = 1.2
+    target.synthesisUnit.hTokenTrack.events[0].guidanceWeight = 0.3
 
     const snapshot = createSynthesisMaterialSnapshot(reference, target, {
       now: '2026-08-11T01:00:00.000Z',
@@ -28,6 +30,10 @@ describe('V5-P material snapshot', () => {
     expect(snapshot.hTransport.reference.jointTerminalSepFrame).toBe(76)
     expect(snapshot.hTransport.target.jointTerminalSepFrame).toBe(159)
     expect(snapshot.hTransport.tokens[77]).toBe(46)
+    expect(snapshot.reference.text.hEvents[0].guidanceWeight).toBeUndefined()
+    expect(snapshot.target.text.hEvents[0].guidanceWeight).toBe(0.3)
+    target.synthesisUnit.hTokenTrack.events[0].guidanceWeight = 0.9
+    expect(snapshot.target.text.hEvents[0].guidanceWeight).toBe(0.3)
     expect(snapshot.midiPTransport).toMatchObject({
       clearEmbeddingStartFrame: 0,
       clearEmbeddingEndFrameExclusive: 75,

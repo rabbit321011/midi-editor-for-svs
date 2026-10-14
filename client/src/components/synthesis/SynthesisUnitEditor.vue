@@ -64,6 +64,7 @@ const audioElement = ref<HTMLAudioElement | null>(null)
 const takeAudioElement = ref<HTMLAudioElement | null>(null)
 const takeListRef = ref<HTMLElement | null>(null)
 const midiSpaceRef = ref<HTMLElement | null>(null)
+const hSpaceRef = ref<HTMLElement | null>(null)
 const editingTakeId = ref<string | null>(null)
 const takeNameDraft = ref('')
 const referenceAudioElement = ref<HTMLAudioElement | null>(null)
@@ -441,6 +442,9 @@ const referenceGuideBlob = computed(() => {
   return key ? tracks.sourceBlobs.get(key) ?? null : null
 })
 const takePrerequisiteMessage = computed(() => {
+  if (weightedHCount.value && (unitModel.value !== 'V5PgO_8K' || samplingSettings.value.guidance.mode !== 'three-way')) {
+    return 'B 区 H Token 权重需要 PgO 独立三路 CFG'
+  }
   if (multiEnabled.value && unitModel.value !== 'V5PgO_8K') return '当前模型暂不支持双 A'
   if (multiEnabled.value && referenceRows.value.length > 1 && samplingSettings.value.guidance.mode !== 'three-way') return '多 A 需要三路 CFG'
   if (multiEnabled.value && referenceRows.value.some(row => !row.unit || !row.blob)) return '部分 A 参考或 Guide 不可用'
@@ -448,6 +452,13 @@ const takePrerequisiteMessage = computed(() => {
   if (!guideBlob.value) return '当前 B 区 Guide 尚未加载'
   if (!referenceGuideBlob.value) return 'A 区参考 Guide 尚未加载'
   return ''
+})
+const weightedHCount = computed(() => (synthesis.value?.hTokenTrack.events ?? [])
+  .filter(event => event.tokenId < 364 && (event.guidanceWeight ?? 1) !== 1).length)
+const hGuidanceForwardCount = computed(() => {
+  const activeReferences = multiEnabled.value ? referenceRows.value.filter(row => row.cfg !== -1).length : 1
+  return activeReferences ? activeReferences * (4 + weightedHCount.value)
+    : 1 + Number(textCfg.value !== 0) + Number(midiCfg.value !== 0) + weightedHCount.value
 })
 const activeTake = computed(() => synthesis.value?.takes.find(take => (
   take.id === synthesis.value?.activeTakeId
@@ -1663,6 +1674,7 @@ function frameFromPointer(event: MouseEvent | PointerEvent) {
 
 function selectHFrame(frame: number) {
   editorSelection.value = { type: 'h', frame }
+  hSpaceRef.value?.focus({ preventScroll: true })
   playheadFrame.value = frame
   const time = frameToAudioTime(frame)
   if (audioElement.value) audioElement.value.currentTime = time
@@ -2245,6 +2257,19 @@ function handleEditorKeydown(event: KeyboardEvent) {
     return
   }
   if (isEditableTarget(event.target) && !isEditorTabTarget) return
+  if (!ctrl && !event.altKey && !event.shiftKey && !event.isComposing
+    && (event.key === 'ArrowUp' || event.key === 'ArrowDown')
+    && hSpaceRef.value?.contains(targetElement)
+    && unitModel.value === 'V5PgO_8K' && guidanceMode.value === 'three-way'
+    && selectedHEvent.value && selectedHEvent.value.tokenId < 364) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    const delta = event.key === 'ArrowUp' ? 0.1 : -0.1
+    setSelectedHWeight(Math.max(0, Math.min(10,
+      Number(((selectedHEvent.value.guidanceWeight ?? 1) + delta).toFixed(10)),
+    )))
+    return
+  }
   if (ctrl && !event.altKey && !event.shiftKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')
     && midiSpaceRef.value?.contains(targetElement) && selectedMidiHeads.value.size > 0) {
     event.preventDefault()
@@ -2420,6 +2445,20 @@ function midiFrameOrigin(frame: number): string {
   return (synthesis.value?.midiPTokenTrack.manualFrames ?? []).includes(frame)
     ? 'user'
     : synthesis.value?.midiPTokenTrack.origin ?? 'empty'
+}
+
+function setSelectedHWeight(weight: number | null) {
+  if (unitModel.value !== 'V5PgO_8K' || guidanceMode.value !== 'three-way') return
+  const event = selectedHEvent.value
+  if (!unit.value || !event || weight == null || weight === (event.guidanceWeight ?? 1)) return
+  const before = objectTree.snapshotTree()
+  const result = objectTree.setSynthesisHTokenGuidanceWeight(unit.value.id, event.id, weight)
+  if (!result.ok) { flashStatus(result.reason ?? 'H Token 权重修改失败'); return }
+  history.push({
+    description: `H Token 权重 ${weight} · frame ${event.frame}`,
+    patches: [], inversePatches: [],
+    objectTree: { kind: 'snapshot', before, after: objectTree.snapshotTree() },
+  })
 }
 
 function clearSelectedHToken() {
@@ -3747,6 +3786,8 @@ onBeforeUnmount(() => {
           <div
             class="track-space grid-space"
             :style="{ width: `${timelineWidth}px` }"
+            ref="hSpaceRef"
+            tabindex="0"
             @click="selectHFrameFromPointer"
             @contextmenu="openHTokenPicker"
           >
@@ -3761,7 +3802,7 @@ onBeforeUnmount(() => {
               class="h-event"
               :class="{ special: event.tokenId >= 365, dragging: hDrag?.eventId === event.id, selected: selectedHFrame === event.frame }"
               :style="hEventStyle(event.id, event.frame)"
-              :title="`${hTokenLabel(event.tokenId, event.symbol)} · ID ${event.tokenId} · frame ${event.frame}`"
+              :title="`${hTokenLabel(event.tokenId, event.symbol)} · ID ${event.tokenId} · frame ${event.frame} · B 权重 ${event.guidanceWeight ?? 1}`"
               @mouseenter="showHTokenTooltip($event, event.tokenId, event.frame)"
               @mouseleave="hideHTokenTooltip"
               @click.stop="selectHFrame(event.frame)"
@@ -3908,6 +3949,16 @@ onBeforeUnmount(() => {
           <dt>来源</dt><dd>{{ selectedHEvent?.origin ?? 'filler' }}</dd>
           <dt>Segment</dt><dd>{{ segmentAtFrame(selectedHFrame ?? 0)?.text || '-' }}</dd>
           <dt>Kana</dt><dd>{{ kanaAtFrame(selectedHFrame ?? 0)?.kana || '-' }}</dd>
+          <template v-if="unitModel === 'V5PgO_8K' && selectedHEvent && selectedHEvent.tokenId < 364">
+            <dt>B 区权重</dt>
+            <dd><NInputNumber
+              :value="selectedHEvent.guidanceWeight ?? 1"
+              :min="0" :max="10" :step="0.1" size="small"
+              :disabled="guidanceMode !== 'three-way'"
+              :input-props="{ 'aria-label': 'B 区 H Token 权重' }"
+              @update:value="setSelectedHWeight"
+            /></dd>
+          </template>
         </dl>
         <div class="inspector-commands">
           <NButton size="small" secondary @click="openHTokenPickerAtFrame(selectedHFrame ?? 0)">替换 Token</NButton>
@@ -4158,7 +4209,7 @@ onBeforeUnmount(() => {
           <span>需要约 {{ (capacityDialog.requiredMiB / 1024).toFixed(1) }} GB</span>
           <span>当前可用 {{ (capacityDialog.freeMiB / 1024).toFixed(1) }} GB</span>
           <span>估算来自 {{ capacityDialog.estimate.sampleSeconds }}s / {{ capacityDialog.estimate.steps ?? 1 }}步标定</span>
-          <span v-if="capacityDialog.estimate.guidanceMode === 'three-way'">三路 CFG 顺序最多 {{ 4 * (capacityDialog.estimate.referenceCount ?? 1) }} 个条件分支，预计约 {{ capacityDialog.estimate.estimatedTimeFactor ?? 2 }}× 耗时</span>
+          <span v-if="capacityDialog.estimate.guidanceMode === 'three-way'">每次求场 {{ hGuidanceForwardCount }} 个条件分支<span v-if="weightedHCount"> · {{ weightedHCount }} 个 B 音素权重</span></span>
         </div>
         <div v-if="capacityDialog.insufficient" class="capacity-insufficient">您的显存实在不足。</div>
         <div v-else-if="capacityDialog.evictions.length > 0" class="capacity-evictions">

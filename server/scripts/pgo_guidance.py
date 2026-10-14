@@ -12,8 +12,55 @@ from torch.nn import functional as F
 FORMULA = "audio-text-midi-independent.v1"
 
 
+def validate_token_weights(snapshot):
+    """Freeze only B phoneme events; A weights never participate in inference."""
+    references = [snapshot["reference"], *((snapshot.get("multiA") or {}).get("references", []))]
+    if any("guidanceWeight" in event for source in references for event in source["text"].get("hEvents", [])):
+        raise ValueError("A snapshots must not contain H token weights")
+    target = snapshot["target"]
+    dense = target["text"]["denseHTokens"]
+    offset = snapshot["frameMap"]["bOffsetFrame"]
+    weights, seen, ids = [], set(), set()
+    for event in target["text"].get("hEvents", []):
+        if "guidanceWeight" not in event:
+            continue
+        weight = event["guidanceWeight"]
+        frame, token = event.get("frame"), event.get("tokenId")
+        if (isinstance(weight, bool) or not isinstance(weight, (int, float))
+                or not math.isfinite(weight) or not 0 <= weight <= 10):
+            raise ValueError("B H token weight must be finite in 0..10")
+        if (type(frame) is not int or not 0 <= frame < len(dense)
+                or type(token) is not int or not 1 <= token < 364
+                or dense[frame] != token or frame in seen
+                or not isinstance(event.get("id"), str) or not event["id"] or event["id"] in ids):
+            raise ValueError("B H token weight must identify a unique phoneme event")
+        seen.add(frame)
+        ids.add(event["id"])
+        if weight != 1:
+            weights.append({"eventId": event["id"], "localFrame": frame,
+                            "jointFrame": offset + frame, "tokenId": token, "weight": weight})
+    return weights
+
+
+def token_weight_correction(original, branch, full, token_weights, drop_audio=False):
+    correction = torch.zeros_like(full)
+    for event in token_weights:
+        frame = event["jointFrame"]
+        text = branch["text"]
+        if not 0 <= frame < text.shape[1] or not torch.all(text[:, frame] == event["tokenId"]):
+            raise ValueError("B weighted H event differs from joint model input")
+        masked = text.clone()
+        # Existing H blank=0, not PUL=366, SEP=365 or internal CFG dropout=-1.
+        # Do not compact tokens or alter any other frame, A, MIDI, x or time.
+        masked[:, frame] = 0
+        without = original(**{**branch, "text": masked}, cfg_infer=False,
+                           drop_audio_cond=drop_audio, drop_text=False, drop_midi=False)[0]
+        correction = correction + (1 - event["weight"]) * (without - full)
+    return correction
+
+
 @contextlib.contextmanager
-def independent_cfg(policy, guidance):
+def independent_cfg(policy, guidance, token_weights=()):
     original = policy.transformer.forward
 
     def forward(transformer, *args, **kwargs):
@@ -22,12 +69,17 @@ def independent_cfg(policy, guidance):
         common = dict(kwargs)
         for key in ("cfg_infer", "cfg_infer_ids", "guidance_scale"):
             common.pop(key, None)
+        common["cache"] = False
         values = []
         for drops in ((False, False, False), (True, False, False), (False, True, False), (False, False, True)):
             values.append(original(*args, **common, cfg_infer=False,
                                    drop_audio_cond=drops[0], drop_text=drops[1], drop_midi=drops[2])[0])
         full, no_a, no_t, no_m = values
         value = full + guidance["audio"] * (full - no_a) + guidance["text"] * (full - no_t) + guidance["midi"] * (full - no_m)
+        if token_weights:
+            if args:
+                raise ValueError("token CFG requires keyword model inputs")
+            value = value + token_weight_correction(original, common, full, token_weights)
         return torch.cat([value, value], dim=0), None
 
     policy.transformer.forward = types.MethodType(forward, policy.transformer)
@@ -99,23 +151,28 @@ def validate_multi(snapshot, inputs, guidance, direct):
     return plans
 
 
-def combine_reference_predictions(values, weights, text_cfg, midi_cfg):
+def combine_reference_predictions(values, weights, text_cfg, midi_cfg, corrections=None):
     total = sum(weights)
     if total <= 0:
         raise ValueError("zero-weight mode uses the explicit no-A branch")
     result = None
-    for prediction, weight in zip(values, weights):
+    for index, (prediction, weight) in enumerate(zip(values, weights)):
         if weight == 0:
             continue
         full, no_a, no_t, no_m = prediction
         relative = weight / total
-        value = relative * no_a + weight * (full - no_a) + text_cfg * relative * (full - no_t) + midi_cfg * relative * (full - no_m)
+        # Finish CFG and local token corrections inside this reference, then mix.
+        if corrections is None:
+            value = relative * no_a + weight * (full - no_a) + text_cfg * relative * (full - no_t) + midi_cfg * relative * (full - no_m)
+        else:
+            value = no_a + total * (full - no_a) + text_cfg * (full - no_t) + midi_cfg * (full - no_m)
+            value = relative * (value + corrections[index])
         result = value if result is None else result + value
     return result
 
 
 @contextlib.contextmanager
-def dual_cfg(policy, plans, guidance, b_only_text):
+def dual_cfg(policy, plans, guidance, b_only_text, token_weights=()):
     original = policy.transformer.forward
     weights = [1 + plan["audioCfg"] for plan in plans]
 
@@ -125,6 +182,7 @@ def dual_cfg(policy, plans, guidance, b_only_text):
         common = dict(kwargs)
         for key in ("cfg_infer", "cfg_infer_ids", "guidance_scale"):
             common.pop(key, None)
+        common["cache"] = False
         if sum(weights) == 0:
             common.update(cond=torch.zeros_like(common["cond"]), text=b_only_text)
             full = original(*args, **common, cfg_infer=False, drop_audio_cond=True, drop_text=False, drop_midi=False)[0]
@@ -135,11 +193,14 @@ def dual_cfg(policy, plans, guidance, b_only_text):
             if guidance["midi"]:
                 no_m = original(*args, **common, cfg_infer=False, drop_audio_cond=True, drop_text=False, drop_midi=True)[0]
                 value = value + guidance["midi"] * (full - no_m)
+            if token_weights:
+                value = value + token_weight_correction(original, common, full, token_weights, drop_audio=True)
         else:
-            values = []
+            values, corrections = [], []
             for plan, weight in zip(plans, weights):
                 if weight == 0:
                     values.append(None)
+                    corrections.append(None)
                     continue
                 branch = {**common, "cond": plan["fullCond"], "text": plan["text"]}
                 predictions = [original(*args, **branch, cfg_infer=False,
@@ -147,7 +208,10 @@ def dual_cfg(policy, plans, guidance, b_only_text):
                                for a, t, m in ((False, False, False), (True, False, False),
                                                (False, True, False), (False, False, True))]
                 values.append(predictions)
-            value = combine_reference_predictions(values, weights, guidance["text"], guidance["midi"])
+                corrections.append(token_weight_correction(original, branch, predictions[0], token_weights)
+                                   if token_weights else 0)
+            value = combine_reference_predictions(values, weights, guidance["text"], guidance["midi"],
+                                                  corrections if token_weights else None)
         return torch.cat([value, value], dim=0), None
 
     policy.transformer.forward = types.MethodType(forward, policy.transformer)
@@ -190,7 +254,7 @@ def synthesize_multi(policy, vae, validated, runner):
     # including the A SEP placed immediately before B's first lyric.
     b_only_text[:, :prefix + validated["hTransport"]["target"]["firstLyricLocalFrame"]] = 0
     runner.emit("sampling", steps=validated["steps"], guidance=validated["guidance"], referenceCount=len(plans), totalFrames=total)
-    with torch.inference_mode(), dual_cfg(policy, plans, validated["guidance"], b_only_text):
+    with torch.inference_mode(), dual_cfg(policy, plans, validated["guidance"], b_only_text, validated.get("hTokenWeights", [])):
         generated, _ = policy.sample(
             cond=plans[0]["prefixCond"], text=plans[0]["text"], duration=total, midi_p=midi,
             bound_p=torch.zeros(1, total, 1, device=device, dtype=midi.dtype),
@@ -207,7 +271,17 @@ def synthesize_multi(policy, vae, validated, runner):
     if not torch.isfinite(output).all():
         raise ValueError("dual A output is nonfinite")
     return output, {
+        "hTokenGuidance": token_weight_audit(validated),
         **control_audit, "multiReference": {"schema": "aisvc.pgo-multi-a.v1", "sources": reference_audits,
                                           "allAudioDisabled": all(plan["audioCfg"] == -1 for plan in plans)},
         "generatedLatentShape": list(generated.shape), "finalSampleCount": output.numel(),
     }
+
+
+def token_weight_audit(validated):
+    events = validated.get("hTokenWeights", [])
+    plans = validated.get("multiReferences")
+    active = sum(plan["audioCfg"] != -1 for plan in plans) if plans else 1
+    return {"schema": "aisvc.pgo-b-h-token-guidance.v1", "blankTokenId": 0,
+            "formula": "G_i+sum((1-w_j)*(F_i_without_j-F_i))",
+            "events": events, "additionalForwardsPerField": len(events) * max(1, active)}

@@ -130,6 +130,10 @@ export function validateSynthesisUnit(unit: SynthesisUnitObjectNode): string[] {
     || event.tokenId < 1
     || event.tokenId > 366
     || event.tokenId === 364
+    || (event.guidanceWeight !== undefined && (
+      !Number.isFinite(event.guidanceWeight) || event.guidanceWeight < 0 || event.guidanceWeight > 10
+      || event.tokenId >= 364
+    ))
   ))) {
     errors.push('H Token track contains an invalid event')
   }

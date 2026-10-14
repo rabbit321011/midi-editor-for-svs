@@ -229,6 +229,10 @@ def validate_job(job, direct_control):
     guidance = validate_guidance(render.get("guidance"), render.get("cfg"))
     multi_references = None
     independent = guidance.get("formula") == "audio-text-midi-independent.v1"
+    import pgo_guidance
+    h_token_weights = pgo_guidance.validate_token_weights(snapshot)
+    if h_token_weights and not independent:
+        raise ValueError("B H token weights require independent PgO CFG")
     if independent and job.get("preset", {}).get("id") != "V5PgO_8K":
         raise ValueError("independent CFG is only supported by PgO")
     if independent:
@@ -262,6 +266,7 @@ def validate_job(job, direct_control):
         "seed": seed,
         "device": device,
         "multiReferences": multi_references,
+        "hTokenWeights": h_token_weights,
     }
 
 
@@ -648,7 +653,7 @@ class ThreeWayCFG:
         self.policy.transformer.clear_cache()
 
 
-def sample_with_guidance(policy, sample_kwargs, guidance):
+def sample_with_guidance(policy, sample_kwargs, guidance, token_weights=()):
     if guidance["mode"] == "unified":
         return policy.sample(
             **sample_kwargs,
@@ -659,7 +664,7 @@ def sample_with_guidance(policy, sample_kwargs, guidance):
         )
     if guidance.get("formula") == "audio-text-midi-independent.v1":
         from pgo_guidance import independent_cfg
-        with independent_cfg(policy, guidance):
+        with independent_cfg(policy, guidance, token_weights):
             return policy.sample(**sample_kwargs, cfg_strength=1.0, guidance_scale=1.0)
     with ThreeWayCFG(policy, guidance):
         # Nonzero cfg_strength selects the standard CFG path; the wrapper replaces
@@ -749,7 +754,7 @@ def synthesize(policy, vae, reference_audio, target_audio, validated):
             "seed": validated["seed"],
             "use_epss": False,
             "enable_melody_control": True,
-        }, validated["guidance"])
+        }, validated["guidance"], validated.get("hTokenWeights", []))
     crop = frame_map["crop"]
     start = int(crop["startFrame"])
     end = int(crop["endFrameExclusive"])
@@ -762,6 +767,8 @@ def synthesize(policy, vae, reference_audio, target_audio, validated):
         raise ValueError("official VAE decoded fewer samples than the effective target range")
     decoded = decoded[:final_samples].contiguous()
     return decoded, {
+        **({"hTokenGuidance": __import__("pgo_guidance").token_weight_audit(validated)}
+           if validated["guidance"].get("formula") == "audio-text-midi-independent.v1" else {}),
         **control_audit,
         "referenceLatentShape": list(reference_latent.shape),
         "generatedLatentShape": list(generated.shape),

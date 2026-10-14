@@ -133,7 +133,7 @@ export function createSynthesisMaterialSnapshot(
       encodedPaddedFrameCount: options.targetEncodedPaddedFrameCount,
     },
   })
-  const referenceText = textSnapshot(reference)
+  const referenceText = textSnapshot(reference, false)
   const targetText = textSnapshot(target)
   const hTransport = compileV5PJointHTransport(
     referenceText.denseHTokens,
@@ -223,14 +223,18 @@ function guideSnapshot(unit: SynthesisUnitObjectNode): SynthesisMaterialGuideSna
   }
 }
 
-function textSnapshot(unit: SynthesisUnitObjectNode): SynthesisMaterialTextSnapshot {
+function textSnapshot(unit: SynthesisUnitObjectNode, includeWeights = true): SynthesisMaterialTextSnapshot {
   const synthesisUnit = unit.synthesisUnit
   const track = synthesisUnit.hTokenTrack
   const events = track.events
-    .map(event => ({
-      ...event,
-      ...(event.generatedFrom ? { generatedFrom: { ...event.generatedFrom } } : {}),
-    }))
+    .map(event => {
+      const { guidanceWeight, ...base } = event
+      return {
+        ...base,
+        ...(includeWeights && guidanceWeight !== undefined ? { guidanceWeight } : {}),
+        ...(event.generatedFrom ? { generatedFrom: { ...event.generatedFrom } } : {}),
+      }
+    })
     .sort((left, right) => left.frame - right.frame)
   const denseHTokens = Array(synthesisUnit.frameContract.frameCount).fill(0)
   for (const event of events) denseHTokens[event.frame] = event.tokenId

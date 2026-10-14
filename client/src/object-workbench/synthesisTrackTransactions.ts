@@ -174,6 +174,22 @@ export function replaceKanaTrackRange(unit: SynthesisUnitObjectNode, request: Re
   touchUnit(unit, request.now)
 }
 
+export function setHTokenGuidanceWeight(unit: SynthesisUnitObjectNode, eventId: string, weight: number) {
+  const track = unit.synthesisUnit.hTokenTrack
+  const event = track.events.find(item => item.id === eventId)
+  if (!event || event.tokenId >= 364) throw new Error('请选择一个发音 H Token')
+  if (!Number.isFinite(weight) || weight < 0 || weight > 10) throw new Error('H Token 权重必须为 0..10')
+  if ((event.guidanceWeight ?? 1) === weight) return
+  if (weight === 1) delete event.guidanceWeight
+  else event.guidanceWeight = weight
+  const revision = nextRevision(unit, 'h', {
+    operation: 'set B H token guidance weight', sourceRefs: [],
+  }, event.frame, event.frame + 1)
+  track.revision = revision.revision
+  track.revisions.push(revision)
+  touchUnit(unit)
+}
+
 export function replaceHTokenTrackRange(unit: SynthesisUnitObjectNode, request: ReplaceHTokenTrackRangeRequest) {
   const range = validateRange(unit, request.startFrame, request.endFrameExclusive)
   validateHEvents(request.events, range.start, range.end)
@@ -882,6 +898,9 @@ function validateKana(
 }
 
 function validateHEvents(events: SynthesisHTokenEvent[], start: number, end: number) {
+  if (events.some(event => event.guidanceWeight !== undefined && (
+    !Number.isFinite(event.guidanceWeight) || event.guidanceWeight < 0 || event.guidanceWeight > 10 || event.tokenId >= 364
+  ))) throw new Error('H Token 权重只支持发音事件，范围为 0..10')
   if (events.some(event => (
     !Number.isInteger(event.frame)
     || event.frame < start

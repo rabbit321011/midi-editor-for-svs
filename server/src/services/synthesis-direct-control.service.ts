@@ -128,6 +128,10 @@ export function validateSynthesisDirectControlRequest(
 
   const steps = integer(req.steps ?? 32, 'steps', 1, 256)
   const guidance = validateGuidance(req.guidance, req.cfg)
+  if (target.text.hEvents.some((event: any) => event.guidanceWeight !== undefined && event.guidanceWeight !== 1)
+    && (req.presetId !== 'V5PgO_8K' || guidance.mode !== 'three-way' || guidance.formula !== 'audio-text-midi-independent.v1')) {
+    throw new Error('B 区 H Token 权重仅支持 PgO 独立三路 CFG')
+  }
   if (guidance.mode === 'three-way' && guidance.formula === 'audio-text-midi-independent.v1' && req.presetId !== 'V5PgO_8K') {
     throw new Error('独立 dropout 当前仅支持 PgO 8K')
   }
@@ -598,10 +602,21 @@ function validateTextSnapshot(
   }
   if (!Array.isArray(value.hEvents)) throw new Error(`${label} H events 无效`)
   const seen = new Set<number>()
+  const weightedIds = new Set<string>()
   for (const [index, raw] of value.hEvents.entries()) {
     const event = record(raw, `${label} H event ${index}`)
     const frame = integer(event.frame, `${label} H frame`, 0, frameCount - 1)
     const token = integer(event.tokenId, `${label} H tokenId`, 1, 366)
+    if (event.guidanceWeight !== undefined) {
+      if (label === 'A') throw new Error('A 区快照不能携带 H Token 权重')
+      if (typeof event.guidanceWeight !== 'number' || !Number.isFinite(event.guidanceWeight)
+        || event.guidanceWeight < 0 || event.guidanceWeight > 10 || token >= 364) {
+        throw new Error('B H Token 权重必须为 0..10 且只用于发音 token')
+      }
+      const id = nonempty(event.id, 'B weighted H event id')
+      if (weightedIds.has(id)) throw new Error('B weighted H event id 重复')
+      weightedIds.add(id)
+    }
     if (token === 364 || seen.has(frame) || dense[frame] !== token) throw new Error(`${label} H events 与 dense layer 不一致`)
     seen.add(frame)
   }

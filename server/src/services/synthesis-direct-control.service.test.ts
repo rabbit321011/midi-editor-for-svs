@@ -8,6 +8,31 @@ import {
   validateSynthesisDirectControlRequest,
 } from './synthesis-direct-control.service.js'
 
+test('B phoneme weights are hash-bound and require independent PgO; A/SEP weights are rejected', () => {
+  const req = fixtureRequest()
+  req.presetId = 'V5PgO_8K'
+  req.guidance = { mode: 'three-way', formula: 'audio-text-midi-independent.v1', audio: 0.5, text: 0.7, midi: 0.5 }
+  const plain = validateSynthesisDirectControlRequest(req)
+  req.snapshot.target.text.hEvents[0].guidanceWeight = 0.3
+  const weighted = validateSynthesisDirectControlRequest(req)
+  assert.notEqual(plain.snapshotSHA256, weighted.snapshotSHA256)
+  assert.deepEqual(plain.frameMap, weighted.frameMap)
+  for (const weight of [-1, 11, NaN, Infinity, true, '0.3']) {
+    const bad = structuredClone(req)
+    bad.snapshot.target.text.hEvents[0].guidanceWeight = weight
+    assert.throws(() => validateSynthesisDirectControlRequest(bad), /权重/)
+  }
+  const badA = structuredClone(req)
+  badA.snapshot.reference.text.hEvents[0].guidanceWeight = 0.3
+  assert.throws(() => validateSynthesisDirectControlRequest(badA), /A 区/)
+  const badSep = structuredClone(req)
+  badSep.snapshot.target.text.hEvents[1].guidanceWeight = 0.3
+  assert.throws(() => validateSynthesisDirectControlRequest(badSep), /发音/)
+  const badMode = structuredClone(req)
+  badMode.guidance = { mode: 'unified', cfg: 0.5 }
+  assert.throws(() => validateSynthesisDirectControlRequest(badMode), /独立三路/)
+})
+
 test('direct preflight independently verifies frame map, H and MIDI transport', () => {
   const request = fixtureRequest()
   const first = validateSynthesisDirectControlRequest(request)

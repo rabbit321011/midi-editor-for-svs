@@ -34,6 +34,8 @@ docs/updates/baseline/report.md
 
 ## 新增设计
 
+- [PgO B 区单 H Token 流量修正](ver0.9/h-token-guidance.md)：参考内部逐 Token 空白分支、四类 H 区分、公式、前向次数与验证范围（2026-10-14）。
+
 - [ver0.9 SYN 歌词辅助校对设计](ver0.9/design.md)：记录参考歌词服从 Segment 边界、基于实际时间与已确认上下文的宽松匹配，以及不挤占时间线的临时校对交互。首版实现及验证情况见 [ver0.9 落地报告](ver0.9/report.md)。
 
 此目录曾长期未追加 checkpoint；ver0.9 是本次设计记录编号，不表示 ver0.8 至今的所有代码变化已补写，也不替代现有专题文档。设计与实际差异以对应 report.md 为准。

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createEmptySynthesisUnit } from './synthesisUnit'
 import {
   moveHTokenEvent,
+  setHTokenGuidanceWeight,
   replaceMidiPFrame,
   moveMidiPFrame,
   transposeMidiPNotes,
@@ -21,6 +22,42 @@ import {
 } from './synthesisTrackTransactions'
 
 describe('SynthesisUnit track transactions', () => {
+  it('edits a phoneme weight without altering token timing or placement provenance', () => {
+    const unit = fixtureUnit()
+    replaceHTokenTrackRange(unit, {
+      operation: 'fixture', origin: 'alignment', startFrame: 0, endFrameExclusive: 16,
+      events: [
+        { id: 'shi', frame: 2, tokenId: 333, origin: 'segment-align' },
+        { id: 'pul', frame: 3, tokenId: 366, origin: 'segment-align' },
+        { id: 'sep', frame: 15, tokenId: 365, origin: 'segment-align' },
+      ],
+      placementRanges: [{ phraseId: 'p', startFrame: 0, endFrameExclusive: 16, placementMode: 'phone', fallbackReason: null }],
+    })
+    const track = unit.synthesisUnit.hTokenTrack
+    const ranges = structuredClone(track.placementRanges)
+    const revision = track.revision
+    setHTokenGuidanceWeight(unit, 'shi', 0.3)
+    expect(track.events[0]).toMatchObject({ id: 'shi', frame: 2, tokenId: 333, guidanceWeight: 0.3 })
+    expect(track.revision).toBe(revision + 1)
+    expect(track.placementRanges).toEqual(ranges)
+    setHTokenGuidanceWeight(unit, 'shi', 0.3)
+    expect(track.revision).toBe(revision + 1)
+    moveHTokenEvent(unit, { eventId: 'shi', targetFrame: 5 })
+    expect(track.events.find(event => event.id === 'shi')).toMatchObject({ frame: 5, guidanceWeight: 0.3 })
+    setHTokenGuidanceWeight(unit, 'shi', 1)
+    expect(track.events.find(event => event.id === 'shi')?.guidanceWeight).toBeUndefined()
+    for (const id of ['pul', 'sep', 'blank']) {
+      const before = structuredClone(unit)
+      expect(() => setHTokenGuidanceWeight(unit, id, 0.3)).toThrow()
+      expect(unit).toEqual(before)
+    }
+    for (const weight of [-1, 11, NaN, Infinity]) {
+      const before = structuredClone(unit)
+      expect(() => setHTokenGuidanceWeight(unit, 'shi', weight)).toThrow()
+      expect(unit).toEqual(before)
+    }
+  })
+
   it('creates one-frame あ on empty Kana space without changing other tracks', () => {
     const unit = fixtureUnit()
     const before = structuredClone({ segment: unit.synthesisUnit.segmentTrack,

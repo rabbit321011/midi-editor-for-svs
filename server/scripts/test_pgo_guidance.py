@@ -11,6 +11,69 @@ import pgo_guidance
 
 
 class PgOGuidanceTest(unittest.TestCase):
+    def test_grouping_modes_match_h_adjacency_not_frame_distance(self):
+        dense = [32, 0, 30, 0, 56, 0, 33, 366, 0, 34, 0, 365, 0, 35]
+        events = [{"eventId": str(frame), "localFrame": frame, "jointFrame": 20 + frame,
+                   "tokenId": dense[frame], "weight": -0.3} for frame in (0, 2, 6, 9, 13)]
+        def frames(mode):
+            return [[event["localFrame"] for event in group["events"]]
+                    for group in pgo_guidance.group_token_weights(list(reversed(events)), mode, dense)]
+        self.assertEqual(frames("none"), [[0], [2], [6], [9], [13]])
+        self.assertEqual(frames("same-weight"), [[0, 2, 6, 9, 13]])
+        self.assertEqual(frames("adjacent"), [[0, 2], [6], [9], [13]])
+        self.assertEqual(pgo_guidance.group_token_weights([], "adjacent", dense), [])
+        with self.assertRaisesRegex(ValueError, "merge mode"):
+            pgo_guidance.group_token_weights(events, "both", dense)
+
+    def test_grouped_reference_forwards_mask_whole_groups_without_cross_reference_subtraction(self):
+        dense = [32, 0, 30, 56, 33, 366, 365]
+        events = [{"localFrame": frame, "jointFrame": frame + 2, "tokenId": dense[frame], "weight": 0.3}
+                  for frame in (0, 2, 4)]
+        text = torch.tensor([[46, 365, *dense]])
+        for mode, count, local_masks in [
+            ("none", 7, [[0], [2], [4]]),
+            ("same-weight", 5, [[0, 2, 4]]),
+            ("adjacent", 6, [[0, 2], [4]]),
+        ]:
+            with self.subTest(mode=mode):
+                groups = pgo_guidance.group_token_weights(events, mode, dense)
+                calls = []
+                def number(kw):
+                    reference = int(kw["cond"][0, 0, 0])
+                    remaining = int((kw["text"][:, [2, 4, 5, 6]] > 0).sum())
+                    return ((0 if kw["drop_audio_cond"] else reference * 2)
+                            + (0 if kw["drop_text"] else reference * remaining ** 2)
+                            + (0 if kw["drop_midi"] else 5))
+                class Transformer:
+                    def forward(self, **kw):
+                        calls.append({**kw, "text": kw["text"].clone()})
+                        return torch.tensor([[float(number(kw))]]), None
+                    def clear_cache(self):
+                        pass
+                plans = [{"audioCfg": cfg, "text": text.clone(),
+                          "fullCond": torch.full((1, 9, 2), float(i + 1))}
+                         for i, cfg in enumerate((0.5, 0.3))]
+                policy = SimpleNamespace(transformer=Transformer())
+                with pgo_guidance.dual_cfg(policy, plans, {"text": 0.7, "midi": 0.5}, text, events, groups):
+                    result, _ = policy.transformer.forward(cfg_infer=True, text=text)
+                self.assertEqual(len(calls), count * 2)
+                expected = 0.0
+                for i, weight in enumerate((1.5, 1.3)):
+                    branch_calls = calls[i * count:(i + 1) * count]
+                    full, no_a, no_t, no_m = [number(call) for call in branch_calls[:4]]
+                    correction = 0
+                    for call, mask in zip(branch_calls[4:], local_masks):
+                        self.assertFalse(call["drop_audio_cond"] or call["drop_text"] or call["drop_midi"])
+                        self.assertFalse(call["cache"])
+                        self.assertEqual(int(call["cond"][0, 0, 0]), i + 1)
+                        masked = text.clone()
+                        masked[:, [frame + 2 for frame in mask]] = 0
+                        torch.testing.assert_close(call["text"], masked)
+                        correction += 0.7 * (number(call) - full)
+                    expected += weight / 2.8 * (no_a + 2.8 * (full - no_a)
+                                                + 0.7 * (full - no_t) + 0.5 * (full - no_m) + correction)
+                torch.testing.assert_close(result, torch.tensor([[expected], [expected]]))
+
     def test_single_token_correction_preserves_four_h_types_and_direction(self):
         text = torch.tensor([[46, 365, 0, 0, 32, 30, 56, 366, 365, 0]])
         x, time = torch.ones(1, 10, 2), torch.tensor(0.5)
@@ -84,7 +147,11 @@ class PgOGuidanceTest(unittest.TestCase):
         }
         expected = [{"eventId": "ko", "localFrame": 0, "jointFrame": 10, "tokenId": 32, "weight": 0.3}]
         self.assertEqual(pgo_guidance.validate_token_weights(snapshot), expected)
-        for weight in (-0.1, 11, float("nan"), float("inf"), True, "0.3"):
+        for weight in (-10, -1, -0.1, 0, 10):
+            allowed = copy.deepcopy(snapshot)
+            allowed["target"]["text"]["hEvents"][0]["guidanceWeight"] = weight
+            self.assertEqual(pgo_guidance.validate_token_weights(allowed)[0]["weight"], weight)
+        for weight in (-10.1, 11, float("nan"), float("inf"), True, "0.3"):
             bad = copy.deepcopy(snapshot)
             bad["target"]["text"]["hEvents"][0]["guidanceWeight"] = weight
             with self.subTest(weight=weight), self.assertRaises(ValueError):
@@ -100,6 +167,22 @@ class PgOGuidanceTest(unittest.TestCase):
             pgo_guidance.validate_token_weights(bad)
         snapshot["target"]["text"]["hEvents"][0]["guidanceWeight"] = 1
         self.assertEqual(pgo_guidance.validate_token_weights(snapshot), [])
+
+    def test_negative_weight_extrapolates_the_correction_without_negative_h_ids(self):
+        text = torch.tensor([[46, 365, 0, 32, 366, 365]])
+        calls = []
+        def forward(**kw):
+            calls.append(kw["text"].clone())
+            self.assertFalse(kw["drop_text"])
+            self.assertGreaterEqual(int(kw["text"].min()), 0)
+            return torch.tensor([[8.0 if kw["text"][0, 3] == 32 else 6.0]]), None
+        correction = pgo_guidance.token_weight_correction(
+            forward, {"text": text, "cache": False}, torch.tensor([[8.0]]),
+            [{"jointFrame": 3, "tokenId": 32, "weight": -1}],
+        )
+        torch.testing.assert_close(correction, torch.tensor([[-4.0]]))
+        self.assertEqual(calls[0].tolist(), [[46, 365, 0, 0, 366, 365]])
+        self.assertEqual(text.tolist(), [[46, 365, 0, 32, 366, 365]])
 
     def test_masking_failure_restores_forward_and_clears_cache(self):
         class Transformer:

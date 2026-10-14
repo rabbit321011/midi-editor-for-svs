@@ -17,7 +17,12 @@ test('B phoneme weights are hash-bound and require independent PgO; A/SEP weight
   const weighted = validateSynthesisDirectControlRequest(req)
   assert.notEqual(plain.snapshotSHA256, weighted.snapshotSHA256)
   assert.deepEqual(plain.frameMap, weighted.frameMap)
-  for (const weight of [-1, 11, NaN, Infinity, true, '0.3']) {
+  for (const weight of [-10, -1, -0.1, 0, 10]) {
+    const allowed = structuredClone(req)
+    allowed.snapshot.target.text.hEvents[0].guidanceWeight = weight
+    assert.doesNotThrow(() => validateSynthesisDirectControlRequest(allowed))
+  }
+  for (const weight of [-10.1, 11, NaN, Infinity, true, '0.3']) {
     const bad = structuredClone(req)
     bad.snapshot.target.text.hEvents[0].guidanceWeight = weight
     assert.throws(() => validateSynthesisDirectControlRequest(bad), /权重/)
@@ -33,6 +38,33 @@ test('B phoneme weights are hash-bound and require independent PgO; A/SEP weight
   assert.throws(() => validateSynthesisDirectControlRequest(badMode), /独立三路/)
 })
 
+test('H merge modes are frozen in the manifest and reject invalid modes', () => {
+  const req = fixtureRequest()
+  req.presetId = 'V5PgO_8K'
+  req.guidance = { mode: 'three-way', formula: 'audio-text-midi-independent.v1', audio: 0.5, text: 0.7, midi: 0.5 }
+  const hashes = new Set<string>()
+  for (const mode of ['none', 'same-weight', 'adjacent']) {
+    req.guidance.hTokenMerge = mode
+    const preflight = validateSynthesisDirectControlRequest(req)
+    assert.equal((preflight.render.guidance as any).hTokenMerge, mode)
+    const resourceSHA256 = Object.fromEntries([
+      'checkpoint', 'modelConfig', 'vaeConfig', 'vaeCheckpoint', 'placement',
+      'directControlAdapter', 'runner', 'midi_p_v4ph.py', 'pgoGuidance',
+    ].map(key => [key, 'a'.repeat(64)]))
+    const manifest = buildV5PDirectJobManifest(req, { ...preflight, resourceSHA256 })
+    assert.equal((manifest.render.guidance as any).hTokenMerge, mode)
+    hashes.add(JSON.stringify(manifest.render))
+  }
+  assert.equal(hashes.size, 3)
+  for (const mode of ['both', true, null]) {
+    req.guidance.hTokenMerge = mode
+    assert.throws(() => validateSynthesisDirectControlRequest(req), /合并模式/)
+  }
+  req.guidance.hTokenMerge = 'adjacent'
+  req.guidance.formula = 'audio-text-midi-telescoping.v1'
+  assert.throws(() => validateSynthesisDirectControlRequest(req), /独立三路/)
+})
+
 test('direct preflight independently verifies frame map, H and MIDI transport', () => {
   const request = fixtureRequest()
   const first = validateSynthesisDirectControlRequest(request)
@@ -43,6 +75,65 @@ test('direct preflight independently verifies frame map, H and MIDI transport', 
   assert.deepEqual(first.render, {
     steps: 32, cfg: 1, guidance: { mode: 'unified', cfg: 1 }, seed: 42, device: 'cuda:0',
   })
+})
+
+test('pitch transpose is frozen without changing source controls and rejects invalid or overflowing pitches', () => {
+  const req = fixtureRequest()
+  const before = structuredClone(req.snapshot)
+  for (const shift of [-24, -12, 0, 12, 24]) {
+    req.pitchShiftSemitones = shift
+    assert.equal(validateSynthesisDirectControlRequest(req).render.pitchShiftSemitones, shift)
+    assert.deepEqual(req.snapshot, before)
+  }
+  for (const shift of [-25, 25, 0.5, true, null]) {
+    req.pitchShiftSemitones = shift
+    assert.throws(() => validateSynthesisDirectControlRequest(req), /pitchShiftSemitones/)
+  }
+  req.pitchShiftSemitones = -1
+  req.snapshot.target.midiP.classes[0] = 0
+  req.snapshot.midiPTransport = buildV5PServerMidiTransport(req.snapshot.frameMap, req.snapshot.target.midiP.classes)
+  assert.throws(() => validateSynthesisDirectControlRequest(req), /超出 MIDI-P 音域/)
+})
+
+test('Sg accepts Guide SOME without MIDI-P and binds its own resources', () => {
+  const request = fixtureRequest()
+  request.presetId = 'V5Sg_40K_EMA'
+  request.guidance = { mode: 'three-way', audio: 0.5, text: 0.7, midi: 0.5, formula: 'audio-text-midi-independent.v1' }
+  delete request.snapshot.target.midiP
+  delete request.snapshot.midiPTransport
+  request.snapshot.target.melody = { source: 'guide-some', guideSHA256: request.snapshot.target.guide.audioSHA256, frameCount: 4 }
+  const preflight = validateSynthesisDirectControlRequest(request)
+  const resourceSHA256 = Object.fromEntries([
+    'checkpoint', 'modelConfig', 'vaeConfig', 'vaeCheckpoint', 'placement', 'directControlAdapter', 'runner',
+    'pgoGuidance', 'sgRuntime', 'someCheckpoint', 'someExtractor', 'someConformer', 'someSmooth', 'someMel',
+  ].map(key => [key, 'a'.repeat(64)]))
+  const manifest = buildV5PDirectJobManifest(request, { ...preflight, resourceSHA256 })
+  assert.equal(manifest.preset.checkpointSchema, 'v5sg_serial4_checkpoint_v1')
+  assert.equal(manifest.preset.checkpointStep, 40000)
+  assert.match((manifest.resources as Record<string, { path: string }>).someCheckpoint?.path ?? '', /100000_simplified.ckpt$/)
+  assert.equal('midiPModule' in manifest.resources, false)
+  const shiftedRequest = structuredClone(request)
+  shiftedRequest.pitchShiftSemitones = 12
+  const shiftedVerified = { ...validateSynthesisDirectControlRequest(shiftedRequest), resourceSHA256 }
+  assert.throws(() => buildV5PDirectJobManifest(shiftedRequest, shiftedVerified), /临时副本/)
+  const shiftedInput = { wav: 'E:/AIscene/AISVC-midi-web/data/render_test_b/shifted.wav', sha256: 'f'.repeat(64),
+    sourceSHA256: request.snapshot.target.guide.audioSHA256, sampleCount: 8192, sampleRate: 44100 as const, semitones: 12 }
+  const shiftedManifest = buildV5PDirectJobManifest(shiftedRequest, shiftedVerified, shiftedInput)
+  assert.deepEqual(shiftedManifest.inputs.shiftedMelody, shiftedInput)
+  assert.equal(shiftedManifest.render.pitchShiftSemitones, 12)
+  const second = structuredClone(request.snapshot.reference)
+  second.unitId = 'node:a2'
+  request.snapshot.multiA = { schema: 'aisvc.pgo-multi-a.v1', primaryUnitId: request.snapshot.reference.unitId,
+    references: [{ ...request.snapshot.reference, audioCfg: 0.5, leadingPadFrames: 0 }, { ...second, audioCfg: 0.3, leadingPadFrames: 0 }] }
+  request.referenceWavs = [{ unitId: request.snapshot.reference.unitId, path: request.referenceWav },
+    { unitId: second.unitId, path: 'E:/AIscene/AISVC-midi-web/data/render_test_a2/combined.wav' }]
+  assert.equal(validateSynthesisDirectControlRequest(request).referenceWavs?.length, 2)
+  const bad = structuredClone(request)
+  bad.snapshot.target.melody.guideSHA256 = 'f'.repeat(64)
+  assert.throws(() => validateSynthesisDirectControlRequest(bad), /Guide SOME/)
+  const wrong = structuredClone(request)
+  wrong.snapshot.target.midiP = { revision: 1, classes: [120, 120, 120, 120], manualFrames: [] }
+  assert.throws(() => validateSynthesisDirectControlRequest(wrong), /MIDI-P transport/)
 })
 
 test('direct preflight freezes validated three-way CFG settings', () => {

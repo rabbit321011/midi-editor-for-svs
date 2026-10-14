@@ -34,6 +34,10 @@ docs/updates/baseline/report.md
 
 ## 新增设计
 
+- [合成旋律移调](../melody-transpose.md)：CFG 半音参数、Pg/F1 临时 MIDI-P 偏移、Sg 临时 Guide 副本及验证范围。
+
+- [Sg 40K 工作台接入](../sg-workbench-integration.md)：基于 Pg 的 Guide/SOME 连续旋律条件、单 A／多 A 和验证范围。
+
 - [PgO B 区单 H Token 流量修正](ver0.9/h-token-guidance.md)：参考内部逐 Token 空白分支、四类 H 区分、公式、前向次数与验证范围（2026-10-14）。
 
 - [ver0.9 SYN 歌词辅助校对设计](ver0.9/design.md)：记录参考歌词服从 Segment 边界、基于实际时间与已确认上下文的宽松匹配，以及不挤占时间线的临时校对交互。首版实现及验证情况见 [ver0.9 落地报告](ver0.9/report.md)。

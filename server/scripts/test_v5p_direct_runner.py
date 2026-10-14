@@ -131,6 +131,14 @@ class V5PDirectRunnerTest(unittest.TestCase):
         }])
         self.assertEqual(validated["hTransport"], snapshot["hTransport"])
         self.assertEqual(validated["hTransport"]["tokens"][83], 46)
+        job["render"]["guidance"]["hTokenMerge"] = "adjacent"
+        merged = runner.validate_job(job, direct)
+        self.assertEqual(merged["guidance"]["hTokenMerge"], "adjacent")
+        self.assertEqual(merged["hTokenGroups"], [{"weight": 0.3, "events": validated["hTokenWeights"]}])
+        for mode in ("both", None, True):
+            job["render"]["guidance"]["hTokenMerge"] = mode
+            with self.subTest(mode=mode), self.assertRaisesRegex(ValueError, "merge mode"):
+                runner.validate_job(job, direct)
 
     def test_validate_job_rejects_client_control_tampering(self):
         job = build_job()
@@ -142,6 +150,28 @@ class V5PDirectRunnerTest(unittest.TestCase):
         ).hexdigest()
 
         with self.assertRaisesRegex(ValueError, "runner joint H"):
+            runner.validate_job(job, direct)
+
+    def test_sg_job_requires_guide_some_and_never_a_midi_p_transport(self):
+        job = build_job()
+        job["preset"]["id"] = "V5Sg_40K_EMA"
+        job["render"]["guidance"] = {"mode": "three-way", "formula": "audio-text-midi-independent.v1",
+                                     "audio": 0.5, "text": 0.7, "midi": 0.5}
+        path = ROOT / "server/scripts/pgo_guidance.py"
+        job["resources"] = {"pgoGuidance": {"path": str(path), "sha256": runner.sha256_file(path)}}
+        snapshot = json.loads(job["snapshotCanonical"])
+        del snapshot["target"]["midiP"]
+        del snapshot["midiPTransport"]
+        snapshot["target"]["melody"] = {"source": "guide-some", "guideSHA256": "a" * 64, "frameCount": 64}
+        def bind():
+            job["snapshotCanonical"] = runner.canonical_json(snapshot)
+            job["snapshotSHA256"] = runner.sha256_text(job["snapshotCanonical"])
+        bind()
+        validated = runner.validate_job(job, direct)
+        self.assertIsNone(validated["midiTransport"])
+        snapshot["target"]["midiP"] = {"classes": [120] * 64}
+        bind()
+        with self.assertRaisesRegex(ValueError, "not MIDI-P"):
             runner.validate_job(job, direct)
 
     def test_padding_makes_reference_boundary_exact(self):

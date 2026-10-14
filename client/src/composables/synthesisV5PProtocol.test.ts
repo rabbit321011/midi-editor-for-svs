@@ -3,6 +3,16 @@ import { readSynthesisV5PResult } from './synthesisV5PProtocol'
 import { V5P_MODEL_META } from '@/object-workbench'
 
 describe('V5-P result protocol', () => {
+  it('preserves valid transpose parameters and rejects malformed values', () => {
+    for (const value of [-24, -12, 0, 12, 24]) {
+      const result = { ...fixture(), samplingSettings: { ...fixture().samplingSettings, pitchShiftSemitones: value } }
+      expect(readSynthesisV5PResult({ type: 'v5p-result', result }, 'v5p-job-test')).toEqual(result)
+    }
+    for (const value of [-25, 25, 0.5, null, '12']) {
+      const result = { ...fixture(), samplingSettings: { ...fixture().samplingSettings, pitchShiftSemitones: value } }
+      expect(readSynthesisV5PResult({ type: 'v5p-result', result }, 'v5p-job-test')).toBeNull()
+    }
+  })
   it('requires the correct F1 EMA and base provenance for both steps', () => {
     for (const presetId of ['V5F_F1_3K_EMA', 'V5F_F1_6K_EMA'] as const) {
       const result = {

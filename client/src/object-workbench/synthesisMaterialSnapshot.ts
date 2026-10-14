@@ -6,7 +6,7 @@ import type {
 import { createV5PABFrameMap, type V5PABFrameMap } from './synthesisABFrameMap'
 import { compileV5PJointHTransport, type V5PJointHTransport } from './synthesisDirectH'
 import { validateSynthesisUnit } from './synthesisUnit'
-import { V5P_DEFAULT_MODEL } from './v5pModel'
+import { V5P_DEFAULT_MODEL, supportsMultiReferenceModel } from './v5pModel'
 import { MAX_A_REFERENCES } from './synthesisMultiReference'
 
 export interface SynthesisMaterialGuideSnapshot {
@@ -47,7 +47,8 @@ export interface SynthesisMaterialSnapshot {
     unitRevision: number
     guide: SynthesisMaterialGuideSnapshot
     text: SynthesisMaterialTextSnapshot
-    midiP: {
+    melody?: { source: 'guide-some'; guideSHA256: string; frameCount: number }
+    midiP?: {
       revision: number
       classes: number[]
       manualFrames: number[]
@@ -57,7 +58,7 @@ export interface SynthesisMaterialSnapshot {
   }
   frameMap: V5PABFrameMap
   hTransport: V5PJointHTransport
-  midiPTransport: {
+  midiPTransport?: {
     classIds: number[]
     clearEmbeddingStartFrame: 0
     clearEmbeddingEndFrameExclusive: number
@@ -86,7 +87,7 @@ export function createMultiSynthesisMaterialSnapshot(
 export function createMultipleSynthesisMaterialSnapshot(
   sources: Array<{ unit: SynthesisUnitObjectNode; cfg: number }>, target: SynthesisUnitObjectNode,
 ): SynthesisMaterialSnapshot {
-  if ((target.synthesisUnit.presetId ?? V5P_DEFAULT_MODEL) !== 'V5PgO_8K') throw new Error('当前仅 PgO 8K 支持双 A')
+  if (!supportsMultiReferenceModel(target.synthesisUnit.presetId ?? V5P_DEFAULT_MODEL)) throw new Error('当前仅 PgO / Sg 支持多 A')
   if (sources.length < 2 || sources.length > MAX_A_REFERENCES || new Set(sources.map(source => source.unit.id)).size !== sources.length) throw new Error('参考数量或身份无效')
   if (sources[0].unit.id !== target.synthesisUnit.reference?.unitId) throw new Error('主参考不一致')
   if (!sources.every(source => Number.isFinite(source.cfg) && source.cfg >= -1 && source.cfg <= 10)) throw new Error('A CFG 无效')
@@ -117,7 +118,8 @@ export function createSynthesisMaterialSnapshot(
     throw new Error('A 区参考与当前绑定不一致')
   }
   assertUnitReady(reference, 'A', false)
-  assertUnitReady(target, 'B', true)
+  const isSg = target.synthesisUnit.presetId === 'V5Sg_40K_EMA'
+  assertUnitReady(target, 'B', !isSg)
 
   const referenceUnit = reference.synthesisUnit
   const targetUnit = target.synthesisUnit
@@ -163,7 +165,8 @@ export function createSynthesisMaterialSnapshot(
       unitRevision: targetUnit.unitRevision,
       guide: guideSnapshot(target),
       text: targetText,
-      midiP: {
+      ...(isSg ? { melody: { source: 'guide-some' as const, guideSHA256: targetUnit.guide.audioSHA256,
+        frameCount: targetUnit.frameContract.frameCount } } : { midiP: {
         revision: targetUnit.midiPTokenTrack.revision,
         classes: targetClasses,
         manualFrames: [...targetUnit.midiPTokenTrack.manualFrames],
@@ -173,11 +176,11 @@ export function createSynthesisMaterialSnapshot(
         ...(targetUnit.midiPTokenTrack.compilerHash
           ? { compilerHash: targetUnit.midiPTokenTrack.compilerHash }
           : {}),
-      },
+      } }),
     },
     frameMap,
     hTransport,
-    midiPTransport: {
+    ...(!isSg ? { midiPTransport: {
       classIds,
       clearEmbeddingStartFrame: 0,
       clearEmbeddingEndFrameExclusive: frameMap.bOffsetFrame,
@@ -186,7 +189,7 @@ export function createSynthesisMaterialSnapshot(
       rearStartFrame: targetEndFrameExclusive,
       rearEndFrameExclusive: frameMap.totalFrameCount,
       rearClassId: 255,
-    },
+    } } : {}),
   }
 }
 

@@ -107,6 +107,25 @@ export function getModelCatalog(): ModelCatalogEntry[] {
   for (const entry of entries) {
     if (entry.id.startsWith('V5P') && entry.id !== 'V5PgO_8K') entry.hidden = true
   }
+  const sg = getV5PDirectPreset('V5Sg_40K_EMA')
+  const pgProfile = readVramProfile('V5PgO_8K', 'V5P_40K_EMA')
+  entries.push({
+    id: sg.id, family: 'svs', engine: 'v5p_direct', checkpoint: sg.checkpoint,
+    vaeCheckpoint: sg.vaeCheckpoint,
+    runtimeState: [sg.checkpoint, sg.vaeCheckpoint, sg.sgLoader,
+      ...Object.values(sg.sgResources ?? {}).map(value => value.path)].every(file => file && fs.existsSync(file)) ? 'configured' : 'unavailable',
+    capabilities: ['synthesis-unit', 'guide-some', 'h-token', 'three-way-cfg', 'multi-reference'],
+    // Includes a separate frozen SOME teacher; do not present the Pg measurement
+    // as an Sg measurement. Keep a conservative unmeasured margin until profiled.
+    vramProfile: readVramProfile(sg.id) ?? (pgProfile ? {
+      ...pgProfile, estimated: true, residentMiB: (pgProfile.residentMiB ?? 2500) + 1200,
+      peakDeltaMiB: (pgProfile.peakDeltaMiB ?? 4000) + 1800,
+      peakUsedMiB: (pgProfile.peakUsedMiB ?? 4000) + 1800,
+      samples: pgProfile.samples?.map(sample => ({ ...sample,
+        peakUsedMiB: (sample.peakUsedMiB ?? 4000) + 1800,
+        peakDeltaMiB: (sample.peakDeltaMiB ?? 4000) + 1800 })),
+    } : undefined),
+  })
   for (const id of ['V5F_F1_3K_EMA', 'V5F_F1_6K_EMA']) {
     const preset = getV5PDirectPreset(id)
     entries.push({

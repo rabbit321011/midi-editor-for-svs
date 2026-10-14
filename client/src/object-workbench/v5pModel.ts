@@ -1,4 +1,4 @@
-export const V5P_MODEL_IDS = ['V5P_40K_EMA', 'V5Pg_20K', 'V5PgO_8K', 'V5PgOV_300K_EMA', 'V5F_F1_3K_EMA', 'V5F_F1_6K_EMA'] as const
+export const V5P_MODEL_IDS = ['V5P_40K_EMA', 'V5Pg_20K', 'V5PgO_8K', 'V5Sg_40K_EMA', 'V5PgOV_300K_EMA', 'V5F_F1_3K_EMA', 'V5F_F1_6K_EMA'] as const
 
 export type V5PModelId = typeof V5P_MODEL_IDS[number]
 
@@ -13,6 +13,13 @@ export const V5P_MODEL_META: Record<V5PModelId, {
   supportsThreeWayCfg: boolean
   hidden?: boolean
 }> = {
+  V5Sg_40K_EMA: {
+    label: 'V5-Sg 40K EMA',
+    checkpointSHA256: '739f034437c1165cd7ef40e860a355e82a1cab791a195ee69f210192144b8249',
+    vaeSHA256: 'f18aeecacc04173cd2ea73bbdf8edae9e976d18e4ca050c38e2723281c5cba85',
+    adapterSHA256: 'a61f6c9987b718555375b92ac4395384085d3f03c016d8cbb961f19f8ea7db38',
+    supportsThreeWayCfg: true,
+  },
   V5P_40K_EMA: {
     hidden: true,
     label: 'V5-P 40K EMA',
@@ -62,4 +69,8 @@ export const V5P_MODEL_META: Record<V5PModelId, {
 
 export function isV5PModelId(value: string): value is V5PModelId {
   return V5P_MODEL_IDS.includes(value as V5PModelId)
+}
+
+export function supportsMultiReferenceModel(value: string): boolean {
+  return value === 'V5PgO_8K' || value === 'V5Sg_40K_EMA'
 }

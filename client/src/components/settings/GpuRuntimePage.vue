@@ -208,7 +208,7 @@ function residentLabel(profile: ModelCatalogItem['vramProfile']) {
           <span class="runtime-kind">{{ profileLabel(model.vramProfile) }}</span>
           <span class="resident-badge">{{ residentLabel(model.vramProfile) }}</span>
           <n-button
-            v-if="['V5PgO_8K', 'V5PgOV_300K_EMA', 'V5F_F1_3K_EMA', 'V5F_F1_6K_EMA', 'V4Hg_10k', 'V4fg_10k', 'Whisper large-v3', 'SOFA Japanese', 'GAME-1.0-medium', 'OpenVPI-SOME'].includes(model.id)"
+            v-if="['V5PgO_8K', 'V5Sg_40K_EMA', 'V5PgOV_300K_EMA', 'V5F_F1_3K_EMA', 'V5F_F1_6K_EMA', 'V4Hg_10k', 'V4fg_10k', 'Whisper large-v3', 'SOFA Japanese', 'GAME-1.0-medium', 'OpenVPI-SOME'].includes(model.id)"
             size="tiny"
             type="primary"
             ghost

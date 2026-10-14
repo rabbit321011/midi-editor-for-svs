@@ -230,6 +230,8 @@ export interface SynthesisReferenceBinding {
   boundAt: string
 }
 
+export type HTokenMergeMode = 'none' | 'same-weight' | 'adjacent'
+
 export type V5PGuidance =
   | { mode: 'unified'; cfg: number }
   | {
@@ -238,12 +240,14 @@ export type V5PGuidance =
       text: number
       midi: number
       formula: 'audio-text-midi-telescoping.v1' | 'audio-text-midi-independent.v1'
+      hTokenMerge?: HTokenMergeMode
     }
 
 export interface V5PSamplingSettings {
   guidance: V5PGuidance
   steps: number
   seed: number
+  pitchShiftSemitones?: number
 }
 
 export interface TakeLoudnessAdjustment {

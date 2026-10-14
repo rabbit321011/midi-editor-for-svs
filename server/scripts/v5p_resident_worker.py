@@ -46,7 +46,8 @@ def load_runtime(runner, preset):
         "vaeConfig": runner.require_resource(resources, "vaeConfig"),
         "vaeCheckpoint": runner.require_resource(resources, "vaeCheckpoint"),
         "placement": runner.require_resource(resources, "placement"),
-        "midiPModule": runner.require_resource(resources, "midiPModule"),
+        **({"midiPModule": runner.require_resource(resources, "midiPModule")}
+           if preset_identity.get("id") != "V5Sg_40K_EMA" else {}),
         "runner": runner.require_resource(resources, "runner"),
     }
     resource_paths["vaeDecoderCheckpoint"] = runner.require_decoder_resource(

@@ -18,7 +18,7 @@ describe('V5-P material snapshot', () => {
     target.synthesisUnit.midiPTokenTrack.classes[8] = 131
     target.synthesisUnit.midiPTokenTrack.manualFrames = [8]
     reference.synthesisUnit.hTokenTrack.events[0].guidanceWeight = 1.2
-    target.synthesisUnit.hTokenTrack.events[0].guidanceWeight = 0.3
+    target.synthesisUnit.hTokenTrack.events[0].guidanceWeight = -0.3
 
     const snapshot = createSynthesisMaterialSnapshot(reference, target, {
       now: '2026-08-11T01:00:00.000Z',
@@ -31,9 +31,9 @@ describe('V5-P material snapshot', () => {
     expect(snapshot.hTransport.target.jointTerminalSepFrame).toBe(159)
     expect(snapshot.hTransport.tokens[77]).toBe(46)
     expect(snapshot.reference.text.hEvents[0].guidanceWeight).toBeUndefined()
-    expect(snapshot.target.text.hEvents[0].guidanceWeight).toBe(0.3)
+    expect(snapshot.target.text.hEvents[0].guidanceWeight).toBe(-0.3)
     target.synthesisUnit.hTokenTrack.events[0].guidanceWeight = 0.9
-    expect(snapshot.target.text.hEvents[0].guidanceWeight).toBe(0.3)
+    expect(snapshot.target.text.hEvents[0].guidanceWeight).toBe(-0.3)
     expect(snapshot.midiPTransport).toMatchObject({
       clearEmbeddingStartFrame: 0,
       clearEmbeddingEndFrameExclusive: 75,
@@ -43,15 +43,15 @@ describe('V5-P material snapshot', () => {
       rearEndFrameExclusive: 160,
       rearClassId: 255,
     })
-    expect(snapshot.midiPTransport.classIds.slice(0, 75).every(value => value === 255)).toBe(true)
-    expect(snapshot.midiPTransport.classIds[75 + 7]).toBe(130)
-    expect(snapshot.midiPTransport.classIds[75 + 8]).toBe(131)
-    expect(snapshot.midiPTransport.classIds.slice(139).every(value => value === 255)).toBe(true)
+    expect(snapshot.midiPTransport!.classIds.slice(0, 75).every(value => value === 255)).toBe(true)
+    expect(snapshot.midiPTransport!.classIds[75 + 7]).toBe(130)
+    expect(snapshot.midiPTransport!.classIds[75 + 8]).toBe(131)
+    expect(snapshot.midiPTransport!.classIds.slice(139).every(value => value === 255)).toBe(true)
 
     reference.synthesisUnit.hTokenTrack.events[0].tokenId = 99
     target.synthesisUnit.midiPTokenTrack.classes[7] = 140
     expect(snapshot.reference.text.hEvents[0].tokenId).toBe(46)
-    expect(snapshot.target.midiP.classes[7]).toBe(130)
+    expect(snapshot.target.midiP!.classes[7]).toBe(130)
   })
 
   it('rejects missing material, PAD and a stale reference binding', () => {

@@ -8,6 +8,7 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import {
   V5P_DIRECT_PRESET,
   getV5PDirectPreset,
+  supportsMultiReferenceModel,
   type V5PDirectPreset,
   type V5PModelId,
 } from './v5p-preset.js'
@@ -386,14 +387,17 @@ async function buildV5PResources(
       path: preset.directRunner,
       sha256: await sha256File(preset.directRunner),
     },
-    ...(preset.id === 'V5PgO_8K' ? { pgoGuidance: {
+    ...(supportsMultiReferenceModel(preset.id) ? { pgoGuidance: {
       path: `${PROJECT_ROOT}/server/scripts/pgo_guidance.py`,
       sha256: await sha256File(`${PROJECT_ROOT}/server/scripts/pgo_guidance.py`),
     } } : {}),
-    midiPModule: {
+    ...(preset.sgResources && preset.sgLoader ? {
+      ...preset.sgResources,
+      sgRuntime: { path: preset.sgLoader, sha256: await sha256File(preset.sgLoader) },
+    } : { midiPModule: {
       path: midiModule,
       sha256: preset.melodyHashes['midi_p_v4ph.py'],
-    },
+    } }),
     singerRoot: { path: SINGER_ROOT },
   }
 }

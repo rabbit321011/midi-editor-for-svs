@@ -28,12 +28,15 @@ export async function compareAudioPitch(referencePath: string, targetPath: strin
   return parsed as PitchComparison
 }
 
-export async function pitchShiftAudio(inputPath: string, semitones: number): Promise<string> {
+export async function pitchShiftAudio(inputPath: string, semitones: number, exactSampleCount?: number): Promise<string> {
   const input = requireTempWav(inputPath)
   if (!Number.isInteger(semitones) || semitones < -24 || semitones > 24) {
     throw new Error('pitch shift must be an integer from -24 to 24 semitones')
   }
   if (semitones === 0) return input
+  if (exactSampleCount !== undefined && (!Number.isSafeInteger(exactSampleCount) || exactSampleCount < 1)) {
+    throw new Error('pitch shift sample count must be a positive integer')
+  }
   const suffix = semitones > 0 ? `p${semitones}` : `m${Math.abs(semitones)}`
   const output = path.join(path.dirname(input), `${path.basename(input, path.extname(input))}.pitch_${suffix}.wav`)
   const ratio = Math.pow(2, semitones / 12)
@@ -43,7 +46,7 @@ export async function pitchShiftAudio(inputPath: string, semitones: number): Pro
   await runProcess(FFMPEG, [
     '-y', '-hide_banner', '-loglevel', 'error',
     '-i', input,
-    '-af', `rubberband=pitch=${ratio.toFixed(9)}:formant=preserved:pitchq=quality,apad,atrim=duration=${duration.toFixed(9)}`,
+    '-af', `rubberband=pitch=${ratio.toFixed(9)}:formant=preserved:pitchq=quality,apad,atrim=${exactSampleCount === undefined ? `duration=${duration.toFixed(9)}` : `end_sample=${exactSampleCount}`}`,
     '-c:a', 'pcm_f32le',
     output,
   ])

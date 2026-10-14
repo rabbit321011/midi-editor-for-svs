@@ -30,9 +30,22 @@ PgO 8K 的三路 CFG 现使用独立 dropout。A 区左侧小按钮开启多参�
 参考条固定总宽度，按数量均分，过多时横向滚动；每条可调 CFG、试听、跳转和移除。
 其他模型继续使用现有路径。详见 `docs/pgo-multi-a.md`。
 
+V5PgO 8K 当前试用估计的可用音域约为 **A#3-A5**，边缘音高需逐段试听。
+
 工作台现提供 **V5-F F1 3K EMA / 6K EMA**，新建 SYN 仍默认 PgO 8K。
 两个版本均整组加载 DiT、VAE encoder 和 decoder LoRA；资源、推理合同和验证见
 `docs/f1-workbench-integration.md`。PgO 入口保留，其他旧 V5P 系列入口隐藏，已保存工程仍兼容。
+
+## Sg 40K 合成模型
+
+SYN 模型选择新增 **V5-Sg 40K EMA**，支持单 A、2～16 个参考 A、统一 CFG 与独立三路 CFG。
+Sg 的旋律条件直接来自 Guide 的 **continuous SOME**，不是 GAME，也不使用或要求先生成编辑轨 MIDI-P。
+已有 MIDI-P 保留用于编辑和试听，不参与 Sg 合成。新建 SYN 默认仍为 PgO 8K。
+Sg 暂不启用逐 H 权重及 H 合并模式；其详细输入契约、资源及验证见 `docs/sg-workbench-integration.md`。
+
+CFG 面板支持“旋律移调（半音）”，默认 0，范围 -24..24，仅影响之后生成的 Take。
+Pg/F1 临时偏移 B 区 MIDI-P；Sg 移调 B Guide 的临时副本再提取 SOME。原始 Guide、MIDI-P 编辑轨及 A 参考不变。
+详见 `docs/melody-transpose.md`。
 
 ## MIDI 试听音色
 

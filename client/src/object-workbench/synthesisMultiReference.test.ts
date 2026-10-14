@@ -23,6 +23,22 @@ function unit(id: string, frames: number): SynthesisUnitObjectNode {
 }
 
 describe('PgO dual reference', () => {
+  it('creates an Sg multi-A snapshot from Guide and H without a MIDI-P layer', () => {
+    const tree = createEmptyProjectObjectTree()
+    const a = unit('sg:a', 8), a2 = unit('sg:a2', 16), b = unit('sg:b', 12)
+    b.synthesisUnit.presetId = 'V5Sg_40K_EMA'
+    b.synthesisUnit.midiPTokenTrack.status = 'empty'
+    b.synthesisUnit.midiPTokenTrack.classes = []
+    tree.root.children.push(a, a2, b)
+    expect(bindPrimaryReference(tree, b.id, a.id).ok).toBe(true)
+    expect(configureMultiReference(tree, b.id, { enabled: true, secondaryUnitId: a2.id, secondaryCfg: 0.3 }).ok).toBe(true)
+    const snapshot = createMultiSynthesisMaterialSnapshot(a, a2, b, 0.5, 0.3)
+    expect(snapshot.target.melody).toEqual({ source: 'guide-some', guideSHA256: b.synthesisUnit.guide.audioSHA256, frameCount: 12 })
+    expect(snapshot.target.midiP).toBeUndefined()
+    expect(snapshot.midiPTransport).toBeUndefined()
+    expect(snapshot.multiA?.references.map(source => source.leadingPadFrames)).toEqual([8, 0])
+  })
+
   it('adds multiple references and promotes the next reference when removing A1', () => {
     const tree = createEmptyProjectObjectTree()
     const a = unit('a', 8), c = unit('c', 16), d = unit('d', 24), b = unit('b', 12)

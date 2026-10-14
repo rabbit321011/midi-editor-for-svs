@@ -6,10 +6,11 @@ import type { WebSocket } from 'ws'
 import { verifyOwnedGuideWav } from './owned-guide-runtime.js'
 import { GPU_PROCESS_CANCELLED_MESSAGE, registerGpuProcess, wasGpuProcessReleased } from './gpu-runtime.service.js'
 import { isV5PRuntimeReady, runV5PResidentInfer } from './model-runtime.service.js'
+import { pitchShiftAudio } from './pitch.service.js'
 
 const PROJECT_ROOT = 'E:/AIscene/AISVC-midi-web'
 const DATA_ROOT = path.resolve(PROJECT_ROOT, 'data')
-import { SINGER_ROOT, getV5PDirectPreset, type V5PModelId } from './v5p-preset.js'
+import { SINGER_ROOT, getV5PDirectPreset, supportsMultiReferenceModel, type V5PModelId } from './v5p-preset.js'
 
 export { V5P_DIRECT_PRESET } from './v5p-preset.js'
 
@@ -24,12 +25,13 @@ export interface SynthesisDirectControlRequest {
   cfg?: number
   guidance?: V5PGuidance
   seed?: number
+  pitchShiftSemitones?: number
   device?: string
 }
 
 export type V5PGuidance =
   | { mode: 'unified'; cfg: number }
-  | { mode: 'three-way'; audio: number; text: number; midi: number; formula: 'audio-text-midi-telescoping.v1' | 'audio-text-midi-independent.v1' }
+  | { mode: 'three-way'; audio: number; text: number; midi: number; formula: 'audio-text-midi-telescoping.v1' | 'audio-text-midi-independent.v1'; hTokenMerge?: 'none' | 'same-weight' | 'adjacent' }
 
 export interface SynthesisDirectControlPreflight {
   schema: 'aisvc.v5p-direct-preflight.v1'
@@ -45,6 +47,7 @@ export interface SynthesisDirectControlPreflight {
     cfg: number
     guidance: V5PGuidance
     seed: number
+    pitchShiftSemitones?: number
     device: string
   }
 }
@@ -67,7 +70,7 @@ export interface SynthesisDirectControlResult {
   loraWeightSource?: 'ema'
   adapterSHA256: string
   seed: number
-  samplingSettings: { guidance: V5PGuidance; steps: number; seed: number }
+  samplingSettings: { guidance: V5PGuidance; steps: number; seed: number; pitchShiftSemitones?: number }
   referenceSources?: Array<{ unitId: string; unitRevision: number; audioCfg: number; guideSHA256: string }>
 }
 
@@ -103,7 +106,15 @@ export function validateSynthesisDirectControlRequest(
   const targetGuide = validateGuide(record(target.guide, 'B Guide'), 'B')
   const referenceText = validateTextSnapshot(record(reference.text, 'A Text'), referenceGuide.frameCount, 'A')
   const targetText = validateTextSnapshot(record(target.text, 'B Text'), targetGuide.frameCount, 'B')
-  const targetMidi = validateMidiSnapshot(record(target.midiP, 'B MIDI-P'), targetGuide.frameCount)
+  const isSg = req.presetId === 'V5Sg_40K_EMA'
+  const targetMidi = isSg ? null : validateMidiSnapshot(record(target.midiP, 'B MIDI-P'), targetGuide.frameCount)
+  if (isSg) {
+    const melody = record(target.melody, 'Sg Guide SOME')
+    if (melody.source !== 'guide-some' || melody.guideSHA256 !== targetGuide.audioSHA256
+      || melody.frameCount !== targetGuide.frameCount || target.midiP !== undefined || snapshot.midiPTransport !== undefined) {
+      throw new Error('Sg 旋律必须来自当前 Guide SOME，不能携带 MIDI-P transport')
+    }
+  } else if (target.melody !== undefined) throw new Error('Pg 模型不能使用 SOME Guide 条件')
 
   const expectedFrameMap = buildV5PServerFrameMap(referenceGuide.sampleCount, targetGuide.sampleCount)
   if (canonicalJSON(snapshot.frameMap) !== canonicalJSON(expectedFrameMap)) {
@@ -121,20 +132,26 @@ export function validateSynthesisDirectControlRequest(
   if (canonicalJSON(snapshot.hTransport) !== canonicalJSON(expectedHTransport)) {
     throw new Error('前端 joint H transport 与服务端权威计算不一致')
   }
-  const expectedTransport = buildV5PServerMidiTransport(expectedFrameMap, targetMidi.classes)
-  if (canonicalJSON(snapshot.midiPTransport) !== canonicalJSON(expectedTransport)) {
+  const expectedTransport = targetMidi ? buildV5PServerMidiTransport(expectedFrameMap, targetMidi.classes) : undefined
+  if (!isSg && canonicalJSON(snapshot.midiPTransport) !== canonicalJSON(expectedTransport)) {
     throw new Error('前端 MIDI-P transport 与服务端权威计算不一致')
   }
 
   const steps = integer(req.steps ?? 32, 'steps', 1, 256)
+  const pitchShift = req.pitchShiftSemitones === undefined ? 0 : integer(req.pitchShiftSemitones, 'pitchShiftSemitones', -24, 24)
+  if (targetMidi && targetMidi.classes.some(value => value < 255 && (value + pitchShift * 2 < 0 || value + pitchShift * 2 > 254))) {
+    throw new Error('旋律移调超出 MIDI-P 音域，所有音符均未修改')
+  }
   const guidance = validateGuidance(req.guidance, req.cfg)
   if (target.text.hEvents.some((event: any) => event.guidanceWeight !== undefined && event.guidanceWeight !== 1)
     && (req.presetId !== 'V5PgO_8K' || guidance.mode !== 'three-way' || guidance.formula !== 'audio-text-midi-independent.v1')) {
     throw new Error('B 区 H Token 权重仅支持 PgO 独立三路 CFG')
   }
-  if (guidance.mode === 'three-way' && guidance.formula === 'audio-text-midi-independent.v1' && req.presetId !== 'V5PgO_8K') {
-    throw new Error('独立 dropout 当前仅支持 PgO 8K')
+  if (guidance.mode === 'three-way' && guidance.formula === 'audio-text-midi-independent.v1' && !supportsMultiReferenceModel(req.presetId)) {
+    throw new Error('独立 dropout 当前仅支持 PgO / Sg')
   }
+  if (isSg && guidance.mode === 'three-way' && guidance.formula !== 'audio-text-midi-independent.v1') throw new Error('Sg 三路 CFG 必须使用独立 dropout')
+  if (isSg && guidance.mode === 'three-way' && (guidance.hTokenMerge ?? 'none') !== 'none') throw new Error('Sg 暂不支持 H Token 合并')
   const referenceWavs = snapshot.multiA ? validateMultiReferences(req, snapshot, guidance, targetGuide.sampleCount) : undefined
   if (!snapshot.multiA && req.referenceWavs !== undefined) throw new Error('单 A 请求不能携带额外参考')
   if (guidance.mode === 'three-way' && !getV5PDirectPreset(req.presetId).supportsThreeWayCfg) {
@@ -153,13 +170,19 @@ export function validateSynthesisDirectControlRequest(
     referenceWav,
     ...(referenceWavs ? { referenceWavs } : {}),
     targetWav,
-    render: { steps, cfg, guidance, seed, device },
+    render: { steps, cfg, guidance, seed, device,
+      ...(req.pitchShiftSemitones !== undefined ? { pitchShiftSemitones: pitchShift } : {}) },
   }
 }
 
 function validateGuidance(value: unknown, legacyCfg?: number): V5PGuidance {
   if (value == null) return { mode: 'unified', cfg: finite(legacyCfg ?? 1, 'cfg', -1, 10) }
   const guidance = record(value, 'guidance')
+  const merge = guidance.hTokenMerge === undefined ? 'none' : guidance.hTokenMerge
+  if (!['none', 'same-weight', 'adjacent'].includes(merge)) throw new Error('H Token 合并模式无效')
+  if (merge !== 'none' && (guidance.mode !== 'three-way' || guidance.formula !== 'audio-text-midi-independent.v1')) {
+    throw new Error('H Token 合并仅支持 PgO 独立三路 CFG')
+  }
   if (guidance.mode === 'unified') {
     return { mode: 'unified', cfg: finite(guidance.cfg, 'guidance.cfg', -1, 10) }
   }
@@ -171,6 +194,7 @@ function validateGuidance(value: unknown, legacyCfg?: number): V5PGuidance {
     text: finite(guidance.text, 'guidance.text', -1, 10),
     midi: finite(guidance.midi, 'guidance.midi', -1, 10),
     formula: guidance.formula,
+    ...(guidance.hTokenMerge !== undefined ? { hTokenMerge: merge } : {}),
   }
 }
 
@@ -178,7 +202,7 @@ function validateMultiReferences(
   req: SynthesisDirectControlRequest, snapshot: Record<string, any>, guidance: V5PGuidance, targetSamples: number,
 ) {
   const multi = record(snapshot.multiA, '双 A snapshot')
-  if (req.presetId !== 'V5PgO_8K' || guidance.mode !== 'three-way' || guidance.formula !== 'audio-text-midi-independent.v1') {
+  if (!supportsMultiReferenceModel(req.presetId) || guidance.mode !== 'three-way' || guidance.formula !== 'audio-text-midi-independent.v1') {
     throw new Error('双 A 需要 PgO 8K 独立 dropout')
   }
   if (multi.schema !== 'aisvc.pgo-multi-a.v1' || !Array.isArray(multi.references) || multi.references.length < 2 || multi.references.length > 16) throw new Error('多 A 需要 2 到 16 个参考')
@@ -250,6 +274,7 @@ export async function verifySynthesisDirectControlResources(
   for (const [name, expected] of Object.entries(preset.melodyHashes)) {
     resources.push([name, `${SINGER_ROOT}/src/YingMusicSinger/melody/${name}`, expected])
   }
+  for (const [name, value] of Object.entries(preset.sgResources ?? {})) resources.push([name, value.path, value.sha256])
   if (!fs.existsSync(preset.directControlAdapter)) {
     throw new Error(`V5-P direct-control adapter 缺失: ${preset.directControlAdapter}`)
   }
@@ -267,20 +292,56 @@ export async function verifySynthesisDirectControlResources(
   }
   resourceSHA256.directControlAdapter = await sha256FileCached(preset.directControlAdapter)
   resourceSHA256.runner = await sha256FileCached(preset.directRunner)
-  if (preset.id === 'V5PgO_8K') resourceSHA256.pgoGuidance = await sha256FileCached(`${PROJECT_ROOT}/server/scripts/pgo_guidance.py`)
+  if (supportsMultiReferenceModel(preset.id)) resourceSHA256.pgoGuidance = await sha256FileCached(`${PROJECT_ROOT}/server/scripts/pgo_guidance.py`)
+  if (preset.sgLoader) resourceSHA256.sgRuntime = await sha256FileCached(preset.sgLoader)
   if (preset.f1Loader) resourceSHA256.f1Loader = await sha256FileCached(preset.f1Loader)
   return { ...preflight, resourceSHA256 }
+}
+
+export interface ShiftedMelodyInput {
+  wav: string
+  sha256: string
+  sourceSHA256: string
+  sampleCount: number
+  sampleRate: 44100
+  semitones: number
+}
+
+export async function prepareShiftedSgMelody(
+  req: SynthesisDirectControlRequest, verified: SynthesisDirectControlPreflight,
+): Promise<ShiftedMelodyInput | undefined> {
+  const semitones = verified.render.pitchShiftSemitones ?? 0
+  if (req.presetId !== 'V5Sg_40K_EMA' || semitones === 0) return undefined
+  const guide = (req.snapshot as any).target.guide
+  verifyOwnedGuideWav(verified.targetWav, guide.audioSHA256, guide.frameCount)
+  const wav = await pitchShiftAudio(verified.targetWav, semitones, guide.sampleCount)
+  const sha256 = await sha256FileCached(wav)
+  const actual = verifyOwnedGuideWav(wav, sha256, guide.frameCount)
+  if (actual.sampleCount !== guide.sampleCount) throw new Error('Sg 移调改变了 Guide 采样点数')
+  return { wav, sha256, sourceSHA256: guide.audioSHA256, sampleCount: actual.sampleCount, sampleRate: 44100, semitones }
 }
 
 export function buildV5PDirectJobManifest(
   req: SynthesisDirectControlRequest,
   verified: SynthesisDirectControlPreflight & { resourceSHA256: Record<string, string> },
+  shiftedMelody?: ShiftedMelodyInput,
 ) {
   const preset = getV5PDirectPreset(req.presetId)
   const snapshotCanonical = canonicalJSON(req.snapshot)
   if (sha256Text(snapshotCanonical) !== verified.snapshotSHA256) {
     throw new Error('V5-P snapshot 在 preflight 后发生变化')
   }
+  const semitones = verified.render.pitchShiftSemitones ?? 0
+  if ((req.pitchShiftSemitones ?? 0) !== semitones) throw new Error('移调参数在 preflight 后发生变化')
+  if (preset.id === 'V5Sg_40K_EMA' && semitones !== 0) {
+    const guide = (req.snapshot as any).target.guide
+    if (!shiftedMelody || shiftedMelody.semitones !== semitones
+      || shiftedMelody.sourceSHA256 !== guide.audioSHA256 || shiftedMelody.sampleCount !== guide.sampleCount
+      || shiftedMelody.sampleRate !== 44100 || !/^[a-f0-9]{64}$/i.test(shiftedMelody.sha256)) {
+      throw new Error('Sg 缺少与移调参数匹配的 Guide 临时副本')
+    }
+    validateJobWavPath(shiftedMelody.wav, 'B')
+  } else if (shiftedMelody) throw new Error('当前任务不应携带移调音频副本')
   const resource = (resourcePath: string, hashKey: string) => ({
     path: resourcePath,
     sha256: nonempty(verified.resourceSHA256[hashKey], `${hashKey} SHA256`),
@@ -300,6 +361,7 @@ export function buildV5PDirectJobManifest(
     inputs: {
       referenceWav: verified.referenceWav,
       targetWav: verified.targetWav,
+      ...(shiftedMelody ? { shiftedMelody } : {}),
       ...(verified.referenceWavs ? { references: verified.referenceWavs.map(item => ({ unitId: item.unitId, wav: item.path })) } : {}),
     },
     render: verified.render,
@@ -324,10 +386,13 @@ export function buildV5PDirectJobManifest(
       ...(verified.resourceSHA256.pgoGuidance ? {
         pgoGuidance: resource(`${PROJECT_ROOT}/server/scripts/pgo_guidance.py`, 'pgoGuidance'),
       } : {}),
-      midiPModule: resource(
+      ...(preset.sgResources && preset.sgLoader ? {
+        ...Object.fromEntries(Object.entries(preset.sgResources).map(([name, value]) => [name, resource(value.path, name)])),
+        sgRuntime: resource(preset.sgLoader, 'sgRuntime'),
+      } : { midiPModule: resource(
         `${SINGER_ROOT}/src/YingMusicSinger/melody/midi_p_v4ph.py`,
         'midi_p_v4ph.py',
-      ),
+      ) }),
       singerRoot: { path: SINGER_ROOT },
     },
   }
@@ -345,7 +410,11 @@ export async function runSynthesisDirectControl(
     if (fs.existsSync(outputDir)) throw new Error(`V5-P jobId 已存在且不可覆盖: ${req.jobId}`)
     fs.mkdirSync(outputDir, { recursive: false })
     const jobFile = path.join(outputDir, 'job.json')
-    const manifest = buildV5PDirectJobManifest(req, verified)
+    if (req.presetId === 'V5Sg_40K_EMA' && verified.render.pitchShiftSemitones) {
+      send(ws, { type: 'progress', progress: 3, message: `准备 B 区旋律移调 ${verified.render.pitchShiftSemitones} 半音` })
+    }
+    const shiftedMelody = await prepareShiftedSgMelody(req, verified)
+    const manifest = buildV5PDirectJobManifest(req, verified, shiftedMelody)
     fs.writeFileSync(jobFile, `${JSON.stringify(manifest, null, 2)}\n`, { encoding: 'utf-8', flag: 'wx' })
     const jobSHA256 = await sha256FileCached(jobFile)
 
@@ -400,6 +469,7 @@ export async function runSynthesisDirectControl(
         guidance: verified.render.guidance,
         steps: verified.render.steps,
         seed: verified.render.seed,
+        ...(verified.render.pitchShiftSemitones !== undefined ? { pitchShiftSemitones: verified.render.pitchShiftSemitones } : {}),
       })
       || !fs.existsSync(result.outputWav)
     ) {
@@ -581,7 +651,7 @@ function validateGuide(value: Record<string, any>, label: 'A' | 'B') {
   const sampleCount = integer(value.sampleCount, `${label} sampleCount`, 1)
   const frameCount = integer(value.frameCount, `${label} frameCount`, 1)
   if (frameCount !== Math.floor(sampleCount / 2048)) throw new Error(`${label} Guide frameCount 与 sampleCount 不一致`)
-  return { sampleCount, frameCount }
+  return { sampleCount, frameCount, audioSHA256: value.audioSHA256 as string }
 }
 
 function validateTextSnapshot(
@@ -610,8 +680,8 @@ function validateTextSnapshot(
     if (event.guidanceWeight !== undefined) {
       if (label === 'A') throw new Error('A 区快照不能携带 H Token 权重')
       if (typeof event.guidanceWeight !== 'number' || !Number.isFinite(event.guidanceWeight)
-        || event.guidanceWeight < 0 || event.guidanceWeight > 10 || token >= 364) {
-        throw new Error('B H Token 权重必须为 0..10 且只用于发音 token')
+        || event.guidanceWeight < -10 || event.guidanceWeight > 10 || token >= 364) {
+        throw new Error('B H Token 权重必须为 -10..10 且只用于发音 token')
       }
       const id = nonempty(event.id, 'B weighted H event id')
       if (weightedIds.has(id)) throw new Error('B weighted H event id 重复')

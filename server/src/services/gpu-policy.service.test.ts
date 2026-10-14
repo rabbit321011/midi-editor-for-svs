@@ -19,6 +19,15 @@ test('V5PgO reuses the compatible V5-P peak profile', () => {
   assert.equal(Number.isFinite(pgo.residentMiB), true)
 })
 
+test('Sg uses an explicitly unmeasured conservative profile rather than claiming a Pg measurement', () => {
+  const pg = estimateGpuMemory('V5PgO_8K', 35)
+  const sg = estimateGpuMemory('V5Sg_40K_EMA', 35, 'three-way', 2)
+  assert.equal(sg.modelId, 'V5Sg_40K_EMA')
+  assert.equal(sg.profilePolicy, 'conservative-unmeasured')
+  assert.ok(sg.peakDeltaMiB > pg.peakDeltaMiB)
+  assert.equal(sg.referenceCount, 2)
+})
+
 test('V5PgOV uses the compatible V5-P peak profile', () => {
   const baseline = estimateGpuMemory('V5P_40K_EMA', 35)
   const pgov = estimateGpuMemory('V5PgOV_300K_EMA', 35)

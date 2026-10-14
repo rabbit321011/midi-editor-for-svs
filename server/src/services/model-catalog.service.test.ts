@@ -10,6 +10,7 @@ test('model catalog only exposes the managed SVS families', () => {
     'V5P_40K_EMA',
     'V5Pg_20K',
     'V5PgO_8K',
+    'V5Sg_40K_EMA',
     'V5PgOV_300K_EMA',
     'OpenVPI-SOME',
     'V5F_F1_3K_EMA',
@@ -39,6 +40,11 @@ test('catalog keeps PH/PUL and direct-control engines distinct', () => {
   assert.equal(Array.isArray(catalog.get('V5PgO_8K')?.vramProfile?.samples), true)
   assert.equal(catalog.get('V5P_40K_EMA')?.hidden, true)
   assert.notEqual(catalog.get('V5PgO_8K')?.hidden, true)
+  assert.equal(catalog.get('V5Sg_40K_EMA')?.runtimeState, 'configured')
+  assert.equal(catalog.get('V5Sg_40K_EMA')?.capabilities.includes('guide-some'), true)
+  assert.equal(catalog.get('V5Sg_40K_EMA')?.capabilities.includes('multi-reference'), true)
+  assert.equal(catalog.get('V5Sg_40K_EMA')?.capabilities.includes('midi-p'), false)
+  assert.notEqual(catalog.get('V5Sg_40K_EMA')?.hidden, true)
   assert.equal(catalog.get('V5F_F1_3K_EMA')?.engine, 'v5f_lora')
   assert.equal(catalog.get('V5F_F1_6K_EMA')?.runtimeState, 'configured')
 })

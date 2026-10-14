@@ -1,5 +1,5 @@
 import type { V5PModelId, V5PSamplingSettings } from '@/object-workbench'
-import { V5P_MODEL_META } from '@/object-workbench'
+import { V5P_MODEL_META, supportsMultiReferenceModel } from '@/object-workbench'
 
 export interface SynthesisV5PResult {
   schema: 'aisvc.v5p-direct-result.v1'
@@ -54,7 +54,7 @@ export function readSynthesisV5PResult(
   if (!Number.isSafeInteger(result.seed) || result.seed < 0) return null
   if (!readSamplingSettings(result.samplingSettings)) return null
   if (result.referenceSources !== undefined) {
-    if (expectedPresetId !== 'V5PgO_8K' || !Array.isArray(result.referenceSources) || result.referenceSources.length < 2 || result.referenceSources.length > 16) return null
+    if (!supportsMultiReferenceModel(expectedPresetId) || !Array.isArray(result.referenceSources) || result.referenceSources.length < 2 || result.referenceSources.length > 16) return null
     const ids = new Set<string>()
     for (const source of result.referenceSources) {
       if (!isRecord(source) || typeof source.unitId !== 'string' || !source.unitId || ids.has(source.unitId)
@@ -68,6 +68,8 @@ export function readSynthesisV5PResult(
 }
 
 function readSamplingSettings(value: unknown): value is V5PSamplingSettings {
+  if (isRecord(value) && value.pitchShiftSemitones !== undefined
+    && (!Number.isInteger(value.pitchShiftSemitones) || value.pitchShiftSemitones < -24 || value.pitchShiftSemitones > 24)) return false
   if (!isRecord(value) || !Number.isInteger(value.steps) || value.steps < 1 || value.steps > 256
     || !Number.isSafeInteger(value.seed) || value.seed < 0 || value.seed > 0xffffffff
     || !isRecord(value.guidance)) return false

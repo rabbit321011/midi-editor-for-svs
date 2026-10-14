@@ -3,7 +3,7 @@ export const V5P_PYTHON = 'C:/Users/jbbj/AppData/Local/Programs/Python/Python310
 export const SINGER_ROOT = 'E:/AIscene/YingMusic_Singer_Plus'
 export const V5P_DIRECT_RUNNER = 'E:/AIscene/AISVC-midi-web/server/scripts/v5p_direct_runner.py'
 
-export const V5P_MODEL_IDS = ['V5P_40K_EMA', 'V5Pg_20K', 'V5PgO_8K', 'V5PgOV_300K_EMA', 'V5F_F1_3K_EMA', 'V5F_F1_6K_EMA'] as const
+export const V5P_MODEL_IDS = ['V5P_40K_EMA', 'V5Pg_20K', 'V5PgO_8K', 'V5Sg_40K_EMA', 'V5PgOV_300K_EMA', 'V5F_F1_3K_EMA', 'V5F_F1_6K_EMA'] as const
 
 export type V5PModelId = typeof V5P_MODEL_IDS[number]
 
@@ -39,9 +39,15 @@ export interface V5PDirectPreset {
   f1Support?: string
   f1SupportSHA256?: string
   f1Loader?: string
+  sgResources?: Record<string, { path: string; sha256: string }>
+  sgLoader?: string
 }
 
-const LEGACY_PRESETS: Record<Exclude<V5PModelId, 'V5F_F1_3K_EMA' | 'V5F_F1_6K_EMA'>, V5PDirectPreset> = {
+export function supportsMultiReferenceModel(id: string): boolean {
+  return id === 'V5PgO_8K' || id === 'V5Sg_40K_EMA'
+}
+
+const LEGACY_PRESETS: Record<Exclude<V5PModelId, 'V5Sg_40K_EMA' | 'V5F_F1_3K_EMA' | 'V5F_F1_6K_EMA'>, V5PDirectPreset> = {
   V5P_40K_EMA: {
   id: 'V5P_40K_EMA',
   label: 'V5-P 40K EMA',
@@ -194,6 +200,28 @@ function f1Preset(id: 'V5F_F1_3K_EMA' | 'V5F_F1_6K_EMA', step: number, checkpoin
 }
 const V5P_DIRECT_PRESETS: Record<V5PModelId, V5PDirectPreset> = {
   ...LEGACY_PRESETS,
+  V5Sg_40K_EMA: {
+    ...LEGACY_PRESETS.V5PgO_8K,
+    id: 'V5Sg_40K_EMA', label: 'V5-Sg 40K EMA', vaeLabel: '285k VAE / continuous SOME',
+    checkpoint: 'E:/MyProject/重要模型保存/V5Sg/step_040000_final.pt',
+    checkpointSHA256: '739f034437c1165cd7ef40e860a355e82a1cab791a195ee69f210192144b8249',
+    checkpointSchema: 'v5sg_serial4_checkpoint_v1', checkpointStep: 40000,
+    trainingCodeSHA256: '94ad6bc4b482dd9dbf32658590b563306fb5db770f28385de32b9aab5a234ccc',
+    melodyHashes: {},
+    sgLoader: 'E:/AIscene/AISVC-midi-web/server/scripts/sg_runtime.py',
+    sgResources: {
+      someCheckpoint: { path: `${SINGER_ROOT}/ckpts/model_ckpt_steps_100000_simplified.ckpt`,
+        sha256: 'aa710fce920b4dae281b0e6cc2acba83345d82ee62d51f7bafeb29636f28f97c' },
+      someExtractor: { path: `${SINGER_ROOT}/src/YingMusicSinger/melody/midi_extractor.py`,
+        sha256: 'c9d8b1bd4be678cde1d45ad65fa5c2da42d5d3aeb09e1f0a8733e73604f9aba3' },
+      someConformer: { path: `${SINGER_ROOT}/src/YingMusicSinger/melody/Gconform.py`,
+        sha256: '8a406546da9c38fbca590673fc9abe84b0e1ad6cf706d728f23cabc8478b3caf' },
+      someSmooth: { path: `${SINGER_ROOT}/src/YingMusicSinger/melody/SmoothMelody.py`,
+        sha256: '36cfcdd705712ffe2d83405ab363255cebe18c404504adab914fc8d50fda9cb1' },
+      someMel: { path: `${SINGER_ROOT}/src/YingMusicSinger/utils/mel_spectrogram.py`,
+        sha256: 'fee7299ee705555b0c31c0a54df099c3c35320f1befbc8b618be7f00a37042f4' },
+    },
+  },
   V5F_F1_3K_EMA: f1Preset('V5F_F1_3K_EMA', 3000, '90d9eb27e730b796d9051046de1bb8c4e3f9993b97b3758bc31c03faaa596f23'),
   V5F_F1_6K_EMA: f1Preset('V5F_F1_6K_EMA', 6000, '0b22d3eeeb6b83da70909c5ffb29a5b924707d3cadbddbf8d8f872c46a56622c'),
 }

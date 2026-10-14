@@ -13,6 +13,7 @@ import LyricProofreader from './LyricProofreader.vue'
 import ReferenceBars from './ReferenceBars.vue'
 import { createKanaAtFrame, removeSynthesisTake } from '@/object-workbench/synthesisTrackTransactions'
 import { lyricStatus } from '@/object-workbench/lyricProofreading'
+import { groupHTokenEvents, hTokenWeightColor } from '@/object-workbench/hTokenGuidance'
 import { V5P_H_TOKEN_BY_ID, type V5PHTokenCatalogEntry } from '@/generated/v5pHTokenCatalog'
 import { useSynthesisUnitAnalysis } from '@/composables/useSynthesisUnitAnalysis'
 import type { SegmentTextControlTarget } from '@/composables/useSynthesisUnitAnalysis'
@@ -22,6 +23,7 @@ import {
   getKanaControlRange,
   getKanaPhraseForSegment,
   isV5PModelId,
+  supportsMultiReferenceModel,
   V5P_DEFAULT_SAMPLING_SETTINGS,
   V5P_DEFAULT_MODEL,
   V5P_MODEL_META,
@@ -30,6 +32,7 @@ import {
   type SynthesisTake,
   type V5PModelId,
   type V5PSamplingSettings,
+  type HTokenMergeMode,
 } from '@/object-workbench'
 import { runSynthesisV5P } from '@/composables/synthesisV5PClient'
 import { runSynthesisMidiP } from '@/composables/synthesisMidiPClient'
@@ -255,7 +258,7 @@ const unitModel = computed<V5PModelId>({
     return value && isV5PModelId(value) ? value : V5P_DEFAULT_MODEL
   },
   set: value => {
-    if (synthesis.value?.multiReference?.enabled && value !== 'V5PgO_8K') {
+    if (synthesis.value?.multiReference?.enabled && !supportsMultiReferenceModel(value)) {
       flashStatus('请先关闭双 A，再切换到其他模型')
       return
     }
@@ -341,6 +344,25 @@ const samplingSeed = computed<number>({
   get: () => samplingSettings.value.seed,
   set: seed => updateSamplingSettings({ ...samplingSettings.value, seed }),
 })
+const pitchShiftSemitones = computed<number>({
+  get: () => samplingSettings.value.pitchShiftSemitones ?? 0,
+  set: value => {
+    if (value == null) return
+    updateSamplingSettings({ ...samplingSettings.value, pitchShiftSemitones: value })
+  },
+})
+const hTokenMergeMode = computed<HTokenMergeMode>(() => {
+  const guidance = samplingSettings.value.guidance
+  return guidance.mode === 'three-way' ? guidance.hTokenMerge ?? 'none' : 'none'
+})
+function setHTokenMergeMode(mode: HTokenMergeMode, enabled: boolean) {
+  const current = samplingSettings.value
+  if (unitModel.value !== 'V5PgO_8K' || current.guidance.mode !== 'three-way') return
+  updateSamplingSettings({
+    ...current,
+    guidance: { ...current.guidance, hTokenMerge: enabled ? mode : 'none' },
+  })
+}
 const samplingSummary = computed(() => {
   const guidance = samplingSettings.value.guidance
   return guidance.mode === 'unified'
@@ -368,7 +390,9 @@ function channelCfg(channel: 'audio' | 'text' | 'midi') {
 }
 
 function updateSamplingSettings(settings: V5PSamplingSettings) {
-  if (unit.value) objectTree.setSynthesisUnitSamplingSettings(unit.value.id, settings)
+  if (!unit.value) return
+  const result = objectTree.setSynthesisUnitSamplingSettings(unit.value.id, settings)
+  if (!result.ok) flashStatus(result.reason ?? '采样设置保存失败')
 }
 
 function freezeSamplingSettings(settings: V5PSamplingSettings): V5PSamplingSettings {
@@ -379,12 +403,14 @@ function freezeSamplingSettings(settings: V5PSamplingSettings): V5PSamplingSetti
         audio: Number(settings.guidance.audio),
         text: Number(settings.guidance.text),
         midi: Number(settings.guidance.midi),
-        formula: unitModel.value === 'V5PgO_8K' ? 'audio-text-midi-independent.v1' as const : 'audio-text-midi-telescoping.v1' as const,
+        formula: supportsMultiReferenceModel(unitModel.value) ? 'audio-text-midi-independent.v1' as const : 'audio-text-midi-telescoping.v1' as const,
+        ...(unitModel.value === 'V5PgO_8K' && settings.guidance.hTokenMerge !== undefined ? { hTokenMerge: settings.guidance.hTokenMerge } : {}),
       }
   return {
     guidance,
     steps: Number(settings.steps),
     seed: Number(settings.seed),
+    ...(settings.pitchShiftSemitones !== undefined ? { pitchShiftSemitones: Number(settings.pitchShiftSemitones) } : {}),
   }
 }
 
@@ -395,7 +421,8 @@ function takeSamplingLabel(take: SynthesisTake) {
   const cfg = guidance.mode === 'unified'
     ? `CFG ${guidance.cfg.toFixed(1)}`
     : `3CFG A${guidance.audio.toFixed(1)} T${guidance.text.toFixed(1)} M${guidance.midi.toFixed(1)}`
-  return `${cfg} · ${settings.steps} steps · seed ${settings.seed}`
+  const shift = settings.pitchShiftSemitones ?? 0
+  return `${cfg} · ${settings.steps} steps · seed ${settings.seed}${shift ? ` · 移调 ${shift > 0 ? '+' : ''}${shift} 半音` : ''}`
 }
 const frameCount = computed(() => synthesis.value?.frameContract.frameCount ?? 1)
 const frameRate = computed(() => synthesis.value?.frameContract.frameRate ?? (44100 / 2048))
@@ -442,10 +469,10 @@ const referenceGuideBlob = computed(() => {
   return key ? tracks.sourceBlobs.get(key) ?? null : null
 })
 const takePrerequisiteMessage = computed(() => {
-  if (weightedHCount.value && (unitModel.value !== 'V5PgO_8K' || samplingSettings.value.guidance.mode !== 'three-way')) {
+  if ((weightedHCount.value || hTokenMergeMode.value !== 'none') && (unitModel.value !== 'V5PgO_8K' || samplingSettings.value.guidance.mode !== 'three-way')) {
     return 'B 区 H Token 权重需要 PgO 独立三路 CFG'
   }
-  if (multiEnabled.value && unitModel.value !== 'V5PgO_8K') return '当前模型暂不支持双 A'
+  if (multiEnabled.value && !supportsMultiReferenceModel(unitModel.value)) return '当前模型暂不支持多 A'
   if (multiEnabled.value && referenceRows.value.length > 1 && samplingSettings.value.guidance.mode !== 'three-way') return '多 A 需要三路 CFG'
   if (multiEnabled.value && referenceRows.value.some(row => !row.unit || !row.blob)) return '部分 A 参考或 Guide 不可用'
   if (!referenceUnit.value) return '请先绑定 A 区参考合成单元'
@@ -457,8 +484,9 @@ const weightedHCount = computed(() => (synthesis.value?.hTokenTrack.events ?? []
   .filter(event => event.tokenId < 364 && (event.guidanceWeight ?? 1) !== 1).length)
 const hGuidanceForwardCount = computed(() => {
   const activeReferences = multiEnabled.value ? referenceRows.value.filter(row => row.cfg !== -1).length : 1
-  return activeReferences ? activeReferences * (4 + weightedHCount.value)
-    : 1 + Number(textCfg.value !== 0) + Number(midiCfg.value !== 0) + weightedHCount.value
+  const groups = groupHTokenEvents(synthesis.value?.hTokenTrack.events ?? [], hTokenMergeMode.value).length
+  return activeReferences ? activeReferences * (4 + groups)
+    : 1 + Number(textCfg.value !== 0) + Number(midiCfg.value !== 0) + groups
 })
 const activeTake = computed(() => synthesis.value?.takes.find(take => (
   take.id === synthesis.value?.activeTakeId
@@ -1414,6 +1442,7 @@ async function generateTakeCore() {
       steps: frozenSampling.steps,
       guidance: frozenSampling.guidance,
       seed: frozenSampling.seed,
+      ...(frozenSampling.pitchShiftSemitones !== undefined ? { pitchShiftSemitones: frozenSampling.pitchShiftSemitones } : {}),
       onProgress: (progress, message) => {
         takeGeneration.value = { running: true, progress, message }
       },
@@ -2265,7 +2294,7 @@ function handleEditorKeydown(event: KeyboardEvent) {
     event.preventDefault()
     event.stopImmediatePropagation()
     const delta = event.key === 'ArrowUp' ? 0.1 : -0.1
-    setSelectedHWeight(Math.max(0, Math.min(10,
+    setSelectedHWeight(Math.max(-10, Math.min(10,
       Number(((selectedHEvent.value.guidanceWeight ?? 1) + delta).toFixed(10)),
     )))
     return
@@ -3475,7 +3504,7 @@ onBeforeUnmount(() => {
         <span>A 区参考</span>
         <NButton quaternary circle size="tiny" class="multi-a-toggle" :class="{ enabled: multiEnabled }" :type="multiEnabled ? 'primary' : 'default'"
           :title="multiEnabled ? '关闭多 A 参考' : '开启多 A 参考'" :aria-pressed="multiEnabled"
-          :disabled="takeGeneration.running || takePreparation.running || (unitModel !== 'V5PgO_8K' && !multiEnabled)"
+          :disabled="takeGeneration.running || takePreparation.running || (!supportsMultiReferenceModel(unitModel) && !multiEnabled)"
           @click="toggleMultipleReferences(!multiEnabled)">
           <span class="multi-a-indicator" aria-hidden="true" />
         </NButton>
@@ -3514,13 +3543,27 @@ onBeforeUnmount(() => {
           <div v-else class="sampling-fields three-way-fields">
             <label><span>A 区音色 CFG</span><NInputNumber v-model:value="audioCfg" :min="-1" :max="10" :step="0.1" /></label>
             <label><span>Text / H CFG</span><NInputNumber v-model:value="textCfg" :min="-1" :max="10" :step="0.1" /></label>
-            <label><span>MIDI-P CFG</span><NInputNumber v-model:value="midiCfg" :min="-1" :max="10" :step="0.1" /></label>
-            <p v-if="unitModel === 'V5PgO_8K'">独立 dropout · A / Text / MIDI · 四个条件分支</p>
+            <label><span>{{ unitModel === 'V5Sg_40K_EMA' ? 'SOME 旋律 CFG' : 'MIDI-P CFG' }}</span><NInputNumber v-model:value="midiCfg" :min="-1" :max="10" :step="0.1" /></label>
+            <p v-if="supportsMultiReferenceModel(unitModel)">独立 dropout · A / Text / {{ unitModel === 'V5Sg_40K_EMA' ? 'SOME' : 'MIDI' }} · 每次求场 {{ hGuidanceForwardCount }} 个条件分支</p>
             <p v-else>三路均为同一数值时，与该数值的统一 CFG 等价。三路模式顺序执行四个条件分支，预计约为统一 CFG 的 2 倍耗时。</p>
           </div>
           <div class="sampling-fields sampling-common">
-            <label><span>采样步数</span><small>默认 32；步数越高通常越慢。</small><NInputNumber v-model:value="samplingSteps" :min="1" :max="256" :step="1" /></label>
-            <label><span>随机 Seed</span><small>相同材料和参数下复现同一结果。</small><NInputNumber v-model:value="samplingSeed" :min="0" :max="4294967295" :step="1" /></label>
+            <label><span>采样步数</span><small>默认 32；步数越高通常越慢。</small><NInputNumber v-model:value="samplingSteps" :min="1" :max="256" :step="1" :input-props="{ 'aria-label': '采样步数' }" /></label>
+            <label><span>随机 Seed</span><small>相同材料和参数下复现同一结果。</small><NInputNumber v-model:value="samplingSeed" :min="0" :max="4294967295" :step="1" :input-props="{ 'aria-label': '随机 Seed' }" /></label>
+            <label><span>旋律移调（半音）</span><NInputNumber
+              v-model:value="pitchShiftSemitones" :min="-24" :max="24" :step="1" :validator="Number.isInteger"
+              :input-props="{ 'aria-label': '旋律移调（半音）' }"
+            /></label>
+          </div>
+          <div v-if="unitModel === 'V5PgO_8K' && guidanceMode === 'three-way'" class="sampling-merge">
+            <label><span>合并同权重 H Token</span><NSwitch
+              :value="hTokenMergeMode === 'same-weight'" aria-label="合并同权重 H Token"
+              @update:value="value => setHTokenMergeMode('same-weight', value)"
+            /></label>
+            <label><span>合并相连同权重 H Token</span><NSwitch
+              :value="hTokenMergeMode === 'adjacent'" aria-label="合并相连同权重 H Token"
+              @update:value="value => setHTokenMergeMode('adjacent', value)"
+            /></label>
           </div>
           <div class="sampling-training">训练条件 dropout：A 30% · Text 15% · MIDI 30%</div>
         </div>
@@ -3553,6 +3596,7 @@ onBeforeUnmount(() => {
         />
       </div>
       <span>{{ frameCount }} frames</span>
+      <span v-if="unitModel === 'V5Sg_40K_EMA'" class="melody-source">旋律条件：Guide / SOME</span>
       <span>{{ synthesis.guide.sampleCount.toLocaleString() }} samples</span>
       <span
         v-if="synthesis.frameContract.trailingSampleCount"
@@ -3800,8 +3844,8 @@ onBeforeUnmount(() => {
               v-for="event in synthesis.hTokenTrack.events"
               :key="event.id"
               class="h-event"
-              :class="{ special: event.tokenId >= 365, dragging: hDrag?.eventId === event.id, selected: selectedHFrame === event.frame }"
-              :style="hEventStyle(event.id, event.frame)"
+              :class="{ special: event.tokenId >= 365, weighted: event.tokenId < 364 && (event.guidanceWeight ?? 1) !== 1, dragging: hDrag?.eventId === event.id, selected: selectedHFrame === event.frame }"
+              :style="{ ...hEventStyle(event.id, event.frame), '--h-weight-color': hTokenWeightColor(event.guidanceWeight ?? 1) }"
               :title="`${hTokenLabel(event.tokenId, event.symbol)} · ID ${event.tokenId} · frame ${event.frame} · B 权重 ${event.guidanceWeight ?? 1}`"
               @mouseenter="showHTokenTooltip($event, event.tokenId, event.frame)"
               @mouseleave="hideHTokenTooltip"
@@ -3809,7 +3853,7 @@ onBeforeUnmount(() => {
               @pointerdown="beginHTokenDrag($event, event.id, event.frame)"
               @dblclick="openHTokenPicker($event, event.frame)"
               @contextmenu="openHTokenPicker($event, event.frame)"
-            >{{ hTokenLabel(event.tokenId, event.symbol) }}</div>
+            ><span class="h-event-symbol">{{ hTokenLabel(event.tokenId, event.symbol) }}</span></div>
             <span v-if="synthesis.hTokenTrack.status === 'empty'" class="empty-track">尚未生成 H Token</span>
           </div>
         </div>
@@ -3818,7 +3862,7 @@ onBeforeUnmount(() => {
         <div class="timeline-row midi-row">
           <div class="track-label control-label">
             <span>MIDI-P</span>
-            <small>r{{ synthesis.midiPTokenTrack.revision }}</small>
+            <small>{{ unitModel === 'V5Sg_40K_EMA' ? '仅试听' : `r${synthesis.midiPTokenTrack.revision}` }}</small>
             <NButton
               size="tiny"
               secondary
@@ -3953,7 +3997,7 @@ onBeforeUnmount(() => {
             <dt>B 区权重</dt>
             <dd><NInputNumber
               :value="selectedHEvent.guidanceWeight ?? 1"
-              :min="0" :max="10" :step="0.1" size="small"
+              :min="-10" :max="10" :step="0.1" size="small"
               :disabled="guidanceMode !== 'three-way'"
               :input-props="{ 'aria-label': 'B 区 H Token 权重' }"
               @update:value="setSelectedHWeight"
@@ -4695,6 +4739,23 @@ onBeforeUnmount(() => {
 .h-selection { position: absolute; top: 0; bottom: 0; z-index: 1; border: 1px solid rgba(240, 196, 92, 0.8); background: rgba(240, 196, 92, 0.13); pointer-events: none; }
 .h-event { z-index: 2; }
 .h-event.selected { border-color: var(--synth-selected); box-shadow: 0 0 0 1px rgba(240, 196, 92, 0.4); }
+.h-event.weighted { overflow: visible; }
+.h-event-symbol { display: block; overflow: hidden; text-overflow: clip; white-space: nowrap; }
+.h-event.weighted::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--h-weight-color);
+  box-shadow: 0 0 4px 1px var(--h-weight-color), 0 0 8px var(--h-weight-color);
+  pointer-events: none;
+}
+.sampling-merge { display: grid; gap: 10px; margin: 12px 0; }
+.sampling-merge label { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 12px; }
 .h-event.special { border-color: var(--synth-h-special-border); background: var(--synth-h-special-bg); color: var(--synth-h-special-text); }
 .h-event.dragging { z-index: 5; border-color: var(--app-accent); background: color-mix(in srgb, var(--app-accent) 24%, var(--app-panel)); cursor: grabbing; }
 .h-token-tooltip {

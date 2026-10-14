@@ -154,6 +154,9 @@ def build_controls(policy, validated, device):
     a_tokens = snapshot["reference"]["text"]["denseHTokens"]
     b_tokens = snapshot["target"]["text"]["denseHTokens"]
     pitches = snapshot["target"]["midiP"]["classes"]
+    if validated.get("pitchShiftSemitones", 0):
+        from v5p_direct_runner import shift_pitch_classes
+        pitches = shift_pitch_classes(pitches, validated["pitchShiftSemitones"])
     if len(a_tokens) != a_owned or len(b_tokens) != b_owned or len(pitches) != b_owned:
         raise ValueError("F-1 source controls differ from frame ownership")
     # F data.py preserves effective A/B text and zeros gap/rear H. Its frozen

@@ -44,6 +44,8 @@ describe('SynthesisUnit track transactions', () => {
     expect(track.revision).toBe(revision + 1)
     moveHTokenEvent(unit, { eventId: 'shi', targetFrame: 5 })
     expect(track.events.find(event => event.id === 'shi')).toMatchObject({ frame: 5, guidanceWeight: 0.3 })
+    setHTokenGuidanceWeight(unit, 'shi', -0.3)
+    expect(track.events.find(event => event.id === 'shi')).toMatchObject({ frame: 5, tokenId: 333, guidanceWeight: -0.3 })
     setHTokenGuidanceWeight(unit, 'shi', 1)
     expect(track.events.find(event => event.id === 'shi')?.guidanceWeight).toBeUndefined()
     for (const id of ['pul', 'sep', 'blank']) {
@@ -51,7 +53,7 @@ describe('SynthesisUnit track transactions', () => {
       expect(() => setHTokenGuidanceWeight(unit, id, 0.3)).toThrow()
       expect(unit).toEqual(before)
     }
-    for (const weight of [-1, 11, NaN, Infinity]) {
+    for (const weight of [-10.1, 11, NaN, Infinity]) {
       const before = structuredClone(unit)
       expect(() => setHTokenGuidanceWeight(unit, 'shi', weight)).toThrow()
       expect(unit).toEqual(before)

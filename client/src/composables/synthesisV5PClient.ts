@@ -13,6 +13,7 @@ export interface RunSynthesisV5POptions {
   cfg?: number
   guidance?: V5PGuidance
   seed?: number
+  pitchShiftSemitones?: number
   onProgress?: (progress: number, message: string) => void
 }
 
@@ -45,6 +46,7 @@ export async function runSynthesisV5P(
     cfg: options.cfg ?? 1,
     guidance: options.guidance ?? { mode: 'unified', cfg: options.cfg ?? 1 },
     seed: options.seed ?? 42,
+    ...(options.pitchShiftSemitones !== undefined ? { pitchShiftSemitones: options.pitchShiftSemitones } : {}),
     device: 'cuda:0',
   }
   options.onProgress?.(3, '服务端 preflight')

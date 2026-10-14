@@ -915,7 +915,17 @@ export const useObjectTreeStore = defineStore('objectTree', () => {
   ): { ok: boolean; reason?: string } {
     const unit = index.value.nodes[unitId]
     if (!unit || unit.kind !== 'synthesisUnit') return { ok: false, reason: '合成单元不存在' }
-    unit.synthesisUnit.samplingSettings = structuredClone(samplingSettings)
+    if (!Number.isInteger(samplingSettings.steps) || samplingSettings.steps < 1 || samplingSettings.steps > 256) {
+      return { ok: false, reason: '采样步数须为 1..256 的整数' }
+    }
+    if (!Number.isSafeInteger(samplingSettings.seed) || samplingSettings.seed < 0 || samplingSettings.seed > 0xffffffff) {
+      return { ok: false, reason: 'Seed 须为 0..4294967295 的整数' }
+    }
+    if (samplingSettings.pitchShiftSemitones !== undefined
+      && (!Number.isInteger(samplingSettings.pitchShiftSemitones) || samplingSettings.pitchShiftSemitones < -24 || samplingSettings.pitchShiftSemitones > 24)) {
+      return { ok: false, reason: '旋律移调须为 -24..24 的整数半音' }
+    }
+    unit.synthesisUnit.samplingSettings = clonePlain(samplingSettings)
     unit.synthesisUnit.updatedAt = new Date().toISOString()
     return { ok: true }
   }

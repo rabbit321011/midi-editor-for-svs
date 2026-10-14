@@ -188,7 +188,8 @@ def validate_job(job, direct_control):
     target_guide = require_record(target.get("guide"), "target Guide")
     reference_text = require_record(reference.get("text"), "reference text")
     target_text = require_record(target.get("text"), "target text")
-    target_midi = require_record(target.get("midiP"), "target MIDI-P")
+    is_sg = job.get("preset", {}).get("id") == "V5Sg_40K_EMA"
+    target_midi = None if is_sg else require_record(target.get("midiP"), "target MIDI-P")
     reference_samples = require_integer(
         reference_guide.get("sampleCount"), "reference sample count", 1
     )
@@ -213,12 +214,22 @@ def validate_job(job, direct_control):
     if canonical_json(snapshot.get("hTransport")) != canonical_json(h_transport):
         raise ValueError("runner joint H differs from material snapshot")
 
-    classes = target_midi.get("classes")
-    if not isinstance(classes, list):
-        raise ValueError("material snapshot lacks MIDI-P classes")
-    midi_transport = direct_control.build_midi_class_transport(frame_map, classes)
-    if canonical_json(snapshot.get("midiPTransport")) != canonical_json(midi_transport):
-        raise ValueError("runner MIDI-P transport differs from material snapshot")
+    midi_transport = None
+    if is_sg:
+        melody = target.get("melody") or {}
+        if (melody.get("source") != "guide-some" or melody.get("guideSHA256") != target_guide.get("audioSHA256")
+                or melody.get("frameCount") != target_samples // 2048
+                or "midiP" in target or "midiPTransport" in snapshot):
+            raise ValueError("Sg requires Guide SOME, not MIDI-P transport")
+    else:
+        classes = target_midi.get("classes")
+        if not isinstance(classes, list):
+            raise ValueError("material snapshot lacks MIDI-P classes")
+        midi_transport = direct_control.build_midi_class_transport(frame_map, classes)
+        if canonical_json(snapshot.get("midiPTransport")) != canonical_json(midi_transport):
+            raise ValueError("runner MIDI-P transport differs from material snapshot")
+        if "melody" in target:
+            raise ValueError("Pg cannot consume a SOME Guide condition")
 
     inputs = require_record(job.get("inputs"), "job inputs")
     reference_wav = Path(str(inputs.get("referenceWav", ""))).resolve()
@@ -226,6 +237,22 @@ def validate_job(job, direct_control):
     render = require_record(job.get("render"), "render settings")
     steps = require_integer(render.get("steps"), "sampling steps", 1, 256)
     seed = require_integer(render.get("seed"), "sampling seed", 0, 0xFFFFFFFF)
+    pitch_shift = require_integer(render.get("pitchShiftSemitones", 0), "pitch shift semitones", -24, 24)
+    if midi_transport is not None and pitch_shift:
+        midi_transport = {**midi_transport, "classIds": list(midi_transport["classIds"])}
+        start, end = midi_transport["targetStartFrame"], midi_transport["targetEndFrameExclusive"]
+        midi_transport["classIds"][start:end] = shift_pitch_classes(midi_transport["classIds"][start:end], pitch_shift)
+    shifted_melody = inputs.get("shiftedMelody")
+    if is_sg and pitch_shift:
+        shifted_melody = require_record(shifted_melody, "Sg shifted Guide")
+        if (shifted_melody.get("semitones") != pitch_shift
+                or shifted_melody.get("sourceSHA256") != target_guide.get("audioSHA256")
+                or shifted_melody.get("sampleCount") != target_samples or shifted_melody.get("sampleRate") != 44100
+                or not shifted_melody.get("wav")):
+            raise ValueError("Sg shifted Guide metadata differs from original Guide or render settings")
+        require_hash(shifted_melody.get("sha256"), "Sg shifted Guide SHA256")
+    elif shifted_melody is not None:
+        raise ValueError("unexpected shifted Guide input")
     guidance = validate_guidance(render.get("guidance"), render.get("cfg"))
     multi_references = None
     independent = guidance.get("formula") == "audio-text-midi-independent.v1"
@@ -233,9 +260,15 @@ def validate_job(job, direct_control):
     h_token_weights = pgo_guidance.validate_token_weights(snapshot)
     if h_token_weights and not independent:
         raise ValueError("B H token weights require independent PgO CFG")
-    if independent and job.get("preset", {}).get("id") != "V5PgO_8K":
-        raise ValueError("independent CFG is only supported by PgO")
-    if independent:
+    h_token_groups = pgo_guidance.group_token_weights(
+        h_token_weights, guidance.get("hTokenMerge", "none"), target_tokens)
+    if is_sg and (h_token_weights or guidance.get("hTokenMerge", "none") != "none"):
+        raise ValueError("Sg does not yet support local H weights or merging")
+    if is_sg and guidance["mode"] == "three-way" and not independent:
+        raise ValueError("Sg three-way CFG must use independent dropout")
+    if independent and job.get("preset", {}).get("id") not in {"V5PgO_8K", "V5Sg_40K_EMA"}:
+        raise ValueError("independent CFG is only supported by PgO / Sg")
+    if independent or is_sg:
         import pgo_guidance
         if require_resource(job["resources"], "pgoGuidance") != Path(pgo_guidance.__file__).resolve():
             raise ValueError("different PgO guidance implementation loaded")
@@ -267,13 +300,34 @@ def validate_job(job, direct_control):
         "device": device,
         "multiReferences": multi_references,
         "hTokenWeights": h_token_weights,
+        "hTokenGroups": h_token_groups,
+        "pitchShiftSemitones": pitch_shift,
+        "shiftedMelody": shifted_melody,
     }
+
+
+def shift_pitch_classes(classes, semitones):
+    semitones = require_integer(semitones, "pitch shift semitones", -24, 24)
+    result = []
+    for token in classes:
+        token = require_integer(token, "MIDI-P pitch class", 0, 255)
+        shifted = token if token == 255 else token + semitones * 2
+        if not 0 <= shifted <= 254 and token != 255:
+            raise ValueError("pitch shift exceeds MIDI-P pitch range; no notes changed")
+        result.append(shifted)
+    return result
 
 
 def validate_guidance(value, legacy_cfg):
     if value is None:
         return {"mode": "unified", "cfg": require_number(legacy_cfg, "CFG", -1, 10)}
     guidance = require_record(value, "guidance")
+    merge = guidance.get("hTokenMerge", "none")
+    if merge not in ("none", "same-weight", "adjacent"):
+        raise ValueError("invalid H token merge mode")
+    if merge != "none" and (guidance.get("mode") != "three-way"
+                             or guidance.get("formula") != "audio-text-midi-independent.v1"):
+        raise ValueError("H token merging requires independent PgO CFG")
     if guidance.get("mode") == "unified":
         return {
             "mode": "unified",
@@ -289,6 +343,7 @@ def validate_guidance(value, legacy_cfg):
         "text": require_number(guidance.get("text"), "guidance.text", -1, 10),
         "midi": require_number(guidance.get("midi"), "guidance.midi", -1, 10),
         "formula": guidance["formula"],
+        **({"hTokenMerge": merge} if "hTokenMerge" in guidance else {}),
     }
 
 
@@ -463,6 +518,16 @@ def training_contract(checkpoint_schema):
 def build_model(checkpoint, model_config, vae_config, vae_checkpoint, singer_root,
                 preset, resources, device, vae_decoder_checkpoint=None):
     import torch
+
+    if preset["id"] == "V5Sg_40K_EMA":
+        import sg_runtime
+        if require_resource(resources, "sgRuntime") != Path(sg_runtime.__file__).resolve():
+            raise ValueError("Sg loaded a different runtime implementation")
+        for name in ("someCheckpoint", "someExtractor", "someConformer", "someSmooth", "someMel"):
+            require_resource(resources, name)
+        return sg_runtime.build_model(
+            checkpoint, model_config, vae_config, vae_checkpoint, preset, resources, device,
+            types.SimpleNamespace(require_resource=require_resource, emit=emit))
 
     if preset["id"] in {"V5F_F1_3K_EMA", "V5F_F1_6K_EMA"}:
         import f1_runtime
@@ -653,7 +718,7 @@ class ThreeWayCFG:
         self.policy.transformer.clear_cache()
 
 
-def sample_with_guidance(policy, sample_kwargs, guidance, token_weights=()):
+def sample_with_guidance(policy, sample_kwargs, guidance, token_weights=(), token_groups=None):
     if guidance["mode"] == "unified":
         return policy.sample(
             **sample_kwargs,
@@ -664,7 +729,7 @@ def sample_with_guidance(policy, sample_kwargs, guidance, token_weights=()):
         )
     if guidance.get("formula") == "audio-text-midi-independent.v1":
         from pgo_guidance import independent_cfg
-        with independent_cfg(policy, guidance, token_weights):
+        with independent_cfg(policy, guidance, token_weights, token_groups):
             return policy.sample(**sample_kwargs, cfg_strength=1.0, guidance_scale=1.0)
     with ThreeWayCFG(policy, guidance):
         # Nonzero cfg_strength selects the standard CFG path; the wrapper replaces
@@ -674,6 +739,14 @@ def sample_with_guidance(policy, sample_kwargs, guidance, token_weights=()):
 
 def synthesize(policy, vae, reference_audio, target_audio, validated):
     import torch
+
+    if getattr(policy, "_sg_runtime", False):
+        import sg_runtime
+        return sg_runtime.synthesize(
+            policy, vae, reference_audio, target_audio, validated,
+            types.SimpleNamespace(emit=emit, load_audio=load_audio, tensor_sha256=tensor_sha256,
+                                  pad_audio_for_frame_map=pad_audio_for_frame_map,
+                                  sample_with_guidance=sample_with_guidance))
 
     if hasattr(policy, "_f1_adapter_audit"):
         import f1_runtime
@@ -754,7 +827,7 @@ def synthesize(policy, vae, reference_audio, target_audio, validated):
             "seed": validated["seed"],
             "use_epss": False,
             "enable_melody_control": True,
-        }, validated["guidance"], validated.get("hTokenWeights", []))
+        }, validated["guidance"], validated.get("hTokenWeights", []), validated.get("hTokenGroups"))
     crop = frame_map["crop"]
     start = int(crop["startFrame"])
     end = int(crop["endFrameExclusive"])
@@ -788,7 +861,7 @@ def save_result(output_dir, job, validated, audio, audit, resource_hashes, start
     sample_count = int(audio.shape[-1])
     sf.write(
         str(wav_path), samples.T if audio.ndim == 2 else samples.reshape(-1, 1), SAMPLE_RATE,
-        subtype="FLOAT" if "f1" in audit or "multiReference" in audit else "PCM_16"
+        subtype="FLOAT" if "f1" in audit or "multiReference" in audit or audit.get("melodySource") == "guide-some" else "PCM_16"
     )
     output_sha = sha256_file(wav_path)
     completed_at = time.time()
@@ -804,10 +877,12 @@ def save_result(output_dir, job, validated, audio, audit, resource_hashes, start
         },
         "midiTransport": {
             key: value
-            for key, value in validated["midiTransport"].items()
+            for key, value in (validated["midiTransport"] or {}).items()
             if key != "classIds"
         },
+        **({"melody": validated["snapshot"]["target"]["melody"]} if validated["snapshot"]["target"].get("melody") else {}),
         "render": job["render"],
+        "pitchShiftSemitones": validated.get("pitchShiftSemitones", 0),
         "resources": resource_hashes,
         "tensor": audit,
         "elapsedSeconds": completed_at - started_at,
@@ -838,6 +913,8 @@ def save_result(output_dir, job, validated, audio, audit, resource_hashes, start
             "guidance": validated["guidance"],
             "steps": validated["steps"],
             "seed": validated["seed"],
+            **({"pitchShiftSemitones": validated.get("pitchShiftSemitones", 0)}
+               if "pitchShiftSemitones" in job["render"] else {}),
         },
         **({"referenceSources": [
             {key: source[key] for key in ("unitId", "unitRevision", "audioCfg", "guideSHA256")}
@@ -879,7 +956,8 @@ def main():
         "vaeConfig": require_resource(resources, "vaeConfig"),
         "vaeCheckpoint": require_resource(resources, "vaeCheckpoint"),
         "placement": require_resource(resources, "placement"),
-        "midiPModule": require_resource(resources, "midiPModule"),
+        **({"midiPModule": require_resource(resources, "midiPModule")}
+           if job.get("preset", {}).get("id") != "V5Sg_40K_EMA" else {}),
         "runner": require_resource(resources, "runner"),
     }
     preset = require_record(job.get("preset"), "V5-P preset")

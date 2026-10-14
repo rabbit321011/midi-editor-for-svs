@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+import { isProxy } from 'vue'
 import { TOP_LEVEL_IDS, createEmptyProjectObjectTree, createEmptySynthesisUnit } from '@/object-workbench'
 import type { NodeId, SynthesisUnitObjectNode, TrackFolderNode } from '@/object-workbench'
 import { useObjectTreeStore } from './objectTree'
@@ -8,6 +9,28 @@ import { useHistoryStore } from './history'
 
 describe('SynthesisUnit object-tree integration', () => {
   beforeEach(() => setActivePinia(createPinia()))
+
+  it('saves steps and seed with a nested reactive guidance object and restores them', () => {
+    const store = useObjectTreeStore()
+    const tree = createEmptyProjectObjectTree()
+    const workspace = tree.root.children.find(node => node.id === TOP_LEVEL_IDS.workspace)
+    if (!workspace || workspace.kind !== 'folder') throw new Error('missing workspace')
+    workspace.children.push(makeUnit('sampling-test', 'sampling'))
+    store.loadObjectTree(tree)
+    const unit = () => store.node('sampling-test') as SynthesisUnitObjectNode
+    const incoming = { ...unit().synthesisUnit.samplingSettings!, steps: 64, seed: 12345, pitchShiftSemitones: -12 }
+    expect(isProxy(incoming.guidance)).toBe(true)
+    expect(store.setSynthesisUnitSamplingSettings('sampling-test', incoming)).toEqual({ ok: true })
+    expect(unit().synthesisUnit.samplingSettings).toMatchObject({ steps: 64, seed: 12345, pitchShiftSemitones: -12 })
+    store.restoreTree(JSON.parse(JSON.stringify(store.snapshotTree())))
+    expect(unit().synthesisUnit.samplingSettings).toMatchObject({ steps: 64, seed: 12345, pitchShiftSemitones: -12 })
+    const before = store.snapshotTree()
+    for (const patch of [{ steps: 0 }, { steps: 257 }, { steps: null }, { seed: -1 }, { seed: 1.5 }, { seed: 4294967296 },
+      { pitchShiftSemitones: -25 }, { pitchShiftSemitones: 25 }, { pitchShiftSemitones: 0.5 }, { pitchShiftSemitones: null }]) {
+      expect(store.setSynthesisUnitSamplingSettings('sampling-test', { ...incoming, ...patch } as any).ok).toBe(false)
+      expect(store.snapshotTree()).toEqual(before)
+    }
+  })
 
   it('persists Take alignment separately from source assets and supports undo/redo', () => {
     const objectTree = useObjectTreeStore()

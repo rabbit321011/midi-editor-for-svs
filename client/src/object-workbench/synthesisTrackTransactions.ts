@@ -178,7 +178,7 @@ export function setHTokenGuidanceWeight(unit: SynthesisUnitObjectNode, eventId: 
   const track = unit.synthesisUnit.hTokenTrack
   const event = track.events.find(item => item.id === eventId)
   if (!event || event.tokenId >= 364) throw new Error('请选择一个发音 H Token')
-  if (!Number.isFinite(weight) || weight < 0 || weight > 10) throw new Error('H Token 权重必须为 0..10')
+  if (!Number.isFinite(weight) || weight < -10 || weight > 10) throw new Error('H Token 权重必须为 -10..10')
   if ((event.guidanceWeight ?? 1) === weight) return
   if (weight === 1) delete event.guidanceWeight
   else event.guidanceWeight = weight
@@ -899,8 +899,8 @@ function validateKana(
 
 function validateHEvents(events: SynthesisHTokenEvent[], start: number, end: number) {
   if (events.some(event => event.guidanceWeight !== undefined && (
-    !Number.isFinite(event.guidanceWeight) || event.guidanceWeight < 0 || event.guidanceWeight > 10 || event.tokenId >= 364
-  ))) throw new Error('H Token 权重只支持发音事件，范围为 0..10')
+    !Number.isFinite(event.guidanceWeight) || event.guidanceWeight < -10 || event.guidanceWeight > 10 || event.tokenId >= 364
+  ))) throw new Error('H Token 权重只支持发音事件，范围为 -10..10')
   if (events.some(event => (
     !Number.isInteger(event.frame)
     || event.frame < start

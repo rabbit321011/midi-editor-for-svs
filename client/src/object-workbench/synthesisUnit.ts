@@ -101,6 +101,10 @@ export function validateSynthesisUnit(unit: SynthesisUnitObjectNode): string[] {
     if (!Number.isSafeInteger(sampling.seed) || sampling.seed < 0 || sampling.seed > 0xffffffff) {
       errors.push('SynthesisUnit sampling seed is invalid')
     }
+    if (sampling.pitchShiftSemitones !== undefined
+      && (!Number.isInteger(sampling.pitchShiftSemitones) || sampling.pitchShiftSemitones < -24 || sampling.pitchShiftSemitones > 24)) {
+      errors.push('SynthesisUnit pitch shift must be an integer in -24..24 semitones')
+    }
     const values = sampling.guidance.mode === 'unified'
       ? [sampling.guidance.cfg]
       : [sampling.guidance.audio, sampling.guidance.text, sampling.guidance.midi]
@@ -110,6 +114,10 @@ export function validateSynthesisUnit(unit: SynthesisUnitObjectNode): string[] {
     if (sampling.guidance.mode === 'three-way'
       && !['audio-text-midi-telescoping.v1', 'audio-text-midi-independent.v1'].includes(sampling.guidance.formula)) {
       errors.push('SynthesisUnit 3CFG formula is invalid')
+    }
+    if (sampling.guidance.mode === 'three-way' && sampling.guidance.hTokenMerge !== undefined
+      && !['none', 'same-weight', 'adjacent'].includes(sampling.guidance.hTokenMerge)) {
+      errors.push('SynthesisUnit H token merge mode is invalid')
     }
   }
   if (guide.sampleRate !== V5P_SAMPLE_RATE) errors.push('Owned Guide sample rate is not 44100 Hz')
@@ -131,7 +139,7 @@ export function validateSynthesisUnit(unit: SynthesisUnitObjectNode): string[] {
     || event.tokenId > 366
     || event.tokenId === 364
     || (event.guidanceWeight !== undefined && (
-      !Number.isFinite(event.guidanceWeight) || event.guidanceWeight < 0 || event.guidanceWeight > 10
+      !Number.isFinite(event.guidanceWeight) || event.guidanceWeight < -10 || event.guidanceWeight > 10
       || event.tokenId >= 364
     ))
   ))) {

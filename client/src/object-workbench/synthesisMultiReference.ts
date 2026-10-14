@@ -1,6 +1,6 @@
 import type { ProjectObjectTree, SynthesisUnitObjectNode } from './types'
 import { buildNodeIndex } from './objectTree'
-import { V5P_DEFAULT_MODEL } from './v5pModel'
+import { V5P_DEFAULT_MODEL, supportsMultiReferenceModel } from './v5pModel'
 
 export const MAX_A_REFERENCES = 16
 export function additionalReferences(unit: SynthesisUnitObjectNode) {
@@ -68,7 +68,7 @@ export function configureMultiReference(
     next.additionalReferences = next.secondaryUnitId ? [{ unitId: next.secondaryUnitId, cfg: next.secondaryCfg }, ...next.additionalReferences.slice(1)] : next.additionalReferences.slice(1)
   }
   if (!Number.isFinite(next.secondaryCfg) || next.secondaryCfg < -1 || next.secondaryCfg > 10) return { ok: false, reason: 'A2 CFG 必须在 -1 到 10 之间' }
-  if (next.enabled && (unit.synthesisUnit.presetId ?? V5P_DEFAULT_MODEL) !== 'V5PgO_8K') return { ok: false, reason: '当前仅 PgO 8K 支持多 A' }
+  if (next.enabled && !supportsMultiReferenceModel(unit.synthesisUnit.presetId ?? V5P_DEFAULT_MODEL)) return { ok: false, reason: '当前仅 PgO / Sg 支持多 A' }
   const sources = next.additionalReferences ?? (next.secondaryUnitId ? [{ unitId: next.secondaryUnitId, cfg: next.secondaryCfg }] : [])
   if (sources.length >= MAX_A_REFERENCES) return { ok: false, reason: `最多 ${MAX_A_REFERENCES} 个参考` }
   if (next.enabled || patch.additionalReferences !== undefined || patch.secondaryUnitId !== undefined) {
